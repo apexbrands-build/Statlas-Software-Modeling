@@ -28,7 +28,7 @@ npm run build
 ## Key definitions
 
 - **Order Revenue** = gross − discounts + shipping + tax (refunds not deducted). Used for MER, AOV, iROAS.
-- **Contribution margin** = Net Sales − Refunds − Shipping costs − COGS − Other variable costs − Ad spend.
+- **Contribution margin** = Net Sales + Shipping − COGS − Ad spend − Cost of delivery. Net Sales = gross − discounts − refunds (no tax). Fixed costs are not part of CM.
 - **Incrementality factors** are editable per client (Store Settings). Defaults: Meta 1.2, Meta returning 0.6, Google 0.75, Google Brand 0.3, Pinterest 0.3.
 
 Read-only everywhere: the app never writes to Shopify, ad platforms or email tools.

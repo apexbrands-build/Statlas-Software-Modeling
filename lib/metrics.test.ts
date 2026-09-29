@@ -9,7 +9,7 @@ const settings: ClientSettings = {
   clientId: "t",
   multipliers: { google_nonbrand: 0.75, google_brand: 0.3, meta_acquisition: 1.2, meta_returning: 0.6, pinterest: 0.3 },
   otherVariablePct: 10,
-  shippingCostPerOrder: 2,
+  deliveryCostPerOrder: 2,
   monthlyFixedCosts: 3650,
   attributionWindow: "7d_click",
   revenueDefinition: "order_revenue",
@@ -46,16 +46,13 @@ function fact(over: Partial<DailyFact> = {}, ch: Partial<Record<ChannelKey, Part
 }
 
 describe("contribution margin", () => {
-  it("= net sales - refunds - shipping cost - COGS - other variable - ad spend", () => {
+  it("= (net sales + shipping) - COGS - ad spend - cost of delivery; no fixed costs", () => {
     const t = aggregate([fact({}, { meta_acquisition: { spend: 150 } })]);
     const p = cmParts(t, settings);
-    // 1000 - 80 - (2*15) - 200 - (10% of 1000) - 150 = 440
-    expect(p.shippingCost).toBe(30);
-    expect(p.otherVariable).toBe(100);
-    expect(p.cm).toBe(440);
-    // fixed costs 3650/mo * 12 / 365 = 120 per day
-    expect(p.fixedCosts).toBeCloseTo(120);
-    expect(p.cmAfterFixed).toBeCloseTo(320);
+    // revenue = 1000 + 60 = 1060; delivery = 10% of 1060 + 2*15 = 136; CM = 1060 - 200 - 150 - 136 = 574
+    expect(p.shipping).toBe(60);
+    expect(p.costOfDelivery).toBeCloseTo(136);
+    expect(p.cm).toBeCloseTo(574);
   });
 });
 
@@ -104,20 +101,21 @@ describe("ratio metrics", () => {
 });
 
 describe("compare / red-green", () => {
-  it("higher-is-better metrics", () => {
-    expect(compare(110, 100, "up").tone).toBe("good");
-    expect(compare(90, 100, "up").tone).toBe("bad");
+  it("higher-is-better metrics (spend included)", () => {
+    expect(compare(120, 100, "up").tone).toBe("good");
+    expect(compare(80, 100, "up").tone).toBe("bad");
   });
   it("lower-is-better metrics", () => {
-    expect(compare(90, 100, "down").tone).toBe("good");
-    expect(compare(110, 100, "down").tone).toBe("bad");
+    expect(compare(80, 100, "down").tone).toBe("good");
+    expect(compare(120, 100, "down").tone).toBe("bad");
   });
-  it("spend is bad only when >10% over plan", () => {
-    expect(compare(108, 100, "spend").tone).toBe("good");
-    expect(compare(115, 100, "spend").tone).toBe("bad");
+  it("within +/-10% is neutral in both directions", () => {
+    expect(compare(110, 100, "up").tone).toBe("neutral");
+    expect(compare(90, 100, "up").tone).toBe("neutral");
+    expect(compare(90, 100, "down").tone).toBe("neutral");
+    expect(compare(110.5, 100, "up").tone).toBe("good");
   });
-  it("tiny differences are neutral; missing reference has no diff", () => {
-    expect(compare(100.5, 100, "up").tone).toBe("neutral");
+  it("missing reference has no diff", () => {
     expect(compare(50, null, "up")).toEqual({ diff: null, tone: "neutral" });
   });
 });
@@ -144,7 +142,7 @@ describe("seed repository", () => {
     expect(a).toEqual(b);
     expect(a).toHaveLength(10);
     for (const f of a) {
-      expect(f.netSales + f.shippingCollected + f.tax).toBeCloseTo(f.newOrderRevenue + f.returningOrderRevenue);
+      expect(f.netSales + f.shippingCollected + f.tax + f.refunds).toBeCloseTo(f.newOrderRevenue + f.returningOrderRevenue);
     }
   });
   it("plan targets satisfy revenue = new + returning", async () => {

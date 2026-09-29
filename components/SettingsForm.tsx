@@ -108,17 +108,17 @@ function Editor(props: {
         </Row>
       </Card>
 
-      <Card title="Contribution margin costs" subtitle="CM = Net Sales − Refunds − Shipping costs − COGS − Other variable − Ad spend.">
+      <Card title="Contribution margin costs" subtitle="CM = Net Sales + Shipping − COGS − Ad spend − Cost of delivery. Net Sales = gross − discounts − refunds (no tax).">
         <Row label="COGS" note="Pulled from Shopify variant cost when connected (seed values for now)">
           <span className="text-sm text-text-muted">Shopify</span>
         </Row>
-        <Row label="Shipping cost per order" note="What the brand pays to ship one order">
-          <input aria-label="Shipping cost per order" type="number" step="0.1" min="0" className={inputCls} value={draft.shippingCostPerOrder} onChange={(e) => set("shippingCostPerOrder", num(e.target.value))} />
+        <Row label="Delivery cost per order (optional)" note="Fulfilment cost per order; part of cost of delivery">
+          <input aria-label="Delivery cost per order" type="number" step="0.1" min="0" className={inputCls} value={draft.deliveryCostPerOrder} onChange={(e) => set("deliveryCostPerOrder", num(e.target.value))} />
         </Row>
-        <Row label="Other variable costs (% of net sales)" note="Payment fees, packaging, etc.">
+        <Row label="Cost of delivery / other variable costs (% of net sales + shipping)" note="Payment fees, packaging, etc.">
           <input aria-label="Other variable costs percent" type="number" step="0.5" min="0" className={inputCls} value={draft.otherVariablePct} onChange={(e) => set("otherVariablePct", num(e.target.value))} />
         </Row>
-        <Row label="Monthly fixed costs" note="Shown as CM after fixed costs; not part of headline CM">
+        <Row label="Monthly fixed costs" note="Not part of CM. Reserved for the future P&L output">
           <input aria-label="Monthly fixed costs" type="number" step="100" min="0" className={inputCls} value={draft.monthlyFixedCosts} onChange={(e) => set("monthlyFixedCosts", num(e.target.value))} />
         </Row>
       </Card>

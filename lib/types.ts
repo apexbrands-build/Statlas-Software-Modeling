@@ -45,7 +45,7 @@ export interface ChannelDay {
 export interface DailyFact {
   clientId: string;
   date: string; // YYYY-MM-DD
-  /** Gross sales minus discounts (Shopify). */
+  /** Net sales = gross sales - discounts - refunds (Shopify). Shipping and tax are not included. */
   netSales: number;
   shippingCollected: number;
   tax: number;
@@ -53,6 +53,7 @@ export interface DailyFact {
   returningOrderRevenue: number;
   newOrders: number;
   returningOrders: number;
+  /** Memo only: already deducted from netSales. */
   refunds: number;
   /** From Shopify variant costs. */
   cogs: number;
@@ -68,11 +69,11 @@ export interface ClientSettings {
   clientId: string;
   /** Incrementality (iROAS) factors: platform-reported revenue x multiplier = incremental revenue. */
   multipliers: Record<ChannelKey, number>;
-  /** Other variable costs (payment fees, packaging...) as % of net sales. */
+  /** Cost of delivery / other variable costs (payment fees, packaging...) as % of Net Sales + Shipping. */
   otherVariablePct: number;
-  /** Fulfilment/shipping cost paid by the brand, per order. */
-  shippingCostPerOrder: number;
-  /** Monthly fixed costs (shown separately, not part of headline CM). */
+  /** Optional fulfilment cost per order, also part of cost of delivery. */
+  deliveryCostPerOrder: number;
+  /** Monthly fixed costs. Not part of CM; reserved for the future P&L output. */
   monthlyFixedCosts: number;
   attributionWindow: "7d_click";
   revenueDefinition: "order_revenue";

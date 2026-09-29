@@ -64,7 +64,7 @@ create table orders (
   discounts numeric not null default 0,
   shipping_collected numeric not null default 0,
   tax numeric not null default 0,
-  refunds numeric not null default 0,
+  refunds numeric not null default 0, -- deducted from net sales
   is_first_order boolean not null default false,
   is_dtc boolean not null default true,
   primary key (client_id, order_id)
@@ -140,8 +140,8 @@ create table metrics_daily (
 create table cost_settings (
   client_id uuid primary key references clients(id),
   other_variable_pct numeric not null default 0,
-  shipping_cost_per_order numeric not null default 0,
-  monthly_fixed_costs numeric not null default 0,
+  delivery_cost_per_order numeric not null default 0, -- part of cost of delivery
+  monthly_fixed_costs numeric not null default 0, -- P&L only, not part of contribution margin
   effective_from date not null default current_date
 );
 

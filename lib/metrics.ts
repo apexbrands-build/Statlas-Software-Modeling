@@ -137,40 +137,28 @@ export const orders = (t: Totals) => t.newOrders + t.returningOrders;
 export const totalSpend = (t: Totals) => CHANNEL_KEYS.reduce((s, k) => s + t.channels[k].spend, 0);
 
 export interface CmParts {
+  /** Gross - discounts - refunds. Taxes are not included. */
   netSales: number;
-  refunds: number;
-  shippingCost: number;
+  /** Shipping charges collected from customers. */
+  shipping: number;
   cogs: number;
-  otherVariable: number;
+  /** Cost of delivery = other variable costs (% of net sales + shipping, plus optional per-order cost). */
+  costOfDelivery: number;
   adSpend: number;
   /** Headline contribution margin. */
   cm: number;
-  fixedCosts: number;
-  cmAfterFixed: number;
 }
 
 /**
- * Contribution margin = Net Sales - Refunds - Shipping costs - COGS - Other variable costs - Ad spend.
- * Net Sales = gross sales - discounts (Shopify). Taxes are not inferred separately.
- * Fixed costs are shown separately (cmAfterFixed) and are not part of the headline CM.
+ * Contribution margin = (Net Sales + Shipping) - COGS - Ad spend - Cost of delivery.
+ * Net Sales = gross - discounts - refunds (no tax). Fixed costs are NOT part of CM (they belong in the P&L).
  */
 export function cmParts(t: Totals, s: ClientSettings): CmParts {
   const adSpend = totalSpend(t);
-  const shippingCost = s.shippingCostPerOrder * orders(t);
-  const otherVariable = (s.otherVariablePct / 100) * t.netSales;
-  const cm = t.netSales - t.refunds - shippingCost - t.cogs - otherVariable - adSpend;
-  const fixedCosts = ((s.monthlyFixedCosts * 12) / 365) * t.days;
-  return {
-    netSales: t.netSales,
-    refunds: t.refunds,
-    shippingCost,
-    cogs: t.cogs,
-    otherVariable,
-    adSpend,
-    cm,
-    fixedCosts,
-    cmAfterFixed: cm - fixedCosts,
-  };
+  const revenue = t.netSales + t.shippingCollected;
+  const costOfDelivery = (s.otherVariablePct / 100) * revenue + s.deliveryCostPerOrder * orders(t);
+  const cm = revenue - t.cogs - adSpend - costOfDelivery;
+  return { netSales: t.netSales, shipping: t.shippingCollected, cogs: t.cogs, costOfDelivery, adSpend, cm };
 }
 
 export interface GroupStats {
@@ -214,8 +202,8 @@ export function amerSpend(t: Totals, s: ClientSettings): number {
 /* Metric registry                                                     */
 /* ------------------------------------------------------------------ */
 
-/** up = higher is better, down = lower is better, spend = over-plan spend is bad (>10% over). */
-export type Direction = "up" | "down" | "spend";
+/** up = higher is better (including ad spend: above plan is shown green), down = lower is better. */
+export type Direction = "up" | "down";
 
 export interface MetricDef {
   key: string;
@@ -238,7 +226,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     format: "currency0",
     direction: "up",
     source: "Derived",
-    formula: "Net Sales − Refunds − Shipping costs − COGS − Other variable costs − Ad spend",
+    formula: "Net Sales + Shipping − COGS − Ad spend − Cost of delivery (other variable costs)",
     value: (t, s) => cmParts(t, s).cm,
     target: (p) => p.cm,
   }),
@@ -256,7 +244,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     key: "adSpend",
     label: "Ad Spend",
     format: "currency0",
-    direction: "spend",
+    direction: "up",
     source: "Platform-reported",
     formula: "Sum of spend across all paid channels",
     value: (t) => totalSpend(t),
@@ -555,7 +543,7 @@ export function channelMetricDefs(g: ChannelGroup): MetricDef[] {
       key: `${g.id}.spend`,
       label: `${g.label} Spend`,
       format: "currency0",
-      direction: "spend",
+      direction: "up",
       source: src,
       formula: `Spend on ${g.label}`,
       value: (t, st) => groupStats(t, st, g.channels).spend,
@@ -627,18 +615,17 @@ export interface Comparison {
   tone: Tone;
 }
 
-const NEUTRAL_BAND = 0.01;
-const SPEND_OVER_LIMIT = 0.1;
+/** Differences within +/-10% of the reference are neutral grey. */
+const NEUTRAL_BAND = 0.1;
 
 export function compare(actual: number | null, ref: number | null, direction: Direction): Comparison {
   if (actual === null || ref === null || ref === 0 || !Number.isFinite(actual) || !Number.isFinite(ref)) {
     return { diff: null, tone: "neutral" };
   }
   const diff = (actual - ref) / Math.abs(ref);
-  if (Math.abs(diff) < NEUTRAL_BAND) return { diff, tone: "neutral" };
+  if (Math.abs(diff) <= NEUTRAL_BAND) return { diff, tone: "neutral" };
   if (direction === "up") return { diff, tone: diff > 0 ? "good" : "bad" };
-  if (direction === "down") return { diff, tone: diff < 0 ? "good" : "bad" };
-  return { diff, tone: diff <= SPEND_OVER_LIMIT ? "good" : "bad" };
+  return { diff, tone: diff < 0 ? "good" : "bad" };
 }
 
 /* ------------------------------------------------------------------ */

@@ -69,7 +69,7 @@ const DTC = ["Online Store", "Shop"];
 const baseSettings = (over: Partial<Omit<ClientSettings, "clientId">> = {}): Omit<ClientSettings, "clientId"> => ({
   multipliers: { ...DEFAULT_MULTIPLIERS },
   otherVariablePct: 6,
-  shippingCostPerOrder: 3.2,
+  deliveryCostPerOrder: 1.2,
   monthlyFixedCosts: 0,
   attributionWindow: "7d_click",
   revenueDefinition: "order_revenue",
@@ -113,7 +113,7 @@ const PROFILES: Profile[] = [
     emailListSize: 260_000,
     mix: { google_nonbrand: 0.22, google_brand: 0.08, meta_acquisition: 0.6, meta_returning: 0.1, pinterest: 0 },
     platformRoas: { google_nonbrand: 2.9, google_brand: 8, meta_acquisition: 1.7, meta_returning: 3.4, pinterest: 3 },
-    settings: baseSettings({ otherVariablePct: 8, shippingCostPerOrder: 5.4, multipliers: { ...DEFAULT_MULTIPLIERS, meta_acquisition: 1.1 } }),
+    settings: baseSettings({ otherVariablePct: 8, deliveryCostPerOrder: 2, multipliers: { ...DEFAULT_MULTIPLIERS, meta_acquisition: 1.1 } }),
   },
   {
     client: { id: "meridian", name: "Meridian Outdoors", currency: "USD", timezone: "America/Denver", podId: "pod-2" },
@@ -130,7 +130,7 @@ const PROFILES: Profile[] = [
     emailListSize: 70_000,
     mix: { google_nonbrand: 0.28, google_brand: 0.06, meta_acquisition: 0.55, meta_returning: 0.09, pinterest: 0.02 },
     platformRoas: { google_nonbrand: 2.8, google_brand: 7, meta_acquisition: 1.5, meta_returning: 3, pinterest: 3.5 },
-    settings: baseSettings({ otherVariablePct: 4, shippingCostPerOrder: 9, monthlyFixedCosts: 22000, dtcChannels: ["Online Store"] }),
+    settings: baseSettings({ otherVariablePct: 4, deliveryCostPerOrder: 3, monthlyFixedCosts: 22000, dtcChannels: ["Online Store"] }),
   },
 ];
 
@@ -201,8 +201,8 @@ function buildFact(p: Profile, date: string): DailyFact {
 
   const shipping = orderRev * p.shippingRate * noise(k("ship"), 0.05);
   const tax = orderRev * p.taxRate;
-  const netSales = orderRev - shipping - tax;
   const refunds = orderRev * p.refundRate * noise(k("ref"), 0.55);
+  const netSales = orderRev - shipping - tax - refunds;
   const cogs = netSales * p.cogsRate * noise(k("cogs"), 0.03);
 
   const totalSpend = e.spend * noise(k("spend"), 0.1);
@@ -268,14 +268,14 @@ function buildPlanDay(p: Profile, planId: string, date: string): PlanTargetDay {
   const returningRevenue = (orders - newOrders) * e.retAov;
   const orderRevenue = newRevenue + returningRevenue;
   const spend = e.spend * PLAN_SPEND_UPLIFT;
-  const netSales = orderRevenue * (1 - p.shippingRate - p.taxRate);
+  const netSales = orderRevenue * (1 - p.shippingRate - p.taxRate - p.refundRate);
+  const shipping = orderRevenue * p.shippingRate;
   const s = p.settings;
   const cm =
-    netSales -
-    orderRevenue * p.refundRate -
-    s.shippingCostPerOrder * orders -
+    netSales +
+    shipping -
     netSales * p.cogsRate -
-    (s.otherVariablePct / 100) * netSales -
+    ((s.otherVariablePct / 100) * (netSales + shipping) + s.deliveryCostPerOrder * orders) -
     spend;
   const spendByChannel: Partial<Record<ChannelKey, number>> = {};
   for (const ch of CHANNEL_KEYS) spendByChannel[ch] = spend * p.mix[ch];

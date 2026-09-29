@@ -92,7 +92,7 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
               <tr>
                 <th className="px-3 py-2 text-left font-medium">Date</th>
                 {isCm ? (
-                  ["Net Sales", "Refunds", "Shipping", "COGS", "Other", "Ad Spend", "CM", "Target"].map((h) => (
+                  ["Net Sales", "Shipping", "COGS", "Ad Spend", "Delivery", "CM", "Target"].map((h) => (
                     <th key={h} className="px-3 py-2 font-medium">
                       {h}
                     </th>
@@ -117,11 +117,10 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
                     {isCm ? (
                       <>
                         <td className="px-3 py-1.5">{c0(c?.netSales)}</td>
-                        <td className="px-3 py-1.5">{c ? `-${c0(c.refunds)}` : ""}</td>
-                        <td className="px-3 py-1.5">{c ? `-${c0(c.shippingCost)}` : ""}</td>
+                        <td className="px-3 py-1.5">{c ? `+${c0(c.shipping)}` : ""}</td>
                         <td className="px-3 py-1.5">{c ? `-${c0(c.cogs)}` : ""}</td>
-                        <td className="px-3 py-1.5">{c ? `-${c0(c.otherVariable)}` : ""}</td>
                         <td className="px-3 py-1.5">{c ? `-${c0(c.adSpend)}` : ""}</td>
+                        <td className="px-3 py-1.5">{c ? `-${c0(c.costOfDelivery)}` : ""}</td>
                         <td className={`px-3 py-1.5 font-medium ${c ? (c.cm >= (s.target[i] ?? -Infinity) ? "text-good" : "text-bad") : ""}`}>{c0(c?.cm)}</td>
                         <td className="px-3 py-1.5 text-text-muted">{c0(s.target[i])}</td>
                       </>

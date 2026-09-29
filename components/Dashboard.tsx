@@ -216,7 +216,7 @@ function Body(props: {
             <h2 className="text-2xl font-bold tracking-wide" style={{ fontFamily: "var(--apex-font-heading)" }}>
               CONTRIBUTION MARGIN
             </h2>
-            <p className="mt-1 text-xs text-text-muted">Net Sales − Refunds − Shipping − COGS − Other variable − Ad Spend</p>
+            <p className="mt-1 text-xs text-text-muted">Net Sales + Shipping − COGS − Ad Spend − Cost of delivery</p>
           </div>
           <div className="flex items-start gap-3">
             <div className="text-right">
@@ -240,15 +240,11 @@ function Body(props: {
         </div>
         <div className="tabular mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-muted">
           <span>Net sales {formatValue(cm.netSales, "currency0", cur)}</span>
-          <span>Refunds −{formatValue(cm.refunds, "currency0", cur)}</span>
-          <span>Shipping −{formatValue(cm.shippingCost, "currency0", cur)}</span>
+          <span>Shipping +{formatValue(cm.shipping, "currency0", cur)}</span>
           <span>COGS −{formatValue(cm.cogs, "currency0", cur)}</span>
-          <span>Other −{formatValue(cm.otherVariable, "currency0", cur)}</span>
           <span>Ad spend −{formatValue(cm.adSpend, "currency0", cur)}</span>
-          <span>CM % of net sales {formatValue(cm.netSales ? cm.cm / cm.netSales : null, "percent1", cur)}</span>
-          {data.settings.monthlyFixedCosts > 0 && (
-            <span className="text-text-faint">After fixed costs {formatValue(cm.cmAfterFixed, "currency0", cur)}</span>
-          )}
+          <span>Cost of delivery −{formatValue(cm.costOfDelivery, "currency0", cur)}</span>
+          <span>CM % of net sales + shipping {formatValue(cm.netSales + cm.shipping ? cm.cm / (cm.netSales + cm.shipping) : null, "percent1", cur)}</span>
         </div>
       </section>
 

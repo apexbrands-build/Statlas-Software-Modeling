@@ -46,8 +46,8 @@ All are computed from daily rows; each metric is labelled by source in the UI.
 |---|---|---|---|
 | Order revenue (default, per Statlas "Order Revenue") | gross − discounts + shipping + tax, excluding returns | Shopify | Statlas also shows "Disc. Sales + Shipping" on the tile; confirm which one feeds MER/AOV |
 | Net Sales + Shipping | order revenue net of tax | Shopify | **Confirm** |
-| Contribution margin (daily) | **Net Sales − Refunds − Shipping costs − COGS − Other variable − Ad spend** (user-confirmed; Net Sales = gross − discounts, taxes not inferred) | mixed | Supersedes the Statlas-style formula. COGS kept in; reconfirm |
-| Contribution margin (monthly, fixed costs) | daily CM summed − monthly fixed costs, pro-rated per day | | **Assumption**: fixed costs are not in Statlas CM; we keep the headline CM without fixed costs and show "CM after fixed costs" separately |
+| Contribution margin (daily) | **(Net Sales + Shipping) − COGS − Ad spend − Cost of delivery**. Net Sales = gross − discounts − refunds (no tax); Shipping = charges collected; Cost of delivery = other variable costs | mixed | Final, user-confirmed. Supersedes earlier formulas |
+| Fixed costs / opex | Not part of CM. Used only in the P&L / bottom-line profit output built with the plan | | Not on the home dashboard |
 | COGS | Σ units × variant unit cost (Shopify cost per item, time-versioned) | Shopify | Manual/CSV override |
 | Other variable costs | % of revenue + $/order | settings | e.g. payment fees |
 | MER | total revenue / total ad spend | Shopify + platforms | |

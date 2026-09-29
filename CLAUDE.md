@@ -26,10 +26,12 @@ Build the **home dashboard** only (tiles, "i" trend modals, YoY comparison, stor
 
 ## Confirmed decisions
 - Revenue definition = **Order Revenue** for all clients (gross − discounts + shipping + tax, returns excluded). Used for MER, AOV, iROAS; refunds are a separate CM line.
-- Contribution margin (user-confirmed 2026-09-29) = **Net Sales − Refunds − Shipping costs − COGS − Other variable costs − Ad spend**. Always Net Sales (gross − discounts); taxes are NOT inferred separately. COGS from Shopify variant cost; other variable costs as % of net sales; monthly fixed costs shown separately (CM after fixed costs). Assumption to reconfirm: COGS stays in the formula (the user's latest wording listed only refunds, shipping and ad spend).
+- Contribution margin (user-confirmed 2026-09-29, final) = **Net Sales + Shipping − COGS − Ad spend − Cost of delivery**. Net Sales = gross − discounts − refunds (no tax). Shipping = shipping charges collected. Cost of delivery = other variable costs (% of net sales + shipping, plus optional per-order cost). COGS is pulled from Shopify variant cost. **Fixed costs are NOT in CM and not on the home dashboard**; they belong to the P&L output (bottom-line profit) built with the plan later.
 - Incrementality (iROAS) multipliers are **editable per client** in settings. Defaults: Meta acquisition 1.2, Meta returning 0.6, Google non-brand 0.75, Google Brand 0.3, Pinterest 0.3.
 - Google "branded" = campaign name contains "branded" (case-insensitive). Meta returning = existing-customer audience segment. Attribution: 7-day click only.
 - Dashboard must show year-over-year comparison for every metric.
+- Red/green: within ±10% of the reference = neutral grey, in both directions. Beyond that: green when better, red when worse. Ad spend counts as higher-is-better (above plan is green, psychology). CAC/iCPA are lower-is-better.
+- Plan comparison covers only elapsed days that have data (correct; Statlas showed the full month only because the demo store's API had stopped pulling).
 - Stack: Next.js on Vercel, Supabase (Postgres, auth, RLS by pod). GitHub first, then Vercel. Theme in a single tokens file.
 - Branding: black background, white lettering. Logos in `/Users/joaoklemcastelobranco/Apex Brands/Visual Identity/` (`basic/color.svg` icon "Λ", `basic 3/black-white.svg` wordmark). Font unknown: use a wide geometric sans as a placeholder.
 - Plan targets are stored as daily rows per plan version (CM, total revenue, returning revenue, new revenue, aMER, spend, per-platform spend).
