@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: var(--apex-bg);
+  --color-surface: var(--apex-surface);
+  --color-surface-raised: var(--apex-surface-raised);
+  --color-border: var(--apex-border);
+  --color-text: var(--apex-text);
+  --color-text-muted: var(--apex-text-muted);
+  --color-text-faint: var(--apex-text-faint);
+  --color-accent: var(--apex-accent);
+  --color-good: var(--apex-good);
+  --color-bad: var(--apex-bad);
+}
+
+html,
+body {
+  background: var(--apex-bg);
+  color: var(--apex-text);
+  font-family: var(--apex-font-body);
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-color: #333 transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

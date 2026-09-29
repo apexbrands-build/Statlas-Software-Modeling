@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 200 200" enable-background="new 0 0 200 200" xml:space="preserve">
+<rect width="200" height="200" fill="#000000" />
+
+  
+  <defs id="defs91690"/>
+  <linearGradient id="3d_gradient2-logo-D4DC41595FCC49339D61D3EED1CF0B6C" x1="30%" y1="120%" x2="-10%" y2="30%" spreadMethod="pad">
+    <stop offset="0%" stop-color="#ffffff" stop-opacity="1" id="stop91667"/>
+    <stop offset="100%" stop-color="#000000" stop-opacity="1" id="stop91669"/>
+  </linearGradient>
+  <linearGradient id="3d_gradient3-logo-D4DC41595FCC49339D61D3EED1CF0B6C" x1="30%" y1="120%" x2="-10%" y2="30%" spreadMethod="pad" gradientTransform="rotate(-30)">
+    <stop offset="0%" stop-color="#ffffff" stop-opacity="1" id="stop91672"/>
+    <stop offset="50%" stop-color="#cccccc" stop-opacity="1" id="stop91674"/>
+    <stop offset="100%" stop-color="#000000" stop-opacity="1" id="stop91676"/>
+  </linearGradient>
+  <path id="path91695" style="font-style:normal;font-weight:800;font-size:72px;line-height:1;font-family:'Montserrat ExtraBold Alt1';font-variant-ligatures:none;text-align:center;text-anchor:middle;fill:#ffffff;stroke:#ffffff;stroke-width:0;stroke-linejoin:miter;stroke-miterlimit:2" d="M 114.29977,48.402939 H 85.552838 L 40.000014,151.59704 h 29.778869 l 8.108108,-20.04914 8.550368,-21.52334 13.267813,-33.022113 13.267818,33.022113 8.55036,21.52334 8.10811,20.04914 h 30.36855 z" stroke-miterlimit="2"/>
+
+</svg>

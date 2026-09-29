@@ -1,0 +1,646 @@
+import type { Format } from "./format";
+import type {
+  ChannelDay,
+  ChannelKey,
+  ClientSettings,
+  DailyFact,
+  PlanTargetDay,
+  Source,
+} from "./types";
+import { CHANNEL_KEYS, CHANNEL_LABELS } from "./types";
+
+/* ------------------------------------------------------------------ */
+/* Aggregation                                                         */
+/* ------------------------------------------------------------------ */
+
+export interface Totals {
+  days: number;
+  netSales: number;
+  shippingCollected: number;
+  tax: number;
+  newOrderRevenue: number;
+  returningOrderRevenue: number;
+  newOrders: number;
+  returningOrders: number;
+  refunds: number;
+  cogs: number;
+  emailRevenue: number;
+  emailCampaignRevenue: number;
+  emailFlowRevenue: number;
+  emailOrders: number;
+  emailSent: number;
+  channels: Record<ChannelKey, ChannelDay>;
+}
+
+const emptyChannels = (): Record<ChannelKey, ChannelDay> =>
+  Object.fromEntries(
+    CHANNEL_KEYS.map((k) => [k, { spend: 0, platformRevenue: 0, platformPurchases: 0 }]),
+  ) as Record<ChannelKey, ChannelDay>;
+
+export function emptyTotals(): Totals {
+  return {
+    days: 0,
+    netSales: 0,
+    shippingCollected: 0,
+    tax: 0,
+    newOrderRevenue: 0,
+    returningOrderRevenue: 0,
+    newOrders: 0,
+    returningOrders: 0,
+    refunds: 0,
+    cogs: 0,
+    emailRevenue: 0,
+    emailCampaignRevenue: 0,
+    emailFlowRevenue: 0,
+    emailOrders: 0,
+    emailSent: 0,
+    channels: emptyChannels(),
+  };
+}
+
+export function aggregate(facts: DailyFact[]): Totals {
+  const t = emptyTotals();
+  for (const f of facts) {
+    t.days += 1;
+    t.netSales += f.netSales;
+    t.shippingCollected += f.shippingCollected;
+    t.tax += f.tax;
+    t.newOrderRevenue += f.newOrderRevenue;
+    t.returningOrderRevenue += f.returningOrderRevenue;
+    t.newOrders += f.newOrders;
+    t.returningOrders += f.returningOrders;
+    t.refunds += f.refunds;
+    t.cogs += f.cogs;
+    t.emailRevenue += f.emailRevenue;
+    t.emailCampaignRevenue += f.emailCampaignRevenue;
+    t.emailFlowRevenue += f.emailFlowRevenue;
+    t.emailOrders += f.emailOrders;
+    t.emailSent += f.emailSent;
+    for (const k of CHANNEL_KEYS) {
+      t.channels[k].spend += f.channels[k].spend;
+      t.channels[k].platformRevenue += f.channels[k].platformRevenue;
+      t.channels[k].platformPurchases += f.channels[k].platformPurchases;
+    }
+  }
+  return t;
+}
+
+export interface PlanTotals {
+  days: number;
+  orderRevenue: number;
+  newRevenue: number;
+  returningRevenue: number;
+  orders: number;
+  newOrders: number;
+  spend: number;
+  cm: number;
+  spendByChannel: Partial<Record<ChannelKey, number>>;
+}
+
+export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
+  const p: PlanTotals = {
+    days: 0,
+    orderRevenue: 0,
+    newRevenue: 0,
+    returningRevenue: 0,
+    orders: 0,
+    newOrders: 0,
+    spend: 0,
+    cm: 0,
+    spendByChannel: {},
+  };
+  for (const r of rows) {
+    p.days += 1;
+    p.orderRevenue += r.orderRevenue;
+    p.newRevenue += r.newRevenue;
+    p.returningRevenue += r.returningRevenue;
+    p.orders += r.orders;
+    p.newOrders += r.newOrders;
+    p.spend += r.spend;
+    p.cm += r.cm;
+    for (const k of CHANNEL_KEYS) {
+      const v = r.spendByChannel[k];
+      if (v !== undefined) p.spendByChannel[k] = (p.spendByChannel[k] ?? 0) + v;
+    }
+  }
+  return p;
+}
+
+/* ------------------------------------------------------------------ */
+/* Core formulas                                                       */
+/* ------------------------------------------------------------------ */
+
+export const div = (a: number, b: number): number | null => (b === 0 || !Number.isFinite(b) ? null : a / b);
+
+export const orderRevenue = (t: Totals) => t.newOrderRevenue + t.returningOrderRevenue;
+export const orders = (t: Totals) => t.newOrders + t.returningOrders;
+export const totalSpend = (t: Totals) => CHANNEL_KEYS.reduce((s, k) => s + t.channels[k].spend, 0);
+
+export interface CmParts {
+  netSales: number;
+  refunds: number;
+  shippingCost: number;
+  cogs: number;
+  otherVariable: number;
+  adSpend: number;
+  /** Headline contribution margin. */
+  cm: number;
+  fixedCosts: number;
+  cmAfterFixed: number;
+}
+
+/**
+ * Contribution margin = Net Sales - Refunds - Shipping costs - COGS - Other variable costs - Ad spend.
+ * Net Sales = gross sales - discounts (Shopify). Taxes are not inferred separately.
+ * Fixed costs are shown separately (cmAfterFixed) and are not part of the headline CM.
+ */
+export function cmParts(t: Totals, s: ClientSettings): CmParts {
+  const adSpend = totalSpend(t);
+  const shippingCost = s.shippingCostPerOrder * orders(t);
+  const otherVariable = (s.otherVariablePct / 100) * t.netSales;
+  const cm = t.netSales - t.refunds - shippingCost - t.cogs - otherVariable - adSpend;
+  const fixedCosts = ((s.monthlyFixedCosts * 12) / 365) * t.days;
+  return {
+    netSales: t.netSales,
+    refunds: t.refunds,
+    shippingCost,
+    cogs: t.cogs,
+    otherVariable,
+    adSpend,
+    cm,
+    fixedCosts,
+    cmAfterFixed: cm - fixedCosts,
+  };
+}
+
+export interface GroupStats {
+  spend: number;
+  platformRevenue: number;
+  iRevenue: number;
+  iOrders: number;
+  /** Multiplier: the single factor, or the revenue-weighted blend when channels are merged. */
+  multiplier: number;
+}
+
+export function groupStats(t: Totals, s: ClientSettings, channels: ChannelKey[]): GroupStats {
+  let spend = 0;
+  let platformRevenue = 0;
+  let iRevenue = 0;
+  let iOrders = 0;
+  for (const k of channels) {
+    const c = t.channels[k];
+    spend += c.spend;
+    platformRevenue += c.platformRevenue;
+    iRevenue += c.platformRevenue * s.multipliers[k];
+    iOrders += c.platformPurchases * s.multipliers[k];
+  }
+  const multiplier = channels.length === 1 ? s.multipliers[channels[0]] : (div(iRevenue, platformRevenue) ?? 0);
+  return { spend, platformRevenue, iRevenue, iOrders, multiplier };
+}
+
+export function paidStats(t: Totals, s: ClientSettings) {
+  return groupStats(t, s, CHANNEL_KEYS);
+}
+
+/** Spend counted as acquisition spend for aMER (settings can exclude brand and Meta returning). */
+export function amerSpend(t: Totals, s: ClientSettings): number {
+  let sp = totalSpend(t);
+  if (s.excludeBrandFromAmer) sp -= t.channels.google_brand.spend;
+  if (s.excludeMetaReturningFromAmer) sp -= t.channels.meta_returning.spend;
+  return sp;
+}
+
+/* ------------------------------------------------------------------ */
+/* Metric registry                                                     */
+/* ------------------------------------------------------------------ */
+
+/** up = higher is better, down = lower is better, spend = over-plan spend is bad (>10% over). */
+export type Direction = "up" | "down" | "spend";
+
+export interface MetricDef {
+  key: string;
+  label: string;
+  format: Format;
+  direction: Direction;
+  source: Source;
+  formula: string;
+  value: (t: Totals, s: ClientSettings) => number | null;
+  /** Plan target for the same period, if the plan covers this metric. */
+  target?: (p: PlanTotals) => number | null;
+}
+
+const def = (d: MetricDef): [string, MetricDef] => [d.key, d];
+
+export const METRICS: Record<string, MetricDef> = Object.fromEntries([
+  def({
+    key: "cm",
+    label: "Contribution Margin",
+    format: "currency0",
+    direction: "up",
+    source: "Derived",
+    formula: "Net Sales − Refunds − Shipping costs − COGS − Other variable costs − Ad spend",
+    value: (t, s) => cmParts(t, s).cm,
+    target: (p) => p.cm,
+  }),
+  def({
+    key: "orderRevenue",
+    label: "Order Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "Shopify",
+    formula: "Gross sales − discounts + shipping + tax (refunds not deducted)",
+    value: (t) => orderRevenue(t),
+    target: (p) => p.orderRevenue,
+  }),
+  def({
+    key: "adSpend",
+    label: "Ad Spend",
+    format: "currency0",
+    direction: "spend",
+    source: "Platform-reported",
+    formula: "Sum of spend across all paid channels",
+    value: (t) => totalSpend(t),
+    target: (p) => p.spend,
+  }),
+  def({
+    key: "mer",
+    label: "MER",
+    format: "ratio2",
+    direction: "up",
+    source: "Derived",
+    formula: "Order Revenue ÷ total ad spend",
+    value: (t) => div(orderRevenue(t), totalSpend(t)),
+    target: (p) => div(p.orderRevenue, p.spend),
+  }),
+  def({
+    key: "aov",
+    label: "AOV",
+    format: "currency2",
+    direction: "up",
+    source: "Shopify",
+    formula: "Order Revenue ÷ orders",
+    value: (t) => div(orderRevenue(t), orders(t)),
+    target: (p) => div(p.orderRevenue, p.orders),
+  }),
+  def({
+    key: "orders",
+    label: "Orders",
+    format: "number",
+    direction: "up",
+    source: "Shopify",
+    formula: "Count of DTC orders",
+    value: (t) => orders(t),
+    target: (p) => p.orders,
+  }),
+  def({
+    key: "returningRevenue",
+    label: "Returning Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "Shopify",
+    formula: "Order Revenue from customers with a prior order",
+    value: (t) => t.returningOrderRevenue,
+    target: (p) => p.returningRevenue,
+  }),
+  def({
+    key: "returningOrders",
+    label: "Returning Orders",
+    format: "number",
+    direction: "up",
+    source: "Shopify",
+    formula: "Orders from customers with a prior order",
+    value: (t) => t.returningOrders,
+    target: (p) => p.orders - p.newOrders,
+  }),
+  def({
+    key: "returningAov",
+    label: "Returning AOV",
+    format: "currency2",
+    direction: "up",
+    source: "Shopify",
+    formula: "Returning revenue ÷ returning orders",
+    value: (t) => div(t.returningOrderRevenue, t.returningOrders),
+    target: (p) => div(p.returningRevenue, p.orders - p.newOrders),
+  }),
+  def({
+    key: "repeatRate",
+    label: "Repeat Rate",
+    format: "percent1",
+    direction: "up",
+    source: "Shopify",
+    formula: "Returning orders ÷ total orders",
+    value: (t) => div(t.returningOrders, orders(t)),
+    target: (p) => div(p.orders - p.newOrders, p.orders),
+  }),
+  def({
+    key: "newRevenue",
+    label: "New Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "Shopify",
+    formula: "Order Revenue from first-time customers",
+    value: (t) => t.newOrderRevenue,
+    target: (p) => p.newRevenue,
+  }),
+  def({
+    key: "newOrders",
+    label: "New Orders",
+    format: "number",
+    direction: "up",
+    source: "Shopify",
+    formula: "First-time customer orders",
+    value: (t) => t.newOrders,
+    target: (p) => p.newOrders,
+  }),
+  def({
+    key: "newAov",
+    label: "New AOV",
+    format: "currency2",
+    direction: "up",
+    source: "Shopify",
+    formula: "New revenue ÷ new orders",
+    value: (t) => div(t.newOrderRevenue, t.newOrders),
+    target: (p) => div(p.newRevenue, p.newOrders),
+  }),
+  def({
+    key: "weightedCac",
+    label: "Weighted CAC",
+    format: "currency2",
+    direction: "down",
+    source: "Derived",
+    formula: "Total ad spend ÷ new orders",
+    value: (t) => div(totalSpend(t), t.newOrders),
+    target: (p) => div(p.spend, p.newOrders),
+  }),
+  def({
+    key: "amer",
+    label: "aMER",
+    format: "ratio2",
+    direction: "up",
+    source: "Derived",
+    formula: "New Order Revenue ÷ acquisition ad spend (total spend unless excluded in settings)",
+    value: (t, s) => div(t.newOrderRevenue, amerSpend(t, s)),
+    target: (p) => div(p.newRevenue, p.spend),
+  }),
+  def({
+    key: "paidIRevenue",
+    label: "Paid iRevenue",
+    format: "currency0",
+    direction: "up",
+    source: "Platform-reported",
+    formula: "Σ platform-reported revenue × incrementality multiplier, all channels",
+    value: (t, s) => paidStats(t, s).iRevenue,
+  }),
+  def({
+    key: "paidIOrders",
+    label: "Paid iOrders",
+    format: "number",
+    direction: "up",
+    source: "Platform-reported",
+    formula: "Σ platform-reported purchases × incrementality multiplier",
+    value: (t, s) => paidStats(t, s).iOrders,
+  }),
+  def({
+    key: "paidAov",
+    label: "Paid AOV",
+    format: "currency2",
+    direction: "up",
+    source: "Platform-reported",
+    formula: "Paid iRevenue ÷ Paid iOrders",
+    value: (t, s) => {
+      const p = paidStats(t, s);
+      return div(p.iRevenue, p.iOrders);
+    },
+  }),
+  def({
+    key: "paidICac",
+    label: "Paid iCAC",
+    format: "currency2",
+    direction: "down",
+    source: "Platform-reported",
+    formula: "Total ad spend ÷ Paid iOrders",
+    value: (t, s) => div(totalSpend(t), paidStats(t, s).iOrders),
+  }),
+  def({
+    key: "ipaMer",
+    label: "ipaMER",
+    format: "ratio2",
+    direction: "up",
+    source: "Platform-reported",
+    formula: "Paid iRevenue ÷ total ad spend",
+    value: (t, s) => div(paidStats(t, s).iRevenue, totalSpend(t)),
+  }),
+  def({
+    key: "emailRevenue",
+    label: "Email Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "Klaviyo",
+    formula: "Klaviyo-attributed revenue (campaigns + flows)",
+    value: (t) => t.emailRevenue,
+  }),
+  def({
+    key: "emailOrders",
+    label: "Email Orders",
+    format: "number",
+    direction: "up",
+    source: "Klaviyo",
+    formula: "Klaviyo-attributed orders",
+    value: (t) => t.emailOrders,
+  }),
+  def({
+    key: "emailCampaignRevenue",
+    label: "Campaign Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "Klaviyo",
+    formula: "Klaviyo campaign-attributed revenue",
+    value: (t) => t.emailCampaignRevenue,
+  }),
+  def({
+    key: "emailFlowRevenue",
+    label: "Flow Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "Klaviyo",
+    formula: "Klaviyo flow-attributed revenue",
+    value: (t) => t.emailFlowRevenue,
+  }),
+  def({
+    key: "emailRevPer1k",
+    label: "Revenue / 1K Sent",
+    format: "currency2",
+    direction: "up",
+    source: "Klaviyo",
+    formula: "Email revenue ÷ (emails sent ÷ 1,000)",
+    value: (t) => div(t.emailRevenue, t.emailSent / 1000),
+  }),
+  def({
+    key: "organicRevenue",
+    label: "Organic Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "Derived",
+    formula: "Order Revenue − Paid iRevenue − Email Revenue (floored at 0)",
+    value: (t, s) => Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue),
+  }),
+  def({
+    key: "organicOrders",
+    label: "Organic Orders",
+    format: "number",
+    direction: "up",
+    source: "Derived",
+    formula: "Orders − Paid iOrders − Email orders (floored at 0)",
+    value: (t, s) => Math.max(0, orders(t) - paidStats(t, s).iOrders - t.emailOrders),
+  }),
+  def({
+    key: "organicAov",
+    label: "Organic AOV",
+    format: "currency2",
+    direction: "up",
+    source: "Derived",
+    formula: "Organic revenue ÷ organic orders",
+    value: (t, s) => {
+      const rev = Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue);
+      const ord = Math.max(0, orders(t) - paidStats(t, s).iOrders - t.emailOrders);
+      return div(rev, ord);
+    },
+  }),
+  def({
+    key: "organicPctOfPaid",
+    label: "Organic % of Paid",
+    format: "percent1",
+    direction: "up",
+    source: "Derived",
+    formula: "Organic revenue ÷ Paid iRevenue",
+    value: (t, s) => {
+      const p = paidStats(t, s);
+      return div(Math.max(0, orderRevenue(t) - p.iRevenue - t.emailRevenue), p.iRevenue);
+    },
+  }),
+]);
+
+/* ------------------------------------------------------------------ */
+/* Channel groups                                                      */
+/* ------------------------------------------------------------------ */
+
+export interface ChannelGroup {
+  id: string;
+  label: string;
+  channels: ChannelKey[];
+}
+
+/** breakout = show Google Brand and Meta Returning as their own rows (default). */
+export function channelGroups(breakout: boolean): ChannelGroup[] {
+  if (breakout) {
+    return (["google_nonbrand", "google_brand", "meta_acquisition", "meta_returning", "pinterest"] as ChannelKey[]).map(
+      (k) => ({ id: k, label: CHANNEL_LABELS[k], channels: [k] }),
+    );
+  }
+  return [
+    { id: "google", label: "Google", channels: ["google_nonbrand", "google_brand"] },
+    { id: "meta", label: "Meta", channels: ["meta_acquisition", "meta_returning"] },
+    { id: "pinterest", label: "Pinterest", channels: ["pinterest"] },
+  ];
+}
+
+export function channelMetricDefs(g: ChannelGroup): MetricDef[] {
+  const src: Source = "Platform-reported";
+  const planSpend = (p: PlanTotals) => {
+    const vals = g.channels.map((k) => p.spendByChannel[k]);
+    return vals.every((v) => v === undefined) ? null : vals.reduce<number>((a, v) => a + (v ?? 0), 0);
+  };
+  return [
+    {
+      key: `${g.id}.spend`,
+      label: `${g.label} Spend`,
+      format: "currency0",
+      direction: "spend",
+      source: src,
+      formula: `Spend on ${g.label}`,
+      value: (t, st) => groupStats(t, st, g.channels).spend,
+      target: planSpend,
+    },
+    {
+      key: `${g.id}.irev`,
+      label: `${g.label} iRev`,
+      format: "currency0",
+      direction: "up",
+      source: src,
+      formula: "Platform-reported revenue (7-day click) × incrementality multiplier",
+      value: (t, st) => groupStats(t, st, g.channels).iRevenue,
+    },
+    {
+      key: `${g.id}.aov`,
+      label: `${g.label} AOV`,
+      format: "currency2",
+      direction: "up",
+      source: src,
+      formula: "iRevenue ÷ iOrders",
+      value: (t, st) => {
+        const x = groupStats(t, st, g.channels);
+        return div(x.iRevenue, x.iOrders);
+      },
+    },
+    {
+      key: `${g.id}.icpa`,
+      label: `${g.label} iCPA`,
+      format: "currency2",
+      direction: "down",
+      source: src,
+      formula: "Spend ÷ iOrders",
+      value: (t, st) => {
+        const x = groupStats(t, st, g.channels);
+        return div(x.spend, x.iOrders);
+      },
+    },
+    {
+      key: `${g.id}.iroas`,
+      label: `${g.label} iROAS`,
+      format: "ratio2",
+      direction: "up",
+      source: src,
+      formula: "iRevenue ÷ Spend",
+      value: (t, st) => {
+        const x = groupStats(t, st, g.channels);
+        return div(x.iRevenue, x.spend);
+      },
+    },
+  ];
+}
+
+/** Label for a channel revenue tile including its multiplier, e.g. "Meta iRev (x1.2)". */
+export function multiplierLabel(g: ChannelGroup, s: ClientSettings, t: Totals): string {
+  const m = groupStats(t, s, g.channels).multiplier;
+  return `${g.label} iRev (x${Number(m.toFixed(2))})`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Comparison status                                                   */
+/* ------------------------------------------------------------------ */
+
+export type Tone = "good" | "bad" | "neutral";
+
+export interface Comparison {
+  /** Relative difference vs the reference: (actual - ref) / |ref|. */
+  diff: number | null;
+  tone: Tone;
+}
+
+const NEUTRAL_BAND = 0.01;
+const SPEND_OVER_LIMIT = 0.1;
+
+export function compare(actual: number | null, ref: number | null, direction: Direction): Comparison {
+  if (actual === null || ref === null || ref === 0 || !Number.isFinite(actual) || !Number.isFinite(ref)) {
+    return { diff: null, tone: "neutral" };
+  }
+  const diff = (actual - ref) / Math.abs(ref);
+  if (Math.abs(diff) < NEUTRAL_BAND) return { diff, tone: "neutral" };
+  if (direction === "up") return { diff, tone: diff > 0 ? "good" : "bad" };
+  if (direction === "down") return { diff, tone: diff < 0 ? "good" : "bad" };
+  return { diff, tone: diff <= SPEND_OVER_LIMIT ? "good" : "bad" };
+}
+
+/* ------------------------------------------------------------------ */
+/* Compare ranges                                                      */
+/* ------------------------------------------------------------------ */
