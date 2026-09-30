@@ -15,7 +15,7 @@ interface Raw {
   lyFacts: DailyFact[];
   prevFacts: DailyFact[];
   plan: PlanTargetDay[];
-  planName: string;
+  planName: string | null;
 }
 
 export interface DashData {
@@ -28,7 +28,9 @@ export interface DashData {
   facts: Map<string, DailyFact>;
   lyFacts: Map<string, DailyFact>;
   plan: Map<string, PlanTargetDay>;
-  planName: string;
+  planName: string | null;
+  /** False when the client has no plan: no targets, no plan comparison. */
+  hasPlan: boolean;
   cur: Totals;
   ly: Totals;
   prev: Totals;
@@ -57,7 +59,7 @@ export function useDashboardData(client: Client | null, settings: ClientSettings
         repo.getFacts(client.id, prevRange.from, prevRange.to),
         plan ? repo.getPlanTargets(client.id, plan.id, range.from, range.to) : Promise.resolve([]),
       ]);
-      if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, plan: planRows, planName: plan?.name ?? "Plan" });
+      if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, plan: planRows, planName: plan?.name ?? null });
     })();
     return () => {
       cancel = true;
@@ -78,6 +80,7 @@ export function useDashboardData(client: Client | null, settings: ClientSettings
       lyFacts: toMap(raw.lyFacts),
       plan: toMap(raw.plan),
       planName: raw.planName,
+      hasPlan: raw.planName !== null,
       cur: aggregate(raw.facts),
       ly: aggregate(raw.lyFacts.filter((f) => f.date <= lyLimit)),
       prev: aggregate(raw.prevFacts),

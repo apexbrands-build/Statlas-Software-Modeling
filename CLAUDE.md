@@ -8,9 +8,9 @@ Internal app for Apex Brands (e-commerce growth agency, 30+ clients) that replic
 - `docs/forecasting-context.md`: the strategist's intent and returning-revenue method
 
 ## Status
-Phase 1 UI is built (`app/`, `components/`, `lib/`, `theme/`): home dashboard with tiles, "i" trend modals, plan/YoY/previous-period comparison, channel performance with editable incrementality factors, email/organic, and a Store Settings page. Runs on seed data via `lib/repository`. Tests: `npm test`. GitHub repo: `datasoftwarebuild` (user imports it into Vercel after the push).
+Phase 1 UI is built (`app/`, `components/`, `lib/`, `theme/`): home dashboard with tiles, "i" trend modals, plan/YoY/previous-period comparison, channel performance with editable incrementality factors, email/organic, and a Store Settings page. Runs on seed data via `lib/repository`. **First functional version has no forecasting/plan targets**: with no plan the dashboard shows store data only (no target lines, no plan comparison; default compare = last year). Plan code stays in the repo behind `ENABLE_SEED_PLANS` in `lib/repository/seed.ts` for Phase 2. Tests: `npm test`. GitHub repo: `datasoftwarebuild` (user imports it into Vercel after the push).
 
-Next: user review of the UI, then Supabase + connectors (Shopify, Meta, Google Ads first), then plan targets/forecasting.
+Next: Shopify app and Meta/Google Ads spend connectors (read-only), Supabase; plan targets/forecasting later.
 
 Ideas the user wants later (not built): marketing-event calendar inferred from Klaviyo/SMS sends (past) plus a register for future initiatives and any actions that may shift the business (creatives, funnels, tests); this feeds the event-effect model. The user's `Jack-7xyz/aMER_ModelV2` repo (C pipeline: linear fit of day-of-week-adjusted aMER vs spend and revenue vs spend, IQR/z-score outlier filtering) is the reference for the new-revenue forecast.
 

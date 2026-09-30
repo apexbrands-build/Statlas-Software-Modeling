@@ -314,6 +314,12 @@ function defaultSettings(clientId: string): ClientSettings {
   return { clientId, ...profileOf(clientId).settings, multipliers: { ...profileOf(clientId).settings.multipliers } };
 }
 
+/**
+ * Plans/forecasting are not part of the first functional version. With no plan, the dashboard shows
+ * store data only (no targets, no plan comparison). Flip this on to demo plan-vs-actual (Phase 2).
+ */
+const ENABLE_SEED_PLANS = false;
+
 export class SeedRepository implements Repository {
   async listClients(): Promise<Client[]> {
     return PROFILES.map((p) => p.client);
@@ -356,6 +362,7 @@ export class SeedRepository implements Repository {
   }
 
   async listPlans(clientId: string): Promise<PlanVersion[]> {
+    if (!ENABLE_SEED_PLANS) return [];
     return [{ id: `${clientId}-2026-official`, clientId, name: "2026 Official Plan", isDefault: true }];
   }
 

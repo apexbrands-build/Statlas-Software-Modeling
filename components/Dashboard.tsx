@@ -76,7 +76,7 @@ export function Dashboard() {
 
   const [preset, setPreset] = useState<Preset>("this_month");
   const [custom, setCustom] = useState<Range>({ from: "2026-01-01", to: "2026-01-31" });
-  const [mode, setMode] = useState<CompareModeName>("plan");
+  const [mode, setMode] = useState<CompareModeName>("yoy");
   const [breakout, setBreakout] = useState(true);
   const [chartType, setChartType] = useState<"sales" | "cm" | "mer">("sales");
   const [open, setOpen] = useState<Open | null>(null);
@@ -98,6 +98,7 @@ export function Dashboard() {
         }}
         mode={mode}
         setMode={setMode}
+        hasPlan={data?.hasPlan ?? false}
       />
       {!data ? (
         <Skeleton />
@@ -134,8 +135,9 @@ function Controls(props: {
   setCustom: (r: Range) => void;
   mode: CompareModeName;
   setMode: (m: CompareModeName) => void;
+  hasPlan: boolean;
 }) {
-  const { preset, setPreset, range, setCustom, mode, setMode } = props;
+  const { preset, setPreset, range, setCustom, mode, setMode, hasPlan } = props;
   const sel = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-accent";
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -157,7 +159,7 @@ function Controls(props: {
       <label className="flex items-center gap-2 text-sm text-text-muted">
         Compare
         <select aria-label="Compare" className={sel} value={mode} onChange={(e) => setMode(e.target.value as CompareModeName)}>
-          <option value="plan">Plan</option>
+          {hasPlan && <option value="plan">Plan</option>}
           <option value="yoy">Last year (YoY)</option>
           <option value="prev">Previous period</option>
         </select>
@@ -206,7 +208,7 @@ function Body(props: {
       <p className="text-xs text-text-faint">
         {data.range.from} → {data.range.to}
         {partial ? ` · actuals through ${data.effTo}, ${COMPARE_LABEL[mode]} covers the same elapsed days` : ""} · {data.client.name} ·{" "}
-        {COMPARE_LABEL[mode] === "vs plan" ? data.planName : COMPARE_LABEL[mode]}
+        {mode === "plan" && data.planName ? data.planName : COMPARE_LABEL[mode]}
       </p>
 
       {/* Hero: contribution margin */}
@@ -339,16 +341,18 @@ function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" 
         { id: "trev", label: "Target revenue", kind: "line", color: c.chartTarget, values: rev.target, dashed: true },
         { id: "tsp", label: "Target spend", kind: "line", color: c.bad, values: sp.target, dashed: true },
       ];
-      if (mode === "yoy") out.push({ id: "ly", label: "Revenue last year", kind: "line", color: c.chartCompare, values: rev.lastYear, dashed: true });
-      return out;
+      if (mode === "yoy" || !data.hasPlan) out.push({ id: "ly", label: "Revenue last year", kind: "line", color: c.chartCompare, values: rev.lastYear, dashed: true });
+      // No plan = no targets: drop any series with no values.
+      return out.filter((s) => s.values.some((v) => v !== null));
     }
     const def = type === "cm" ? METRICS.cm : METRICS.mer;
     const s = metricSeries(def, ctx);
-    return [
+    const out: ChartSeries[] = [
       { id: "a", label: def.label, kind: "line", color: c.chartPrimary, values: s.actual },
       { id: "t", label: "Plan target", kind: "line", color: c.chartTarget, values: s.target, dashed: true },
       { id: "ly", label: "Last year", kind: "line", color: c.chartCompare, values: s.lastYear, dashed: true },
     ];
+    return out.filter((x) => x.values.some((v) => v !== null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, type, mode]);
 
