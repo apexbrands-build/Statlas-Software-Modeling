@@ -32,7 +32,7 @@ export function Connections() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!client) return;
+    if (!client || dataMode !== "supabase") return;
     const db = getBrowserClient();
     const { data } = await db
       .from("integrations")
@@ -48,6 +48,7 @@ export function Connections() {
   }, [load]);
 
   useEffect(() => {
+    if (dataMode !== "supabase") return;
     getBrowserClient()
       .auth.getUser()
       .then(async ({ data }: { data: { user: { id: string } | null } }) => {
