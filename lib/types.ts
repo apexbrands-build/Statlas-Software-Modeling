@@ -3,7 +3,18 @@ export type ChannelKey =
   | "google_brand"
   | "meta_acquisition"
   | "meta_returning"
-  | "pinterest";
+  | "pinterest"
+  | "pinterest_returning"
+  | "youtube"
+  | "youtube_returning"
+  | "bing"
+  | "bing_returning"
+  | "applovin"
+  | "applovin_returning"
+  | "tiktok"
+  | "tiktok_returning"
+  | "snapchat"
+  | "snapchat_returning";
 
 export const CHANNEL_KEYS: ChannelKey[] = [
   "google_nonbrand",
@@ -11,6 +22,17 @@ export const CHANNEL_KEYS: ChannelKey[] = [
   "meta_acquisition",
   "meta_returning",
   "pinterest",
+  "pinterest_returning",
+  "youtube",
+  "youtube_returning",
+  "bing",
+  "bing_returning",
+  "applovin",
+  "applovin_returning",
+  "tiktok",
+  "tiktok_returning",
+  "snapchat",
+  "snapchat_returning",
 ];
 
 export const CHANNEL_LABELS: Record<ChannelKey, string> = {
@@ -19,6 +41,17 @@ export const CHANNEL_LABELS: Record<ChannelKey, string> = {
   meta_acquisition: "Meta",
   meta_returning: "Meta Returning",
   pinterest: "Pinterest",
+  pinterest_returning: "Pinterest Returning",
+  youtube: "YouTube",
+  youtube_returning: "YouTube Returning",
+  bing: "Bing",
+  bing_returning: "Bing Returning",
+  applovin: "AppLovin",
+  applovin_returning: "AppLovin Returning",
+  tiktok: "TikTok",
+  tiktok_returning: "TikTok Returning",
+  snapchat: "Snapchat",
+  snapchat_returning: "Snapchat Returning",
 };
 
 export type Currency = "GBP" | "USD" | "EUR";
@@ -111,7 +144,8 @@ export interface ExtraSettings {
 export interface ClientSettings {
   clientId: string;
   /** Incrementality (iROAS) factors: platform-reported revenue x multiplier = incremental revenue. */
-  multipliers: Record<ChannelKey, number>;
+  /** Only channels with a factor set. A channel without a factor is treated as 1 (platform-reported). */
+  multipliers: Partial<Record<ChannelKey, number>>;
   /** Cost of delivery / other variable costs (payment fees, packaging...) as % of Net Sales + Shipping. */
   otherVariablePct: number;
   /** Optional fulfilment cost per order, also part of cost of delivery. */

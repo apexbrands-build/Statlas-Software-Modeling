@@ -63,6 +63,30 @@ describe("contribution margin", () => {
   });
 });
 
+describe("ROAS vs iROAS and platforms", () => {
+  const t = aggregate([fact({}, { google_nonbrand: { spend: 20, platformRevenue: 80, platformPurchases: 1 }, youtube: { spend: 10, platformRevenue: 30, platformPurchases: 1 } })]);
+  it("ROAS mode reports platform numbers without the factor", () => {
+    const g = channelGroups(true).find((x) => x.id === "google_nonbrand")!;
+    const roas = channelMetricDefs(g, false).find((m) => m.key.endsWith(".iroas"))!;
+    const iroas = channelMetricDefs(g, true).find((m) => m.key.endsWith(".iroas"))!;
+    expect(roas.label).toBe("Google ROAS");
+    expect(roas.value(t, settings)).toBeCloseTo(80 / 20);
+    expect(iroas.value(t, settings)).toBeCloseTo((80 * 0.75) / 20);
+  });
+  it("a channel with no factor counts as 1, and added platforms use their own factor", () => {
+    const yt = channelGroups(true).find((x) => x.id === "youtube")!;
+    const iroas = channelMetricDefs(yt, true).find((m) => m.key.endsWith(".iroas"))!;
+    expect(iroas.value(t, settings)).toBeCloseTo(30 / 10);
+    expect(iroas.value(t, { ...settings, multipliers: { ...settings.multipliers, youtube: 0.3 } })).toBeCloseTo((30 * 0.3) / 10);
+  });
+  it("acquisition only drops non-acquisition rows", () => {
+    const ids = channelGroups(true, true).map((g) => g.id);
+    expect(ids).toContain("google_nonbrand");
+    expect(ids).not.toContain("google_brand");
+    expect(ids).not.toContain("meta_returning");
+  });
+});
+
 describe("COGS fallback", () => {
   it("estimates COGS for sales whose product has no cost", () => {
     const t = aggregate([fact({ cogs: 100, cogsUnmappedSales: 400 })]);
@@ -96,7 +120,7 @@ describe("ratio metrics", () => {
   });
 
   it("applies incrementality multipliers per channel", () => {
-    const google = channelMetricDefs(channelGroups(true)[0]);
+    const google = channelMetricDefs(channelGroups(true).find((g) => g.id === "google_nonbrand")!);
     const iRev = google.find((m) => m.key.endsWith(".irev"))!;
     const iRoas = google.find((m) => m.key.endsWith(".iroas"))!;
     expect(iRev.value(t, settings)).toBeCloseTo(80 * 0.75);
@@ -107,7 +131,7 @@ describe("ratio metrics", () => {
   });
 
   it("merging channels blends the multiplier", () => {
-    const googleMerged = channelMetricDefs(channelGroups(false)[0]);
+    const googleMerged = channelMetricDefs(channelGroups(false).find((g) => g.id === "google")!);
     const iRev = googleMerged.find((m) => m.key.endsWith(".irev"))!;
     expect(iRev.value(t, settings)).toBeCloseTo(60 + 30);
   });

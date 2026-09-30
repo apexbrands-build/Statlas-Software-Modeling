@@ -310,3 +310,10 @@ create policy order_refunds_read on order_refunds for select to authenticated us
 /* ---------- applied later as migration "settings_extra_and_flat_cogs" ---------- */
 alter table client_settings add column if not exists extra jsonb not null default '{}'::jsonb;
 alter table client_settings add column if not exists cogs_flat_rate boolean not null default false;
+
+/* ---------- applied later as migration "more_channel_keys" ---------- */
+alter table daily_channel_facts drop constraint if exists daily_channel_facts_channel_check;
+alter table daily_channel_facts add constraint daily_channel_facts_channel_check check (channel in (
+  'google_nonbrand','google_brand','meta_acquisition','meta_returning',
+  'pinterest','pinterest_returning','youtube','youtube_returning','bing','bing_returning',
+  'applovin','applovin_returning','tiktok','tiktok_returning','snapchat','snapchat_returning'));

@@ -21,6 +21,7 @@ import { compactCurrency, formatDiff, formatValue } from "@/lib/format";
 import {
   channelGroups,
   channelMetricDefs,
+  visibleGroups,
   cmParts,
   METRICS,
   multiplierLabel,
@@ -80,6 +81,7 @@ export function Dashboard() {
   const [mode, setMode] = useState<CompareModeName>("yoy");
   const [customCmp, setCustomCmp] = useState<Range | null>(null);
   const [breakout, setBreakout] = useState(true);
+  const [roasMode, setRoasMode] = useState<"iroas" | "roas" | "iroas_acq" | "roas_acq" | null>(null);
   const [chartType, setChartType] = useState<"sales" | "cm" | "mer">("sales");
   const [open, setOpen] = useState<Open | null>(null);
 
@@ -116,7 +118,7 @@ export function Dashboard() {
           No actual data in this range yet (data runs through {data.lastData}). Pick an earlier period.
         </div>
       ) : (
-        <Body data={data} mode={mode} breakout={breakout} setBreakout={setBreakout} chartType={chartType} setChartType={setChartType} setOpen={setOpen} />
+        <Body data={data} mode={mode} breakout={breakout} setBreakout={setBreakout} roasMode={roasMode ?? (settings.extra.showIncrementalByDefault ? "iroas" : "roas")} setRoasMode={setRoasMode} chartType={chartType} setChartType={setChartType} setOpen={setOpen} />
       )}
       {open && data && <MetricModal def={open.def} title={open.title} data={data} mode={mode} onClose={() => setOpen(null)} />}
     </div>
@@ -192,11 +194,13 @@ function Body(props: {
   mode: CompareModeName;
   breakout: boolean;
   setBreakout: (b: boolean) => void;
+  roasMode: "iroas" | "roas" | "iroas_acq" | "roas_acq";
+  setRoasMode: (m: "iroas" | "roas" | "iroas_acq" | "roas_acq") => void;
   chartType: "sales" | "cm" | "mer";
   setChartType: (c: "sales" | "cm" | "mer") => void;
   setOpen: (o: Open) => void;
 }) {
-  const { data, mode, breakout, setBreakout, chartType, setChartType, setOpen } = props;
+  const { data, mode, breakout, setBreakout, roasMode, setRoasMode, chartType, setChartType, setOpen } = props;
   const cur = data.client.currency;
   const partial = data.effTo < data.range.to;
 
@@ -220,7 +224,9 @@ function Body(props: {
 
   const cm = cmParts(data.cur, data.settings);
   const cmNums = tileNumbers(METRICS.cm, data, mode);
-  const groups = channelGroups(breakout);
+  const incremental = roasMode === "iroas" || roasMode === "iroas_acq";
+  const acquisitionOnly = roasMode === "iroas_acq" || roasMode === "roas_acq";
+  const groups = visibleGroups(channelGroups(breakout, acquisitionOnly), data.cur);
 
   return (
     <>
@@ -304,18 +310,23 @@ function Body(props: {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-4">
           <h3 className="text-sm font-medium uppercase tracking-wide text-text-muted">Channel performance</h3>
+          <select aria-label="Channel metric" value={roasMode} onChange={(e) => setRoasMode(e.target.value as typeof roasMode)} className="rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent">
+            <option value="roas">ROAS</option>
+            <option value="iroas">iROAS</option>
+            <option value="roas_acq">ROAS - Acquisition Only</option>
+            <option value="iroas_acq">iROAS - Acquisition Only</option>
+          </select>
           <label className="flex items-center gap-2 text-xs text-text-muted">
-            <input type="checkbox" checked={breakout} onChange={(e) => setBreakout(e.target.checked)} className="accent-[var(--apex-accent)]" />
-            Break out Google Brand and Meta returning
+            <input type="checkbox" checked={breakout && !acquisitionOnly} disabled={acquisitionOnly} onChange={(e) => setBreakout(e.target.checked)} className="accent-[var(--apex-accent)]" />
+            Break out Non-Acquisition (Google Brand, Meta returning...)
           </label>
           <span className="text-xs text-text-faint">Incrementality factors are editable in Store Settings</span>
         </div>
         {groups.map((g) => {
-          const defs = channelMetricDefs(g);
-          if (defs[0].value(data.cur, data.settings) === 0 && g.id === "pinterest") return null;
+          const defs = channelMetricDefs(g, incremental);
           return (
             <Grid key={g.id} cols={5}>
-              {defs.map((d) => tile(d, d.key.endsWith(".irev") ? multiplierLabel(g, data.settings, data.cur) : undefined))}
+              {defs.map((d) => tile(d, incremental && d.key.endsWith(".irev") ? multiplierLabel(g, data.settings, data.cur) : undefined))}
             </Grid>
           );
         })}

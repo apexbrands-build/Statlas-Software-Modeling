@@ -19,7 +19,7 @@ const ICONS: Record<string, Brand> = {
   youtube: siYoutube,
 };
 
-const FALLBACK_COLOR: Record<string, string> = { klaviyo: "#3ad823", postscript: "#7c5cff", omnisend: "#00b894", applovin: "#2b7cff" };
+const FALLBACK_COLOR: Record<string, string> = { klaviyo: "#3ad823", postscript: "#7c5cff", omnisend: "#00b894", applovin: "#2b7cff", bing: "#00a4ef" };
 
 /** Dark logos (TikTok) would vanish on the black background, so near-black brands render white. */
 function visibleColor(hex: string): string {

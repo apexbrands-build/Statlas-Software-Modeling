@@ -52,12 +52,12 @@ interface Profile {
   taxRate: number;
   emailShare: number;
   emailListSize: number;
-  mix: Record<ChannelKey, number>;
-  platformRoas: Record<ChannelKey, number>;
+  mix: Partial<Record<ChannelKey, number>>;
+  platformRoas: Partial<Record<ChannelKey, number>>;
   settings: Omit<ClientSettings, "clientId">;
 }
 
-const DEFAULT_MULTIPLIERS: Record<ChannelKey, number> = {
+const DEFAULT_MULTIPLIERS: Partial<Record<ChannelKey, number>> = {
   google_nonbrand: 0.75,
   google_brand: 0.3,
   meta_acquisition: 1.2,
@@ -213,8 +213,8 @@ function buildFact(p: Profile, date: string): DailyFact {
   const totalSpend = e.spend * noise(k("spend"), 0.1);
   const channels = {} as DailyFact["channels"];
   for (const ch of CHANNEL_KEYS) {
-    const spend = totalSpend * p.mix[ch] * noise(k(`sp-${ch}`), 0.12);
-    const platformRevenue = spend * p.platformRoas[ch] * noise(k(`pr-${ch}`), 0.14);
+    const spend = totalSpend * (p.mix[ch] ?? 0) * noise(k(`sp-${ch}`), 0.12);
+    const platformRevenue = spend * (p.platformRoas[ch] ?? 0) * noise(k(`pr-${ch}`), 0.14);
     const platAov = p.aov * noise(k(`pa-${ch}`), 0.08);
     channels[ch] = { spend, platformRevenue, platformPurchases: platformRevenue / platAov };
   }
@@ -284,7 +284,7 @@ function buildPlanDay(p: Profile, planId: string, date: string): PlanTargetDay {
     ((s.otherVariablePct / 100) * (netSales + shipping) + s.deliveryCostPerOrder * orders) -
     spend;
   const spendByChannel: Partial<Record<ChannelKey, number>> = {};
-  for (const ch of CHANNEL_KEYS) spendByChannel[ch] = spend * p.mix[ch];
+  for (const ch of CHANNEL_KEYS) spendByChannel[ch] = spend * (p.mix[ch] ?? 0);
   return {
     planId,
     clientId: p.client.id,

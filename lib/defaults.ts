@@ -1,6 +1,6 @@
 import type { ChannelKey, ClientSettings, ExtraSettings } from "./types";
 
-export const DEFAULT_MULTIPLIERS: Record<ChannelKey, number> = {
+export const DEFAULT_MULTIPLIERS: Partial<Record<ChannelKey, number>> = {
   google_nonbrand: 0.75,
   google_brand: 0.3,
   meta_acquisition: 1.2,

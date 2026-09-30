@@ -7,7 +7,8 @@ import type {
   PlanTargetDay,
   Source,
 } from "./types";
-import { CHANNEL_KEYS, CHANNEL_LABELS } from "./types";
+import { CHANNEL_KEYS } from "./types";
+import { CORE_CHANNELS, PLATFORMS } from "./channels";
 
 /* ------------------------------------------------------------------ */
 /* Aggregation                                                         */
@@ -176,19 +177,24 @@ export interface GroupStats {
   multiplier: number;
 }
 
-export function groupStats(t: Totals, s: ClientSettings, channels: ChannelKey[]): GroupStats {
+/** Incrementality factor for a channel; no factor set = 1 (platform-reported numbers). */
+export const factor = (s: ClientSettings, k: ChannelKey): number => s.multipliers[k] ?? 1;
+
+/** incremental = false reports platform numbers as-is (factor 1). */
+export function groupStats(t: Totals, s: ClientSettings, channels: ChannelKey[], incremental = true): GroupStats {
   let spend = 0;
   let platformRevenue = 0;
   let iRevenue = 0;
   let iOrders = 0;
   for (const k of channels) {
     const c = t.channels[k];
+    const f = incremental ? factor(s, k) : 1;
     spend += c.spend;
     platformRevenue += c.platformRevenue;
-    iRevenue += c.platformRevenue * s.multipliers[k];
-    iOrders += c.platformPurchases * s.multipliers[k];
+    iRevenue += c.platformRevenue * f;
+    iOrders += c.platformPurchases * f;
   }
-  const multiplier = channels.length === 1 ? s.multipliers[channels[0]] : (div(iRevenue, platformRevenue) ?? 0);
+  const multiplier = channels.length === 1 ? (incremental ? factor(s, channels[0]) : 1) : (div(iRevenue, platformRevenue) ?? 0);
   return { spend, platformRevenue, iRevenue, iOrders, multiplier };
 }
 
@@ -524,22 +530,34 @@ export interface ChannelGroup {
   channels: ChannelKey[];
 }
 
-/** breakout = show Google Brand and Meta Returning as their own rows (default). */
-export function channelGroups(breakout: boolean): ChannelGroup[] {
-  if (breakout) {
-    return (["google_nonbrand", "google_brand", "meta_acquisition", "meta_returning", "pinterest"] as ChannelKey[]).map(
-      (k) => ({ id: k, label: CHANNEL_LABELS[k], channels: [k] }),
-    );
+/**
+ * breakout = show each platform's non-acquisition channel (Google Brand, Meta Returning...) as its own row.
+ * acquisitionOnly = leave the non-acquisition channels out entirely.
+ */
+export function channelGroups(breakout: boolean, acquisitionOnly = false): ChannelGroup[] {
+  const out: ChannelGroup[] = [];
+  for (const p of PLATFORMS) {
+    if (acquisitionOnly) {
+      out.push({ id: p.acquisition, label: p.label, channels: [p.acquisition] });
+    } else if (breakout) {
+      out.push({ id: p.acquisition, label: p.label, channels: [p.acquisition] });
+      out.push({ id: p.nonAcquisition, label: p.nonAcquisitionLabel, channels: [p.nonAcquisition] });
+    } else {
+      out.push({ id: p.id, label: p.label, channels: [p.acquisition, p.nonAcquisition] });
+    }
   }
-  return [
-    { id: "google", label: "Google", channels: ["google_nonbrand", "google_brand"] },
-    { id: "meta", label: "Meta", channels: ["meta_acquisition", "meta_returning"] },
-    { id: "pinterest", label: "Pinterest", channels: ["pinterest"] },
-  ];
+  return out;
 }
 
-export function channelMetricDefs(g: ChannelGroup): MetricDef[] {
+/** Hide platforms with no spend at all, except the core Google and Meta rows. */
+export function visibleGroups(groups: ChannelGroup[], t: Totals): ChannelGroup[] {
+  return groups.filter((g) => g.channels.some((k) => CORE_CHANNELS.includes(k)) || g.channels.some((k) => t.channels[k].spend > 0));
+}
+
+/** incremental = factor-adjusted (iRev, iCPA, iROAS); otherwise platform-reported (Rev, CPA, ROAS). */
+export function channelMetricDefs(g: ChannelGroup, incremental = true): MetricDef[] {
   const src: Source = "Platform-reported";
+  const i = incremental ? "i" : "";
   const planSpend = (p: PlanTotals) => {
     const vals = g.channels.map((k) => p.spendByChannel[k]);
     return vals.every((v) => v === undefined) ? null : vals.reduce<number>((a, v) => a + (v ?? 0), 0);
@@ -552,17 +570,17 @@ export function channelMetricDefs(g: ChannelGroup): MetricDef[] {
       direction: "up",
       source: src,
       formula: `Spend on ${g.label}`,
-      value: (t, st) => groupStats(t, st, g.channels).spend,
+      value: (t, st) => groupStats(t, st, g.channels, incremental).spend,
       target: planSpend,
     },
     {
       key: `${g.id}.irev`,
-      label: `${g.label} iRev`,
+      label: `${g.label} ${i}Rev`,
       format: "currency0",
       direction: "up",
       source: src,
-      formula: "Platform-reported revenue (7-day click) × incrementality multiplier",
-      value: (t, st) => groupStats(t, st, g.channels).iRevenue,
+      formula: incremental ? "Platform-reported revenue (7-day click) × incrementality factor" : "Platform-reported revenue (7-day click)",
+      value: (t, st) => groupStats(t, st, g.channels, incremental).iRevenue,
     },
     {
       key: `${g.id}.aov`,
@@ -570,40 +588,40 @@ export function channelMetricDefs(g: ChannelGroup): MetricDef[] {
       format: "currency2",
       direction: "up",
       source: src,
-      formula: "iRevenue ÷ iOrders",
+      formula: `${i}Revenue ÷ ${i}Orders`,
       value: (t, st) => {
-        const x = groupStats(t, st, g.channels);
+        const x = groupStats(t, st, g.channels, incremental);
         return div(x.iRevenue, x.iOrders);
       },
     },
     {
       key: `${g.id}.icpa`,
-      label: `${g.label} iCPA`,
+      label: `${g.label} ${i}CPA`,
       format: "currency2",
       direction: "down",
       source: src,
-      formula: "Spend ÷ iOrders",
+      formula: `Spend ÷ ${i}Orders`,
       value: (t, st) => {
-        const x = groupStats(t, st, g.channels);
+        const x = groupStats(t, st, g.channels, incremental);
         return div(x.spend, x.iOrders);
       },
     },
     {
       key: `${g.id}.iroas`,
-      label: `${g.label} iROAS`,
+      label: `${g.label} ${i}ROAS`,
       format: "ratio2",
       direction: "up",
       source: src,
-      formula: "iRevenue ÷ Spend",
+      formula: `${i}Revenue ÷ Spend`,
       value: (t, st) => {
-        const x = groupStats(t, st, g.channels);
+        const x = groupStats(t, st, g.channels, incremental);
         return div(x.iRevenue, x.spend);
       },
     },
   ];
 }
 
-/** Label for a channel revenue tile including its multiplier, e.g. "Meta iRev (x1.2)". */
+/** Label for a channel revenue tile including its factor, e.g. "Meta iRev (x1.2)". */
 export function multiplierLabel(g: ChannelGroup, s: ClientSettings, t: Totals): string {
   const m = groupStats(t, s, g.channels).multiplier;
   return `${g.label} iRev (x${Number(m.toFixed(2))})`;

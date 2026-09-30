@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { BrandIcon, channelProvider } from "@/components/BrandIcon";
 import { Accordion, Check, Field, inputCls, Modal, NumberInput, Select, Switch } from "./ui";
-import { CHANNEL_LABELS, type ChannelKey, type ClientSettings, type ExtraSettings } from "@/lib/types";
+import { PLATFORMS, platformOf } from "@/lib/channels";
+import { CHANNEL_KEYS, type ChannelKey, type ClientSettings, type ExtraSettings } from "@/lib/types";
 
 const INDUSTRIES = ["Jewelry & Accessories", "Apparel", "Beauty & Personal Care", "Health & Wellness", "Home & Garden", "Food & Beverage", "Sports & Outdoors", "Electronics", "Pets", "Other"];
 
@@ -22,15 +23,6 @@ const REVENUE_DEFS: { name: string; description: string; ready: boolean }[] = [
 const SHOPIFY_CHANNELS = ["Online Store", "Draft Orders", "Shop", "Point of Sale", "Gorgias - Live Chat & Helpdesk", "TikTok", "Faire: Sell Wholesale", "Swap", "Facebook & Instagram", "Facebook"];
 const ORGANIC_DEFS = ["Calculated: New Rev - Paid", "Calculated: Total Rev - Paid", "Calculated: New Rev - iPaid", "Calculated: Total Rev - iPaid", "Calculated: Total Rev - Paid - Email/SMS", "Calculated: Total Rev - iPaid - Email/SMS", "GA (medium=organic + Org Shopping)"];
 
-// Incrementality rows, in the reference tool's order: acquisition first, then non-acquisition.
-const FACTOR_ROWS: { key: ChannelKey; publisher: string; kind: "Acquisition" | "NON-Acquisition"; note?: string }[] = [
-  { key: "meta_acquisition", publisher: "Facebook", kind: "Acquisition" },
-  { key: "google_nonbrand", publisher: "GoogleAds", kind: "Acquisition" },
-  { key: "pinterest", publisher: "Pinterest", kind: "Acquisition" },
-  { key: "meta_returning", publisher: "Facebook", kind: "NON-Acquisition" },
-  { key: "google_brand", publisher: "GoogleAds", kind: "NON-Acquisition" },
-];
-
 interface Props {
   clientName: string;
   currency: string;
@@ -44,6 +36,9 @@ interface Props {
 export function EditStoreDialog({ clientName, currency, timezone, initial, onSave, onRecalculate, onClose }: Props) {
   const [d, setD] = useState<ClientSettings>({ ...initial, multipliers: { ...initial.multipliers }, dtcChannels: [...initial.dtcChannels], excludedOrderTags: [...initial.excludedOrderTags], extra: { ...initial.extra } });
   const [tag, setTag] = useState("");
+  const [newPublisher, setNewPublisher] = useState("YouTube");
+  const [newAcq, setNewAcq] = useState(true);
+  const [newFactor, setNewFactor] = useState(0.3);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof ClientSettings>(k: K, v: ClientSettings[K]) => setD((p) => ({ ...p, [k]: v }));
@@ -146,17 +141,65 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, onSav
       <Accordion title="Incrementality (iROAS)" subtitle="Used to normalize ROAS among different publishers" defaultOpen>
         <Check checked={x.showIncrementalByDefault} onChange={(v) => ex("showIncrementalByDefault", v)} label="Show Incremental ROAS (iROAS) Instead of ROAS by Default" />
         <div className="space-y-2">
-          {FACTOR_ROWS.map((r) => (
-            <div key={r.key} className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3 ${r.kind === "Acquisition" ? "border-good/30 bg-good/5" : "border-yellow-400/30 bg-yellow-400/5"}`}>
-              <div className="text-sm">
-                <span className="inline-flex items-center gap-2 font-medium"><BrandIcon provider={r.publisher === "Facebook" ? "facebook" : r.publisher === "GoogleAds" ? "google_ads" : "pinterest"} title={r.publisher} />{r.publisher}</span> <span className="ml-3 text-text-muted">{r.kind}</span>
-                <span className="ml-3 text-[11px] text-text-faint">({CHANNEL_LABELS[r.key]})</span>
+          {CHANNEL_KEYS.filter((k) => d.multipliers[k] !== undefined)
+            .sort((a, b) => Number(platformOf(a).kind === "NON-Acquisition") - Number(platformOf(b).kind === "NON-Acquisition") || PLATFORMS.indexOf(platformOf(a).platform) - PLATFORMS.indexOf(platformOf(b).platform))
+            .map((key: ChannelKey) => {
+              const { platform, kind } = platformOf(key);
+              return (
+                <div key={key} className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3 ${kind === "Acquisition" ? "border-good/30 bg-good/5" : "border-yellow-400/30 bg-yellow-400/5"}`}>
+                  <div className="text-sm">
+                    <span className="inline-flex items-center gap-2 font-medium">
+                      <BrandIcon provider={platform.icon} title={platform.publisher} />
+                      {platform.publisher}
+                    </span>
+                    <span className="ml-3 text-text-muted">{kind}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-28">
+                      <NumberInput label={`${platform.publisher} ${kind} factor`} step={0.05} value={d.multipliers[key] ?? 1} onChange={(v) => set("multipliers", { ...d.multipliers, [key]: v })} />
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${platform.publisher} ${kind}`}
+                      onClick={() => {
+                        const next = { ...d.multipliers };
+                        delete next[key];
+                        set("multipliers", next);
+                      }}
+                      className="text-xs font-semibold text-bad hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-accent/50 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="w-40">
+                <Select label="Publisher" value={newPublisher} options={PLATFORMS.map((p) => p.publisher)} onChange={setNewPublisher} />
               </div>
-              <div className="w-28">
-                <NumberInput label={`${CHANNEL_LABELS[r.key]} factor`} step={0.05} value={d.multipliers[r.key]} onChange={(v) => set("multipliers", { ...d.multipliers, [r.key]: v })} />
-              </div>
+              <span className="flex items-center gap-2 text-sm">
+                {newAcq ? "Acquisition" : "NON-Acquisition"}
+                <Switch label="Acquisition" checked={newAcq} onChange={setNewAcq} />
+              </span>
             </div>
-          ))}
+            <div className="flex items-center gap-3">
+              <div className="w-24">
+                <NumberInput label="New factor" step={0.05} value={newFactor} onChange={setNewFactor} />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const p = PLATFORMS.find((x) => x.publisher === newPublisher);
+                  if (p) set("multipliers", { ...d.multipliers, [newAcq ? p.acquisition : p.nonAcquisition]: newFactor });
+                }}
+                className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text"
+              >
+                Add
+              </button>
+            </div>
+          </div>
         </div>
         <p className="text-xs text-text-faint">Platform-reported revenue × factor = incremental revenue. Set per client (for example from a geo-holdout or a third-party incrementality study).</p>
       </Accordion>
