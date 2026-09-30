@@ -317,3 +317,11 @@ alter table daily_channel_facts add constraint daily_channel_facts_channel_check
   'google_nonbrand','google_brand','meta_acquisition','meta_returning',
   'pinterest','pinterest_returning','youtube','youtube_returning','bing','bing_returning',
   'applovin','applovin_returning','tiktok','tiktok_returning','snapchat','snapchat_returning'));
+
+/* ---------- applied later as migration "agency_secrets" ---------- */
+create table if not exists agency_secrets (
+  provider text primary key,
+  ciphertext text not null,
+  updated_at timestamptz not null default now()
+);
+alter table agency_secrets enable row level security;

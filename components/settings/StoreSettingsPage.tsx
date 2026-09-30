@@ -75,9 +75,9 @@ export function StoreSettingsPage() {
   const shopify = rows.find((r) => r.provider === "shopify");
   const banner = params.get("connected") ? `Connected ${params.get("connected")}.` : params.get("error") ? `Connection problem: ${params.get("error")}` : null;
 
-  async function syncAll(provider: "shopify" | "meta") {
+  async function syncAll(provider: "shopify" | "meta" | "google_ads") {
     for (const r of rows.filter((x) => x.provider === provider)) {
-      const res = await fetch(`/api/sync/${provider}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: r.id, days: provider === "meta" ? 90 : 60 }) });
+      const res = await fetch(`/api/sync/${provider === "google_ads" ? "google" : provider}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: r.id, days: provider === "shopify" ? 60 : 90 }) });
       if (!res.ok) throw new Error((await res.json()).error ?? "Sync failed");
     }
     await load();
@@ -220,7 +220,7 @@ export function StoreSettingsPage() {
           }}
         />
       )}
-      {dialog === "add" && <AddConnectionDialog clientId={client.id} initialShop={shopParam ?? ""} onClose={() => setDialog(null)} onChanged={load} setMsg={setMsg} />}
+      {dialog === "add" && <AddConnectionDialog clientId={client.id} initialShop={shopParam ?? ""} isAdmin={isAdmin} onClose={() => setDialog(null)} onChanged={load} setMsg={setMsg} />}
       {dialog === "costs" && <CostDialog clientId={client.id} live={live} onClose={() => setDialog(null)} setMsg={setMsg} />}
       {dialog === "store" && <NewStoreDialog onClose={() => setDialog(null)} />}
       {typeof dialog === "object" && dialog && "connection" in dialog && (
@@ -228,7 +228,7 @@ export function StoreSettingsPage() {
           row={dialog.connection}
           onClose={() => setDialog(null)}
           onSync={async () => {
-            await syncAll(dialog.connection.provider === "meta" ? "meta" : "shopify");
+            await syncAll(dialog.connection.provider === "meta" ? "meta" : dialog.connection.provider === "google_ads" ? "google_ads" : "shopify");
             setMsg("Synced.");
           }}
         />
@@ -246,7 +246,7 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AddConnectionDialog({ clientId, initialShop, onClose, onChanged, setMsg }: { clientId: string; initialShop: string; onClose: () => void; onChanged: () => Promise<void>; setMsg: (m: string | null) => void }) {
+function AddConnectionDialog({ clientId, initialShop, isAdmin, onClose, onChanged, setMsg }: { clientId: string; initialShop: string; isAdmin: boolean; onClose: () => void; onChanged: () => Promise<void>; setMsg: (m: string | null) => void }) {
   const [shop, setShop] = useState(initialShop);
   const [account, setAccount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -288,7 +288,8 @@ function AddConnectionDialog({ clientId, initialShop, onClose, onChanged, setMsg
         </form>
         {err && <p className="text-xs text-bad">{err}</p>}
       </div>
-      {[["google_ads", "Google Ads"], ["pinterest", "Pinterest"], ["klaviyo", "Klaviyo"], ["ga4", "GA4"]].map(([id, p]) => (
+      <GoogleConnect clientId={clientId} isAdmin={isAdmin} onChanged={onChanged} onClose={onClose} setMsg={setMsg} />
+      {[["pinterest", "Pinterest"], ["klaviyo", "Klaviyo"], ["ga4", "GA4"]].map(([id, p]) => (
         <div key={p} className="flex items-center justify-between rounded-xl border border-border px-4 py-3 text-sm text-text-muted">
           <span className="flex items-center gap-2"><BrandIcon provider={id} title={p} />{p}</span>
           <span className="rounded-full border border-border px-2 text-[10px] uppercase tracking-wide text-text-faint">Soon</span>
@@ -301,7 +302,7 @@ function AddConnectionDialog({ clientId, initialShop, onClose, onChanged, setMsg
 function ConnectionDialog({ row, onClose, onSync }: { row: Integration; onClose: () => void; onSync: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const syncable = row.provider === "shopify" || row.provider === "meta";
+  const syncable = row.provider === "shopify" || row.provider === "meta" || row.provider === "google_ads";
   return (
     <Modal title={`${PROVIDER_LABEL[row.provider] ?? row.provider} connection`} onClose={onClose}>
       <BrandIcon provider={row.provider} size={32} title={PROVIDER_LABEL[row.provider]} />
@@ -411,5 +412,61 @@ function NewStoreDialog({ onClose }: { onClose: () => void }) {
         {busy ? "Creating…" : "Create store"}
       </button>
     </Modal>
+  );
+}
+
+function GoogleConnect({ clientId, isAdmin, onChanged, onClose, setMsg }: { clientId: string; isAdmin: boolean; onChanged: () => Promise<void>; onClose: () => void; setMsg: (m: string | null) => void }) {
+  const [status, setStatus] = useState<{ configured: boolean; authorized: boolean } | null>(null);
+  const [customer, setCustomer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/google/status")
+      .then((r) => r.json())
+      .then(setStatus)
+      .catch(() => setStatus({ configured: false, authorized: false }));
+  }, []);
+
+  async function connect() {
+    setBusy(true);
+    setErr(null);
+    const res = await fetch("/api/google/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId, customerId: customer }) });
+    const json = await res.json();
+    setBusy(false);
+    if (!res.ok) return setErr(json.error ?? "Could not connect");
+    setMsg(`Connected ${json.name}. Click Edit, then Sync now.`);
+    await onChanged();
+    onClose();
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <BrandIcon provider="google_ads" title="Google Ads" />
+        Google Ads
+      </div>
+      <p className="text-xs text-text-muted">Read-only spend and purchase conversions through the agency manager (MCC) account. Brand spend = campaign name contains the brand keyword in Settings.</p>
+      {!status ? (
+        <p className="text-xs text-text-muted">Checking…</p>
+      ) : !status.configured ? (
+        <p className="text-xs text-yellow-300">Google is not configured on the server yet (missing environment variables).</p>
+      ) : !status.authorized ? (
+        isAdmin ? (
+          <a href="/api/google/install" className="inline-block rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-black">
+            Authorize Google (one time, admins)
+          </a>
+        ) : (
+          <p className="text-xs text-yellow-300">An admin must authorize Google once before accounts can be connected.</p>
+        )
+      ) : (
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void connect(); }}>
+          <input className={inputCls} placeholder="Customer ID, e.g. 123-456-7890" value={customer} onChange={(e) => setCustomer(e.target.value)} />
+          <button disabled={!customer.trim() || busy} className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-black disabled:opacity-50">
+            {busy ? "…" : "Connect"}
+          </button>
+        </form>
+      )}
+      {err && <p className="text-xs text-bad">{err}</p>}
+    </div>
   );
 }

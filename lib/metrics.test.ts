@@ -5,6 +5,7 @@ import { defaultExtra } from "./defaults";
 import { SeedRepository } from "./repository/seed";
 import { markFirstOrders } from "./sync/first-orders";
 import { splitCampaignDays } from "./sync/meta-split";
+import { isBrandCampaign, mergeGoogleRows } from "./sync/google-split";
 import type { ChannelKey, ClientSettings, DailyFact } from "./types";
 import { CHANNEL_KEYS } from "./types";
 
@@ -243,5 +244,24 @@ describe("Meta existing-customer split", () => {
   it("never produces negative acquisition when the breakdown slightly exceeds the total", () => {
     const rows = splitCampaignDays([day], new Map([["2026-09-01|c1", { spend: 101, purchases: 11, revenue: 510 }]]));
     expect(rows.every((r) => r.spend >= 0 && r.platform_revenue >= 0)).toBe(true);
+  });
+});
+
+describe("Google brand rule and merge", () => {
+  it("brand = campaign name contains the keyword, case-insensitive; empty keyword never matches", () => {
+    expect(isBrandCampaign("Search | Branded | US", "branded")).toBe(true);
+    expect(isBrandCampaign("Search | Generic", "branded")).toBe(false);
+    expect(isBrandCampaign("Search | Branded", "")).toBe(false);
+  });
+  it("joins cost and purchase rows per campaign-day", () => {
+    const cost = [{ segments: { date: "2026-09-01" }, campaign: { id: "1", name: "A" }, metrics: { costMicros: "12340000" } }];
+    const purchases = [
+      { segments: { date: "2026-09-01" }, campaign: { id: "1", name: "A" }, metrics: { conversions: 2, conversionsValue: 150 } },
+      { segments: { date: "2026-09-02" }, campaign: { id: "2", name: "B" }, metrics: { conversions: 1, conversionsValue: 40 } },
+    ];
+    const rows = mergeGoogleRows(cost, purchases);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ spend: 12.34, purchases: 2, revenue: 150 });
+    expect(rows[1]).toMatchObject({ spend: 0, purchases: 1, revenue: 40 });
   });
 });
