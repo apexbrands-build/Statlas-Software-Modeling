@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addYears, comparisonRange, diffDays } from "./dates";
 import { aggregate, channelGroups, channelMetricDefs, cmParts, compare, METRICS } from "./metrics";
 import { SeedRepository } from "./repository/seed";
+import { markFirstOrders } from "./sync/first-orders";
 import type { ChannelKey, ClientSettings, DailyFact } from "./types";
 import { CHANNEL_KEYS } from "./types";
 
@@ -155,5 +156,25 @@ describe("seed repository", () => {
     const rows = await repo.getPlanTargets("kettle", "kettle-2026-official", "2026-01-01", "2026-01-31");
     expect(rows).toHaveLength(31);
     for (const r of rows) expect(r.orderRevenue).toBeCloseTo(r.newRevenue + r.returningRevenue);
+  });
+});
+
+describe("new vs returning classification", () => {
+  const o = (orderId: string, customerId: string | null, createdAt: string, life: number | null) => ({ orderId, customerId, createdAt, customerLifetimeOrders: life });
+  it("guest orders are new; repeat orders in the window are returning", () => {
+    const r = markFirstOrders([o("1", null, "2026-09-01", null), o("2", "c", "2026-09-02", 2), o("3", "c", "2026-09-05", 2)]);
+    expect(r.get("1")).toBe(true);
+    expect(r.get("2")).toBe(true);
+    expect(r.get("3")).toBe(false);
+  });
+  it("a customer with orders before the window is returning", () => {
+    // lifetime 3 orders, only 1 inside the window => 2 earlier orders
+    const r = markFirstOrders([o("9", "old", "2026-09-10", 3)]);
+    expect(r.get("9")).toBe(false);
+  });
+  it("without lifetime counts it falls back to the window", () => {
+    const r = markFirstOrders([o("a", "x", "2026-09-01", null), o("b", "x", "2026-09-03", null)]);
+    expect(r.get("a")).toBe(true);
+    expect(r.get("b")).toBe(false);
   });
 });

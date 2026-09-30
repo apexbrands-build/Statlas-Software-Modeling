@@ -28,6 +28,21 @@ export function verifyShopifyHmac(params: URLSearchParams, secret: string): bool
 }
 
 export async function shopifyGraphql<T>(shop: string, token: string, query: string, variables?: Record<string, unknown>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await shopifyGraphqlOnce<T>(shop, token, query, variables);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (attempt < 5 && (msg.includes("THROTTLED") || msg.includes("Shopify 429") || msg.includes("Shopify 503"))) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+async function shopifyGraphqlOnce<T>(shop: string, token: string, query: string, variables?: Record<string, unknown>): Promise<T> {
   const res = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },

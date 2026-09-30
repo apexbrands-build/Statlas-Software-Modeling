@@ -28,6 +28,13 @@ export async function proxy(request: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
+  const shop = request.nextUrl.searchParams.get("shop");
+  if (data.user && path === "/" && shop && request.nextUrl.searchParams.get("hmac")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/settings";
+    url.search = `?shop=${encodeURIComponent(shop)}`;
+    return NextResponse.redirect(url);
+  }
   if (data.user && path === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/";

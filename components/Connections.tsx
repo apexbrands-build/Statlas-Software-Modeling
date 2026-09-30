@@ -26,7 +26,7 @@ export function Connections() {
   const { client } = useApp();
   const params = useSearchParams();
   const [rows, setRows] = useState<Integration[]>([]);
-  const [shop, setShop] = useState("");
+  const [shop, setShop] = useState(() => (typeof window === "undefined" ? "" : (new URLSearchParams(window.location.search).get("shop") ?? "")));
   const [adAccount, setAdAccount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -71,9 +71,14 @@ export function Connections() {
   const status = params.get("connected") ? `Connected ${params.get("connected")}.` : params.get("error") ? `Connection problem: ${params.get("error")}` : null;
 
   async function addClient() {
+    if (busy === "client") return;
+    setBusy("client");
     setMsg(null);
     const res = await fetch("/api/clients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newName }) });
-    if (!res.ok) return setMsg((await res.json()).error ?? "Could not create client");
+    if (!res.ok) {
+      setBusy(null);
+      return setMsg((await res.json()).error ?? "Could not create client");
+    }
     setNewName("");
     window.location.reload();
   }
@@ -93,13 +98,13 @@ export function Connections() {
     await load();
   }
 
-  async function syncMeta(id: string) {
+  async function syncMeta(id: string, provider: "meta" | "shopify" = "meta") {
     setBusy(id);
     setMsg(null);
-    const res = await fetch("/api/sync/meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: id, days: 90 }) });
+    const res = await fetch(`/api/sync/${provider}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: id, days: 90 }) });
     const json = await res.json();
     setBusy(null);
-    setMsg(res.ok ? `Synced ${json.rows} campaign-days.` : (json.error ?? "Sync failed"));
+    setMsg(res.ok ? (provider === "meta" ? `Synced ${json.rows} campaign-days.` : `Synced ${json.orders} orders.${json.note ? ` ${json.note}` : ""}`) : (json.error ?? "Sync failed"));
     await load();
   }
   const inputCls = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent";
@@ -128,7 +133,12 @@ export function Connections() {
                     <span>
                       {r.account_name ?? r.account_id} <span className="text-text-muted">({r.account_id})</span>
                     </span>
-                    <span className={r.status === "connected" ? "text-good" : "text-bad"}>{r.status}{r.last_error ? `: ${r.last_error}` : ""}</span>
+                    <span className="flex items-center gap-3">
+                      <span className={r.status === "connected" ? "text-good" : "text-bad"}>{r.status}{r.last_error ? `: ${r.last_error}` : ""}</span>
+                      <button disabled={busy === r.id} onClick={() => syncMeta(r.id, "shopify")} className="rounded-lg border border-border px-2 py-1 text-text-muted hover:text-text disabled:opacity-50">
+                        {busy === r.id ? "Syncing…" : "Sync now"}
+                      </button>
+                    </span>
                   </div>
                 ))}
                 <form
@@ -171,7 +181,7 @@ export function Connections() {
       {isAdmin && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
           <input className={`${inputCls} w-64`} placeholder="New client name" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <button onClick={addClient} disabled={!newName.trim()} className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text disabled:opacity-50">
+          <button onClick={addClient} disabled={!newName.trim() || busy === "client"} className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text disabled:opacity-50">
             Add client
           </button>
         </div>
