@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { theme } from "@/theme/theme";
 import { AppProvider, useApp } from "@/lib/app-context";
+import { getBrowserClient } from "@/lib/supabase/client";
+import { authEnabled, dataMode } from "@/lib/supabase/env";
 
 const NAV = [
   { href: "/", label: "Home", enabled: true },
@@ -44,7 +46,7 @@ function Shell({ children }: { children: ReactNode }) {
             ),
           )}
         </nav>
-        <p className="mt-auto text-[11px] text-text-faint">Beta · seed data only</p>
+        <p className="mt-auto text-[11px] text-text-faint">{dataMode === "supabase" ? "Beta · live data" : "Beta · seed data only"}</p>
       </aside>
       <div className="min-w-0 flex-1">
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-8">
@@ -68,6 +70,18 @@ function Shell({ children }: { children: ReactNode }) {
                 </option>
               ))}
             </select>
+            {authEnabled && (
+              <button
+                type="button"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text"
+                onClick={async () => {
+                  await getBrowserClient().auth.signOut();
+                  window.location.href = "/login";
+                }}
+              >
+                Sign out
+              </button>
+            )}
           </div>
         </header>
         <main className="px-4 py-6 md:px-8">{children}</main>
