@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { authEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/env";
+import { authEnabled, SESSION_COOKIE_OPTIONS, supabaseKey, supabaseUrl } from "@/lib/supabase/env";
 
 /** Keeps the Supabase session fresh and sends signed-out visitors to /login. */
 export async function proxy(request: NextRequest) {
@@ -8,6 +8,7 @@ export async function proxy(request: NextRequest) {
 
   let response = NextResponse.next({ request });
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    cookieOptions: SESSION_COOKIE_OPTIONS,
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {

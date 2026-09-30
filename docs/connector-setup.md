@@ -28,21 +28,29 @@ UI names below are from memory and platforms rename things often: if a menu is d
 5. For each client store: open the install link as a store admin (or ask the client's admin to). This grants the app read access. Nothing is written to the store.
 6. Copy Client ID and Client Secret into Vercel.
 
-## 2. Meta (ad spend)
+## 2. Meta (ad spend): exact steps
 
-Fastest route, no per-client OAuth, no app review for your own managed accounts:
-1. developers.facebook.com → create an app (type: Business), link it to the agency Business portfolio, add the **Marketing API** product.
-2. In Business Settings → Users → **System users**: create "Apex Data" (role: Employee). Assign each client's ad account with **read-only** permission (View performance). Generate a token for the system user with the `ads_read` permission. It does not expire.
-3. Put the token in `META_SYSTEM_USER_TOKEN`. Business verification and `ads_read` Advanced access are needed only if we later want clients to connect themselves via OAuth.
-4. Per client we store the ad account ID (`act_…`). Existing-customer spend comes from the ad-set audience targeting (customer-list/existing-customer audiences).
+Do these yourself (not automated, to keep the Meta account safe). UI names may differ slightly.
 
-## 3. Google Ads (ad spend)
+1. **App.** developers.facebook.com → My Apps → Create App → use case "Other" → type **Business** → name `Apex Data`, your contact email, and select the **Apex Brands business portfolio**. Add the **Marketing API** product. Leave the app in Development mode.
+2. **Link the app to the business.** business.facebook.com → Business settings → Accounts → **Apps** → Add → connect `Apex Data`. (Without this the app will not appear when generating the token.)
+3. **System user.** Business settings → Users → **System users** → Add → name `Apex Data`, role **Employee**.
+4. **Assign client ad accounts (read-only).** Open the system user → **Add assets** → Ad accounts → tick each client ad account (partner-shared ones appear here) → turn on **View performance** only → Save. Repeat when a new client is added.
+5. **Generate the token.** Same system user → **Generate new token** → pick the `Apex Data` app → expiration **Never** → permission **`ads_read`** only → Generate → copy it once.
+6. **Vercel.** Add `META_SYSTEM_USER_TOKEN` (the token) and redeploy. Never paste it in chat.
+7. **In the dashboard.** Store Settings → Connections → Meta → paste the ad account ID (Ads Manager shows `act=1234567890` in the URL) → **Connect Meta** → **Sync now**.
+8. If Meta answers with an "app access level" or permission error, the app needs **Advanced access** to `ads_read` (App Review: short screen recording + privacy policy URL; takes 1-4 weeks). Standard access usually works for accounts inside your own business portfolio.
 
-1. Use the agency **manager (MCC) account**. In it: Tools → API Center → apply for a **developer token** (Basic access; approval takes days). Note the MCC customer ID (`GOOGLE_ADS_LOGIN_CUSTOMER_ID`).
-2. Each client ad account must be linked to the MCC (client approves the link request).
-3. Google Cloud: create a project → enable **Google Ads API** → OAuth consent screen. If `apexbrands.io` is a Google Workspace, choose **Internal**: no Google verification needed. Create an OAuth client (Web) with redirect `NEXT_PUBLIC_APP_URL/api/google/callback`.
-4. One agency user with MCC access authorises once; we store its refresh token encrypted and query each client through the MCC.
-5. Brand vs non-brand: campaign name contains "branded" (setting per client).
+How spend is split today: campaigns whose name contains retention, existing, returning, crm, lapsed or reactivation count as **Meta returning**; everything else is **Meta acquisition**. To be confirmed (see questions).
+
+## 3. Google Ads (ad spend): exact steps
+
+1. **Developer token.** In the manager (MCC) account: Admin/Tools → API Center → fill the application (company, website, "internal reporting tool, read-only") → request **Basic access**. Copy the token when issued; approval takes days. The instant test token only works on test accounts.
+2. **Note the MCC ID** (digits only, no dashes) → `GOOGLE_ADS_LOGIN_CUSTOMER_ID`.
+3. **Link client accounts** to the MCC: MCC → Accounts → Sub-account settings → Link existing account. The client accepts the request.
+4. **Google Cloud (agency Chrome, Workspace).** console.cloud.google.com → new project `apex-data` → APIs & Services → Library → enable **Google Ads API** → OAuth consent screen → **Internal** → app name, support email → add scope `https://www.googleapis.com/auth/adwords` → Credentials → Create credentials → OAuth client ID → **Web application** → authorized redirect URI `https://apex-data-beta.vercel.app/api/google/callback`.
+5. **Vercel.** Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`.
+6. The Google connector code (OAuth + spend query) is built once the developer token exists, because it cannot be tested before.
 
 ## 4. Order of work
 

@@ -91,7 +91,10 @@ export class SupabaseRepository implements Repository {
       const d = r.date as string;
       byDate.set(d, [...(byDate.get(d) ?? []), r]);
     }
-    return facts.map((r) => {
+    const empty = (date: string): Row => ({ date });
+    const have = new Set(facts.map((r) => r.date as string));
+    const extra = [...byDate.keys()].filter((d) => !have.has(d)).map(empty);
+    return [...facts, ...extra].sort((a, b) => ((a.date as string) < (b.date as string) ? -1 : 1)).map((r) => {
       const channels = Object.fromEntries(
         CHANNEL_KEYS.map((k) => [k, { spend: 0, platformRevenue: 0, platformPurchases: 0 }]),
       ) as DailyFact["channels"];

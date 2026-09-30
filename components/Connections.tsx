@@ -18,7 +18,7 @@ interface Integration {
 
 const PROVIDERS: { id: string; label: string; ready: boolean; note: string }[] = [
   { id: "shopify", label: "Shopify", ready: true, note: "Orders, customers, product costs (read-only)" },
-  { id: "meta", label: "Meta Ads", ready: false, note: "Ad spend (coming next)" },
+  { id: "meta", label: "Meta Ads", ready: true, note: "Ad spend and 7-day click purchases (read-only)" },
   { id: "google_ads", label: "Google Ads", ready: false, note: "Ad spend (coming next)" },
 ];
 
@@ -27,6 +27,8 @@ export function Connections() {
   const params = useSearchParams();
   const [rows, setRows] = useState<Integration[]>([]);
   const [shop, setShop] = useState("");
+  const [adAccount, setAdAccount] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [newName, setNewName] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -77,6 +79,29 @@ export function Connections() {
   }
 
   const shopify = rows.filter((r) => r.provider === "shopify");
+  const meta = rows.filter((r) => r.provider === "meta");
+
+  async function connectMeta() {
+    if (!client) return;
+    setBusy("meta");
+    setMsg(null);
+    const res = await fetch("/api/meta/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: client.id, adAccountId: adAccount }) });
+    const json = await res.json();
+    setBusy(null);
+    if (!res.ok) return setMsg(json.error ?? "Could not connect");
+    setAdAccount("");
+    await load();
+  }
+
+  async function syncMeta(id: string) {
+    setBusy(id);
+    setMsg(null);
+    const res = await fetch("/api/sync/meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: id, days: 90 }) });
+    const json = await res.json();
+    setBusy(null);
+    setMsg(res.ok ? `Synced ${json.rows} campaign-days.` : (json.error ?? "Sync failed"));
+    await load();
+  }
   const inputCls = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent";
 
   return (
@@ -118,16 +143,37 @@ export function Connections() {
                 </form>
               </div>
             )}
+            {p.id === "meta" && client && (
+              <div className="mt-3 space-y-2">
+                {meta.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-3 text-xs">
+                    <span>
+                      {r.account_name ?? r.account_id} <span className="text-text-muted">({r.account_id})</span>
+                    </span>
+                    <span className="flex items-center gap-3">
+                      <span className={r.status === "connected" ? "text-good" : "text-bad"}>{r.status}{r.last_error ? `: ${r.last_error}` : ""}</span>
+                      <button disabled={busy === r.id} onClick={() => syncMeta(r.id)} className="rounded-lg border border-border px-2 py-1 text-text-muted hover:text-text disabled:opacity-50">
+                        {busy === r.id ? "Syncing…" : "Sync now"}
+                      </button>
+                    </span>
+                  </div>
+                ))}
+                <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void connectMeta(); }}>
+                  <input className={`${inputCls} w-64`} placeholder="Ad account ID, e.g. act_1234567890" value={adAccount} onChange={(e) => setAdAccount(e.target.value)} />
+                  <button disabled={busy === "meta" || !adAccount.trim()} className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-black disabled:opacity-50">Connect Meta</button>
+                </form>
+              </div>
+            )}
           </div>
         ))}
       </div>
+      {msg && <p className="border-t border-border px-4 py-2 text-xs text-text-muted">{msg}</p>}
       {isAdmin && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
           <input className={`${inputCls} w-64`} placeholder="New client name" value={newName} onChange={(e) => setNewName(e.target.value)} />
           <button onClick={addClient} disabled={!newName.trim()} className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text disabled:opacity-50">
             Add client
           </button>
-          {msg && <span className="text-xs text-bad">{msg}</span>}
         </div>
       )}
     </section>
