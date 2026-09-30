@@ -306,3 +306,7 @@ create table if not exists order_refunds (
 create index if not exists order_refunds_client_date on order_refunds (client_id, refund_date);
 alter table order_refunds enable row level security;
 create policy order_refunds_read on order_refunds for select to authenticated using (public.has_client_access(client_id));
+
+/* ---------- applied later as migration "settings_extra_and_flat_cogs" ---------- */
+alter table client_settings add column if not exists extra jsonb not null default '{}'::jsonb;
+alter table client_settings add column if not exists cogs_flat_rate boolean not null default false;

@@ -67,6 +67,47 @@ export interface DailyFact {
   channels: Record<ChannelKey, ChannelDay>;
 }
 
+/**
+ * Store settings mirrored from the reference tool's Edit pop-up. Fields marked "applied" change the dashboard;
+ * the rest are saved for when the matching feature is built (shown in the UI as "saved, not applied yet").
+ */
+export interface ExtraSettings {
+  logoUrl: string;
+  industry: string;
+  weekStartDay: string;
+  showIncrementalByDefault: boolean; // applied later
+  fbClickWindow: string;
+  fbViewWindow: string;
+  fbClickType: string;
+  fbExcludeOnsite: boolean;
+  fbUseIncrementalDefault: boolean;
+  googleRevenueTiming: string;
+  pinterestAttribution: string;
+  dontSeparateBrand: boolean;
+  dontSeparateRetention: boolean;
+  dontSeparateReactivation: boolean;
+  excludeTestCampaigns: boolean;
+  testKeyword: string;
+  testStartsWith: string;
+  testEndsWith: string;
+  excludeTestFromRoas: boolean;
+  cmReduceByAdSpend: boolean;
+  cmIncludeShippingAsProfit: boolean;
+  cogsAccrueReturnsByRate: boolean;
+  dontUseShopifyCogs: boolean;
+  giftCardMode: string;
+  emailRevenueSource: "klaviyo" | "ga4";
+  organicDefinition: string;
+  churnAtRiskDays: number;
+  churnDays: number;
+  dio: number;
+  dso: number;
+  dpo: number;
+  tiktokReferralFeePct: number;
+  tiktokGmvSharePct: number;
+  tiktokGmvCommissionPct: number;
+}
+
 export interface ClientSettings {
   clientId: string;
   /** Incrementality (iROAS) factors: platform-reported revenue x multiplier = incremental revenue. */
@@ -77,6 +118,10 @@ export interface ClientSettings {
   deliveryCostPerOrder: number;
   /** COGS estimate (% of sales) for products with no cost per item. */
   cogsFallbackPct: number;
+  /** When on, COGS = cogsFallbackPct of net sales for ALL sales, ignoring Shopify costs. */
+  cogsFlatRate: boolean;
+  excludedOrderTags: string[];
+  extra: ExtraSettings;
   /** Monthly fixed costs. Not part of CM; reserved for the future P&L output. */
   monthlyFixedCosts: number;
   attributionWindow: "7d_click";

@@ -1,4 +1,4 @@
-import type { ChannelKey, ClientSettings } from "./types";
+import type { ChannelKey, ClientSettings, ExtraSettings } from "./types";
 
 export const DEFAULT_MULTIPLIERS: Record<ChannelKey, number> = {
   google_nonbrand: 0.75,
@@ -8,6 +8,45 @@ export const DEFAULT_MULTIPLIERS: Record<ChannelKey, number> = {
   pinterest: 0.3,
 };
 
+export function defaultExtra(): ExtraSettings {
+  return {
+    logoUrl: "",
+    industry: "",
+    weekStartDay: "Monday",
+    showIncrementalByDefault: true,
+    fbClickWindow: "1 Day",
+    fbViewWindow: "Disabled",
+    fbClickType: "Unique Outbound Clicks",
+    fbExcludeOnsite: false,
+    fbUseIncrementalDefault: false,
+    googleRevenueTiming: "Conversion by Revenue Date",
+    pinterestAttribution: "Unset",
+    dontSeparateBrand: false,
+    dontSeparateRetention: false,
+    dontSeparateReactivation: false,
+    excludeTestCampaigns: false,
+    testKeyword: "",
+    testStartsWith: "",
+    testEndsWith: "",
+    excludeTestFromRoas: true,
+    cmReduceByAdSpend: true,
+    cmIncludeShippingAsProfit: true,
+    cogsAccrueReturnsByRate: false,
+    dontUseShopifyCogs: false,
+    giftCardMode: "Do not separate (default)",
+    emailRevenueSource: "klaviyo",
+    organicDefinition: "Calculated: Total Rev - iPaid - Email/SMS",
+    churnAtRiskDays: 30,
+    churnDays: 140,
+    dio: 0,
+    dso: 0,
+    dpo: 0,
+    tiktokReferralFeePct: 0,
+    tiktokGmvSharePct: 0,
+    tiktokGmvCommissionPct: 0,
+  };
+}
+
 /** Settings for a client that has none saved yet. */
 export function defaultSettings(clientId: string): ClientSettings {
   return {
@@ -15,6 +54,9 @@ export function defaultSettings(clientId: string): ClientSettings {
     multipliers: { ...DEFAULT_MULTIPLIERS },
     otherVariablePct: 0,
     cogsFallbackPct: 0,
+    cogsFlatRate: false,
+    excludedOrderTags: [],
+    extra: defaultExtra(),
     deliveryCostPerOrder: 0,
     monthlyFixedCosts: 0,
     attributionWindow: "7d_click",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addYears, comparisonRange, diffDays } from "./dates";
 import { aggregate, channelGroups, channelMetricDefs, cmParts, compare, METRICS } from "./metrics";
+import { defaultExtra } from "./defaults";
 import { SeedRepository } from "./repository/seed";
 import { markFirstOrders } from "./sync/first-orders";
 import type { ChannelKey, ClientSettings, DailyFact } from "./types";
@@ -11,6 +12,9 @@ const settings: ClientSettings = {
   multipliers: { google_nonbrand: 0.75, google_brand: 0.3, meta_acquisition: 1.2, meta_returning: 0.6, pinterest: 0.3 },
   otherVariablePct: 10,
   cogsFallbackPct: 0,
+  cogsFlatRate: false,
+  excludedOrderTags: [],
+  extra: defaultExtra(),
   deliveryCostPerOrder: 2,
   monthlyFixedCosts: 3650,
   attributionWindow: "7d_click",
@@ -64,6 +68,10 @@ describe("COGS fallback", () => {
     const t = aggregate([fact({ cogs: 100, cogsUnmappedSales: 400 })]);
     expect(cmParts(t, { ...settings, cogsFallbackPct: 25 }).cogs).toBeCloseTo(200);
     expect(cmParts(t, settings).cogs).toBeCloseTo(100);
+  });
+  it("flat rate ignores Shopify costs and uses a share of net sales", () => {
+    const t = aggregate([fact({ cogs: 100, netSales: 1000 })]);
+    expect(cmParts(t, { ...settings, cogsFlatRate: true, cogsFallbackPct: 30 }).cogs).toBeCloseTo(300);
   });
 });
 

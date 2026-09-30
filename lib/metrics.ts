@@ -161,7 +161,8 @@ export function cmParts(t: Totals, s: ClientSettings): CmParts {
   const revenue = t.netSales + t.shippingCollected;
   const costOfDelivery = (s.otherVariablePct / 100) * revenue + s.deliveryCostPerOrder * orders(t);
   // Known product costs plus an estimate (fallback %) for sales whose product has no cost.
-  const cogs = t.cogs + (s.cogsFallbackPct / 100) * t.cogsUnmappedSales;
+  // "Flat rate" ignores Shopify costs entirely: COGS is a share of net sales.
+  const cogs = s.cogsFlatRate ? (s.cogsFallbackPct / 100) * t.netSales : t.cogs + (s.cogsFallbackPct / 100) * t.cogsUnmappedSales;
   const cm = revenue - cogs - adSpend - costOfDelivery;
   return { netSales: t.netSales, shipping: t.shippingCollected, cogs, costOfDelivery, adSpend, cm };
 }

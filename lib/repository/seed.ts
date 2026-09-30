@@ -8,6 +8,7 @@ import type {
   PlanVersion,
 } from "../types";
 import { CHANNEL_KEYS } from "../types";
+import { defaultExtra } from "../defaults";
 import type { Repository } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -70,6 +71,9 @@ const baseSettings = (over: Partial<Omit<ClientSettings, "clientId">> = {}): Omi
   multipliers: { ...DEFAULT_MULTIPLIERS },
   otherVariablePct: 6,
   cogsFallbackPct: 0,
+  cogsFlatRate: false,
+  excludedOrderTags: [],
+  extra: defaultExtra(),
   deliveryCostPerOrder: 1.2,
   monthlyFixedCosts: 0,
   attributionWindow: "7d_click",
@@ -331,7 +335,7 @@ export class SeedRepository implements Repository {
     const base = defaultSettings(clientId);
     const o = readOverrides(clientId);
     if (!o) return base;
-    return { ...base, ...o, clientId, multipliers: { ...base.multipliers, ...(o.multipliers ?? {}) } };
+    return { ...base, ...o, clientId, multipliers: { ...base.multipliers, ...(o.multipliers ?? {}) }, extra: { ...base.extra, ...(o.extra ?? {}) } };
   }
 
   async saveSettings(settings: ClientSettings): Promise<void> {
