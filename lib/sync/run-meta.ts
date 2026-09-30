@@ -20,9 +20,14 @@ export async function syncMeta(integrationId: string, days: number): Promise<{ r
 
     // 2) Existing-customer spend: Advantage+ Shopping breakdown by audience segment.
     let note: string | undefined;
+    let diagnostics = "";
     const existing = new Map<string, { spend: number; purchases: number; revenue: number }>();
     try {
       const segmented = await fetchCampaignDays(integration.account_id, since, until, "user_segment_key");
+      // Diagnostics: which segments did Meta return, and how much spend is in each?
+      const bySegment = new Map<string, number>();
+      for (const r of segmented) bySegment.set(r.segment ?? "(none)", (bySegment.get(r.segment ?? "(none)") ?? 0) + r.spend);
+      diagnostics = `Segments returned: ${segmented.length === 0 ? "none" : [...bySegment.entries()].map(([k, v]) => `${k} ${v.toFixed(2)}`).join("; ")}`;
       for (const r of segmented) {
         if (!isExistingSegment(r.segment)) continue;
         const k = `${r.date}|${r.campaignId}`;
@@ -69,7 +74,9 @@ export async function syncMeta(integrationId: string, days: number): Promise<{ r
 
     const now = new Date().toISOString();
     await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: since, coverage_end: until }).eq("id", integrationId);
-    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: note ?? null }).eq("id", run?.id ?? "");
+    const existingSpend = [...existing.values()].reduce((s, e) => s + e.spend, 0);
+    const runMessage = [note, diagnostics, `Existing-customer spend: ${existingSpend.toFixed(2)}`].filter(Boolean).join(" | ");
+    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: runMessage }).eq("id", run?.id ?? "");
     return { rows: spendRows.length, note };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";
