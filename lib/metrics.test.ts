@@ -254,6 +254,13 @@ describe("Google brand rule and merge", () => {
     expect(isBrandCampaign("Search | Generic", "brand")).toBe(false);
     expect(isBrandCampaign("Search | Branded", "")).toBe(false);
   });
+  it("a campaign tagged NB is never brand, even if it contains the keyword", () => {
+    expect(isBrandCampaign("AB | NB | Brand Terms Test", "brand")).toBe(false);
+    expect(isBrandCampaign("Search NB US", "brand")).toBe(false);
+    expect(isBrandCampaign("AB | Brand | US", "brand")).toBe(true);
+    expect(isBrandCampaign("Nba Brand", "brand")).toBe(true); // "Nba" is not the standalone tag NB
+    expect(isBrandCampaign("AB | NB | Brand", "brand", "")).toBe(true); // no tag configured
+  });
   it("non-brand campaign names are not brand", () => {
     expect(isBrandCampaign("Search | Non-Brand | US", "brand")).toBe(false);
     expect(isBrandCampaign("Search NonBrand", "brand")).toBe(false);

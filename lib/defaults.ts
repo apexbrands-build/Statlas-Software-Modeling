@@ -21,6 +21,7 @@ export function defaultExtra(): ExtraSettings {
     fbUseIncrementalDefault: false,
     googleRevenueTiming: "Conversion by Revenue Date",
     pinterestAttribution: "Unset",
+    nonBrandTag: "NB",
     dontSeparateBrand: false,
     dontSeparateRetention: false,
     dontSeparateReactivation: false,

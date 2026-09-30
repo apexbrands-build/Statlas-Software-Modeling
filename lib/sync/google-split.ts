@@ -11,13 +11,15 @@ const NON_BRAND = /non[\s_-]*brand/i;
 
 /**
  * Brand campaign = name contains the client's keyword (case-insensitive). An empty keyword never matches.
- * "Non-brand" / "nonbrand" / "non brand" names are never brand, even though they contain the word.
+ * Never brand: names with the non-brand tag as its own word (e.g. "NB", the agency naming convention),
+ * and "non-brand" / "nonbrand" / "non brand" names, even though they contain the word "brand".
  */
-export function isBrandCampaign(name: string, keyword: string): boolean {
+export function isBrandCampaign(name: string, keyword: string, nonBrandTag = "NB"): boolean {
   const k = keyword.trim().toLowerCase();
   if (k.length === 0) return false;
-  const cleaned = name.replace(NON_BRAND, " ");
-  return cleaned.toLowerCase().includes(k);
+  const tag = nonBrandTag.trim().toLowerCase();
+  if (tag && name.toLowerCase().split(/[^a-z0-9]+/).includes(tag)) return false;
+  return name.replace(NON_BRAND, " ").toLowerCase().includes(k);
 }
 
 type Row = Record<string, Record<string, string | number>>;

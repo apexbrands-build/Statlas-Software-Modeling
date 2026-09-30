@@ -210,6 +210,9 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, onSav
         <Field label="Google brand keyword" hint="Google campaigns whose name contains this text are treated as Brand.">
           <input className={inputCls} value={d.brandCampaignKeyword} onChange={(e) => set("brandCampaignKeyword", e.target.value)} />
         </Field>
+        <Field label="Non-brand tag" hint='A campaign with this tag as its own word in the name (e.g. "AB | NB | Sales") is never counted as brand, even if it also contains the brand keyword.'>
+          <input className={inputCls} value={x.nonBrandTag} onChange={(e) => ex("nonBrandTag", e.target.value)} />
+        </Field>
         <Check checked={x.dontSeparateBrand} onChange={(v) => ex("dontSeparateBrand", v)} label={'Don\'t Separate "Brand" Campaigns from Search'} hint="Checking this will make all paid search spend count as Acquisition (saved, not applied yet)" />
         <Check checked={x.dontSeparateRetention} onChange={(v) => ex("dontSeparateRetention", v)} label={'Don\'t Separate Campaigns with "Retention" from Acquisition'} hint="Saved, not applied yet" />
         <Check checked={x.dontSeparateReactivation} onChange={(v) => ex("dontSeparateReactivation", v)} label={'Don\'t Separate Campaigns with "Reactivation" (also: Reengagement) from Acquisition'} hint="Saved, not applied yet" />

@@ -45,7 +45,7 @@ How spend is split today: campaigns whose name contains retention, existing, ret
 
 ## 3. Google Ads (ad spend): exact steps
 
-Built: one-time agency authorization, per-client account connect, spend and purchase-conversion sync (API version `v25`, override with `GOOGLE_ADS_API_VERSION`). Brand vs non-brand = campaign name contains the client's brand keyword (Edit → aMER/CAC Calculation → Google brand keyword, default "brand"; names containing "non-brand" are never treated as brand).
+Built: one-time agency authorization, per-client account connect, spend and purchase-conversion sync (API version `v25`, override with `GOOGLE_ADS_API_VERSION`). Brand vs non-brand = campaign name contains the client's brand keyword (Edit → aMER/CAC Calculation → Google brand keyword, default "brand"; names with the tag "NB" as its own word, or "non-brand", are never treated as brand).
 
 1. **Developer token.** In the manager (MCC) account: Admin → **API Center**. Complete the short form. A new token starts at **Explorer access** (production accounts, about 2,880 operations a day, enough for this app). Apply for **Basic access** later (about 2 business days) for more headroom. Copy the token.
 2. **MCC ID.** The manager account's 10-digit ID, digits only (`GOOGLE_ADS_LOGIN_CUSTOMER_ID`).

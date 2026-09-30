@@ -13,8 +13,9 @@ export async function syncGoogle(integrationId: string, days: number): Promise<{
   const { data: run } = await admin.from("sync_runs").insert({ client_id: integration.client_id, integration_id: integrationId, provider: "google_ads" }).select("id").single();
 
   try {
-    const { data: settings } = await admin.from("client_settings").select("brand_campaign_keyword").eq("client_id", integration.client_id).maybeSingle();
+    const { data: settings } = await admin.from("client_settings").select("brand_campaign_keyword,extra").eq("client_id", integration.client_id).maybeSingle();
     const keyword = (settings?.brand_campaign_keyword as string | undefined) ?? "brand";
+    const nonBrandTag = ((settings?.extra as { nonBrandTag?: string } | null)?.nonBrandTag ?? "NB") as string;
 
     const until = addDays(new Date().toISOString().slice(0, 10), -1);
     const since = addDays(until, -(Math.min(Math.max(days, 1), 800) - 1));
@@ -39,7 +40,7 @@ export async function syncGoogle(integrationId: string, days: number): Promise<{
       platform: "google_ads",
       campaign_id: c.campaignId,
       campaign_name: c.campaignName,
-      category: isBrandCampaign(c.campaignName, keyword) ? "brand" : "acquisition",
+      category: isBrandCampaign(c.campaignName, keyword, nonBrandTag) ? "brand" : "acquisition",
       audience_type: "unknown",
       spend: c.spend,
       platform_revenue: c.revenue,
@@ -74,7 +75,7 @@ export async function syncGoogle(integrationId: string, days: number): Promise<{
     const brandSpend = spendRows.filter((r) => r.category === "brand").reduce((s, r) => s + r.spend, 0);
     const now = new Date().toISOString();
     await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: since, coverage_end: until }).eq("id", integrationId);
-    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: [note, `Brand spend (name contains "${keyword}"): ${brandSpend.toFixed(2)}`].filter(Boolean).join(" | ") }).eq("id", run?.id ?? "");
+    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: [note, `Brand spend (name contains "${keyword}", not tagged ${nonBrandTag || "–"}): ${brandSpend.toFixed(2)}`].filter(Boolean).join(" | ") }).eq("id", run?.id ?? "");
     return { rows: spendRows.length, note };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";

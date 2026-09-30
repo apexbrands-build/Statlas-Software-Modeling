@@ -116,6 +116,8 @@ export interface ExtraSettings {
   fbUseIncrementalDefault: boolean;
   googleRevenueTiming: string;
   pinterestAttribution: string;
+  /** A campaign name containing this tag (as its own word, e.g. "NB") is never brand. */
+  nonBrandTag: string;
   dontSeparateBrand: boolean;
   dontSeparateRetention: boolean;
   dontSeparateReactivation: boolean;
