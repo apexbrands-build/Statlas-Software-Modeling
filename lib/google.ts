@@ -45,7 +45,13 @@ async function accessToken(): Promise<string> {
 interface SearchResponse {
   results?: Record<string, Record<string, string | number>>[];
   nextPageToken?: string;
-  error?: { message: string };
+  error?: { message: string; details?: { errors?: { message?: string; errorCode?: Record<string, string> }[] }[] };
+}
+
+/** Google's top-level message is often generic ("invalid argument"); the real reason is in details. */
+function describeError(json: SearchResponse, status: number): string {
+  const detail = json.error?.details?.flatMap((d) => d.errors ?? []).map((e) => e.message).filter(Boolean).join("; ");
+  return `Google Ads: ${detail || json.error?.message || status}`;
 }
 
 /** Runs a GAQL query against one client account, following pages. */
@@ -62,10 +68,11 @@ export async function adsSearch(customerId: string, query: string): Promise<Reco
         "login-customer-id": digits(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID!),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ query, pageSize: 10000, ...(pageToken ? { pageToken } : {}) }),
+      // No pageSize: current API versions fix the page size and reject the field.
+      body: JSON.stringify({ query, ...(pageToken ? { pageToken } : {}) }),
     });
     const json = (await res.json()) as SearchResponse;
-    if (!res.ok || json.error) throw new Error(`Google Ads: ${json.error?.message ?? res.status}`);
+    if (!res.ok || json.error) throw new Error(describeError(json, res.status));
     rows.push(...(json.results ?? []));
     pageToken = json.nextPageToken;
   } while (pageToken);
