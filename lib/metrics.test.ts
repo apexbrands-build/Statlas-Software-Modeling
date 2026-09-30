@@ -21,7 +21,7 @@ const settings: ClientSettings = {
   monthlyFixedCosts: 3650,
   attributionWindow: "7d_click",
   revenueDefinition: "order_revenue",
-  brandCampaignKeyword: "branded",
+  brandCampaignKeyword: "brand",
   excludeBrandFromAmer: false,
   excludeMetaReturningFromAmer: false,
   dtcChannels: ["Online Store"],
@@ -249,9 +249,16 @@ describe("Meta existing-customer split", () => {
 
 describe("Google brand rule and merge", () => {
   it("brand = campaign name contains the keyword, case-insensitive; empty keyword never matches", () => {
-    expect(isBrandCampaign("Search | Branded | US", "branded")).toBe(true);
-    expect(isBrandCampaign("Search | Generic", "branded")).toBe(false);
+    expect(isBrandCampaign("Search | Branded | US", "brand")).toBe(true);
+    expect(isBrandCampaign("Brand - Exact", "brand")).toBe(true);
+    expect(isBrandCampaign("Search | Generic", "brand")).toBe(false);
     expect(isBrandCampaign("Search | Branded", "")).toBe(false);
+  });
+  it("non-brand campaign names are not brand", () => {
+    expect(isBrandCampaign("Search | Non-Brand | US", "brand")).toBe(false);
+    expect(isBrandCampaign("Search NonBrand", "brand")).toBe(false);
+    expect(isBrandCampaign("Search | non brand", "brand")).toBe(false);
+    expect(isBrandCampaign("Brand | Non-Brand Mix", "brand")).toBe(true);
   });
   it("joins cost and purchase rows per campaign-day", () => {
     const cost = [{ segments: { date: "2026-09-01" }, campaign: { id: "1", name: "A" }, metrics: { costMicros: "12340000" } }];

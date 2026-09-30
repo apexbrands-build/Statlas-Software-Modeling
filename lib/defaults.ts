@@ -61,7 +61,7 @@ export function defaultSettings(clientId: string): ClientSettings {
     monthlyFixedCosts: 0,
     attributionWindow: "7d_click",
     revenueDefinition: "order_revenue",
-    brandCampaignKeyword: "branded",
+    brandCampaignKeyword: "brand",
     excludeBrandFromAmer: false,
     excludeMetaReturningFromAmer: false,
     dtcChannels: ["Online Store", "Shop"],

@@ -148,7 +148,7 @@ Tokens are stored encrypted server-side only (Supabase Vault or app-level encryp
 
 - **Revenue definition = Order Revenue** across all clients: gross − discounts + shipping + tax, with returns excluded (Statlas wording: "Total Sales without Returns"). Used for MER, AOV, iROAS and all correlations with platform-reported revenue; refunds are *not* netted on the marketing side. Refunds still appear as a line in the contribution margin P&L.
 - **Incrementality multipliers are editable per client** in settings (an "Incrementality (iROAS)" table in Statlas's store edit dialog); no geo-holdout tests by Apex, some clients run tests elsewhere (e.g. Triple Whale). Defaults are the House-based public benchmarks you gave (Meta acquisition 1.2, Meta returning 0.6, Google non-brand 0.75 seen in Statlas, Google Brand 0.3 seen in Statlas).
-- **Google branded = campaign name contains "branded"** (case-insensitive).
+- **Google brand = campaign name contains "brand"** (case-insensitive, editable per client; "non-brand" names are excluded).
 - **Meta returning spend** = spend on the existing/customer-defined audience segment.
 - **Seed data first**, Supabase and API connectors afterwards.
 - **Contribution margin** = net sales − COGS − other variable costs − ad spend (per your description), COGS pulled from Shopify per-variant cost, other variable costs as % of revenue.

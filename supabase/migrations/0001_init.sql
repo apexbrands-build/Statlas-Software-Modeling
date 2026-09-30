@@ -203,7 +203,7 @@ create table client_settings (
   delivery_cost_per_order numeric not null default 0,
   monthly_fixed_costs numeric not null default 0,     -- P&L only, not part of contribution margin
   attribution_window text not null default '7d_click',
-  brand_campaign_keyword text not null default 'branded',
+  brand_campaign_keyword text not null default 'brand',
   dtc_channels text[] not null default '{"Online Store","Shop"}',
   excluded_order_tags text[] not null default '{}',
   exclude_brand_from_amer boolean not null default false,
@@ -325,3 +325,6 @@ create table if not exists agency_secrets (
   updated_at timestamptz not null default now()
 );
 alter table agency_secrets enable row level security;
+
+/* ---------- applied later: default brand keyword is "brand" ---------- */
+alter table client_settings alter column brand_campaign_keyword set default 'brand';

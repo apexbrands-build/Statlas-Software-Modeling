@@ -14,7 +14,7 @@ export async function syncGoogle(integrationId: string, days: number): Promise<{
 
   try {
     const { data: settings } = await admin.from("client_settings").select("brand_campaign_keyword").eq("client_id", integration.client_id).maybeSingle();
-    const keyword = (settings?.brand_campaign_keyword as string | undefined) ?? "branded";
+    const keyword = (settings?.brand_campaign_keyword as string | undefined) ?? "brand";
 
     const until = addDays(new Date().toISOString().slice(0, 10), -1);
     const since = addDays(until, -(Math.min(Math.max(days, 1), 800) - 1));

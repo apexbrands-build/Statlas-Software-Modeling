@@ -78,7 +78,7 @@ const baseSettings = (over: Partial<Omit<ClientSettings, "clientId">> = {}): Omi
   monthlyFixedCosts: 0,
   attributionWindow: "7d_click",
   revenueDefinition: "order_revenue",
-  brandCampaignKeyword: "branded",
+  brandCampaignKeyword: "brand",
   excludeBrandFromAmer: false,
   excludeMetaReturningFromAmer: false,
   dtcChannels: [...DTC],

@@ -7,10 +7,17 @@ export interface GoogleCampaignDay {
   revenue: number;
 }
 
-/** Brand campaign = name contains the client's keyword (case-insensitive). An empty keyword never matches. */
+const NON_BRAND = /non[\s_-]*brand/i;
+
+/**
+ * Brand campaign = name contains the client's keyword (case-insensitive). An empty keyword never matches.
+ * "Non-brand" / "nonbrand" / "non brand" names are never brand, even though they contain the word.
+ */
 export function isBrandCampaign(name: string, keyword: string): boolean {
   const k = keyword.trim().toLowerCase();
-  return k.length > 0 && name.toLowerCase().includes(k);
+  if (k.length === 0) return false;
+  const cleaned = name.replace(NON_BRAND, " ");
+  return cleaned.toLowerCase().includes(k);
 }
 
 type Row = Record<string, Record<string, string | number>>;
