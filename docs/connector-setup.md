@@ -47,11 +47,11 @@ How spend is split today: campaigns whose name contains retention, existing, ret
 
 Built: one-time agency authorization, per-client account connect, spend and purchase-conversion sync (API version `v25`, override with `GOOGLE_ADS_API_VERSION`). Brand vs non-brand = campaign name contains the client's brand keyword (Edit → aMER/CAC Calculation → Google brand keyword, default "brand"; names with the tag "NB" as its own word, or "non-brand", are never treated as brand).
 
-1. **Developer token.** In the manager (MCC) account: Admin → **API Center**. Complete the short form. A new token starts at **Explorer access** (production accounts, about 2,880 operations a day, enough for this app). Apply for **Basic access** later (about 2 business days) for more headroom. Copy the token.
+1. **API access (no developer token needed).** Since September 2026 Google manages API access levels per **Google Cloud project** (the project that issues the OAuth client), and developer tokens are no longer required. Check the level under Cloud Console → APIs & Services → Google Ads API. A developer token, if you still have one, is optional (`GOOGLE_ADS_DEVELOPER_TOKEN`).
 2. **MCC ID.** The manager account's 10-digit ID, digits only (`GOOGLE_ADS_LOGIN_CUSTOMER_ID`).
 3. **Client accounts under the MCC.** Each client's Google Ads account must be linked to the MCC (MCC → Accounts → Sub-account settings → Link existing account; the client approves).
 4. **Google Cloud.** console.cloud.google.com → new project `apex-data` → APIs & Services → Library → enable **Google Ads API** → OAuth consent screen → user type **Internal** (Workspace) → app name, support email → add scope `https://www.googleapis.com/auth/adwords` → Credentials → Create credentials → **OAuth client ID** → Web application → authorized redirect URI `https://apex-data-beta.vercel.app/api/google/callback`. Copy Client ID and Client secret.
-5. **Vercel variables** (then redeploy): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (Sensitive), `GOOGLE_ADS_DEVELOPER_TOKEN` (Sensitive), `GOOGLE_ADS_LOGIN_CUSTOMER_ID`.
+5. **Vercel variables** (then redeploy): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (Sensitive), `GOOGLE_ADS_LOGIN_CUSTOMER_ID`. Optional: `GOOGLE_ADS_DEVELOPER_TOKEN`.
 6. **Authorize once** (an admin signed in to the app): Store Settings → Add Connection → Google Ads → **Authorize Google**. Sign in with the Google account that has MCC access and approve. The refresh token is stored encrypted on the server.
 7. **Connect a client account:** Add Connection → Google Ads → enter the client's 10-digit customer ID → Connect → Edit → **Sync now**.
 

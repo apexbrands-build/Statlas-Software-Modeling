@@ -6,8 +6,10 @@ import { getAdminClient } from "@/lib/supabase/server";
 export const GOOGLE_ADS_VERSION = process.env.GOOGLE_ADS_API_VERSION ?? "v25";
 export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/adwords";
 
+// Since Sept 2026 Google manages API access levels per Google Cloud project (the one that issued the OAuth client),
+// and developer tokens are no longer required. GOOGLE_ADS_DEVELOPER_TOKEN is optional and only sent if set.
 export function googleConfigured(): boolean {
-  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_ADS_DEVELOPER_TOKEN && process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID);
+  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID);
 }
 
 export const digits = (s: string) => s.replace(/\D/g, "");
@@ -56,7 +58,7 @@ export async function adsSearch(customerId: string, query: string): Promise<Reco
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN!,
+        ...(process.env.GOOGLE_ADS_DEVELOPER_TOKEN ? { "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN } : {}),
         "login-customer-id": digits(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID!),
         "Content-Type": "application/json",
       },
