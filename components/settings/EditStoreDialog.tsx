@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BrandIcon, channelProvider } from "@/components/BrandIcon";
 import { Accordion, Check, Field, inputCls, Modal, NumberInput, Select, Switch } from "./ui";
 import { CHANNEL_LABELS, type ChannelKey, type ClientSettings, type ExtraSettings } from "@/lib/types";
 
@@ -148,7 +149,7 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, onSav
           {FACTOR_ROWS.map((r) => (
             <div key={r.key} className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3 ${r.kind === "Acquisition" ? "border-good/30 bg-good/5" : "border-yellow-400/30 bg-yellow-400/5"}`}>
               <div className="text-sm">
-                <span className="font-medium">{r.publisher}</span> <span className="ml-3 text-text-muted">{r.kind}</span>
+                <span className="inline-flex items-center gap-2 font-medium"><BrandIcon provider={r.publisher === "Facebook" ? "facebook" : r.publisher === "GoogleAds" ? "google_ads" : "pinterest"} title={r.publisher} />{r.publisher}</span> <span className="ml-3 text-text-muted">{r.kind}</span>
                 <span className="ml-3 text-[11px] text-text-faint">({CHANNEL_LABELS[r.key]})</span>
               </div>
               <div className="w-28">
@@ -219,7 +220,7 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, onSav
             const on = d.dtcChannels.some((x) => x.toLowerCase() === c.toLowerCase());
             return (
               <div key={c} className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
-                <span className="text-sm">{c}</span>
+                <span className="flex items-center gap-3 text-sm"><BrandIcon provider={channelProvider(c)} title={c} size={22} />{c}</span>
                 <Switch label={c} checked={on} onChange={(v) => set("dtcChannels", v ? [...d.dtcChannels, c] : d.dtcChannels.filter((x) => x.toLowerCase() !== c.toLowerCase()))} />
               </div>
             );

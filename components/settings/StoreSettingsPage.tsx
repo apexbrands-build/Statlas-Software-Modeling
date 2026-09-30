@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { BrandIcon } from "@/components/BrandIcon";
 import { EditStoreDialog } from "./EditStoreDialog";
 import { inputCls, Modal } from "./ui";
 import { useApp } from "@/lib/app-context";
@@ -22,7 +23,6 @@ interface Integration {
 }
 
 const PROVIDER_LABEL: Record<string, string> = { shopify: "Shopify", meta: "Facebook", google_ads: "Google Ads", pinterest: "Pinterest", klaviyo: "Klaviyo", ga4: "GA4" };
-const PROVIDER_DOT: Record<string, string> = { shopify: "#95bf47", meta: "#1877f2", google_ads: "#fbbc04", pinterest: "#e60023", klaviyo: "#3ad823", ga4: "#e37400" };
 
 type Dialog = null | "edit" | "add" | "costs" | "store" | { connection: Integration };
 
@@ -144,7 +144,7 @@ export function StoreSettingsPage() {
                     <tr key={r.id} className="border-t border-border align-top">
                       <td className="px-5 py-3">
                         <span className="flex items-center gap-2 font-medium">
-                          <span className="inline-block h-3 w-3 rounded-full" style={{ background: PROVIDER_DOT[r.provider] ?? "#888" }} />
+                          <BrandIcon provider={r.provider} title={PROVIDER_LABEL[r.provider]} />
                           {PROVIDER_LABEL[r.provider] ?? r.provider}
                           {r.status === "error" && <span title={r.last_error ?? ""}>⚠️</span>}
                         </span>
@@ -268,7 +268,7 @@ function AddConnectionDialog({ clientId, initialShop, onClose, onChanged, setMsg
   return (
     <Modal title="Add Connection" onClose={onClose}>
       <div className="space-y-2 rounded-xl border border-border p-4">
-        <div className="text-sm font-semibold">Shopify</div>
+        <div className="flex items-center gap-2 text-sm font-semibold"><BrandIcon provider="shopify" />Shopify</div>
         <p className="text-xs text-text-muted">Read-only: orders, customers, product costs. You approve the install in Shopify as a store admin.</p>
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); window.location.href = `/api/shopify/install?client=${clientId}&shop=${encodeURIComponent(shop)}`; }}>
           <input className={inputCls} placeholder="store-name.myshopify.com" value={shop} onChange={(e) => setShop(e.target.value)} />
@@ -278,7 +278,7 @@ function AddConnectionDialog({ clientId, initialShop, onClose, onChanged, setMsg
         </form>
       </div>
       <div className="space-y-2 rounded-xl border border-border p-4">
-        <div className="text-sm font-semibold">Meta Ads</div>
+        <div className="flex items-center gap-2 text-sm font-semibold"><BrandIcon provider="meta" title="Meta" />Meta Ads</div>
         <p className="text-xs text-text-muted">Read-only ad spend and 7-day click purchases, through the agency System User.</p>
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void connectMeta(); }}>
           <input className={inputCls} placeholder="Ad account ID, e.g. act_1234567890" value={account} onChange={(e) => setAccount(e.target.value)} />
@@ -288,9 +288,9 @@ function AddConnectionDialog({ clientId, initialShop, onClose, onChanged, setMsg
         </form>
         {err && <p className="text-xs text-bad">{err}</p>}
       </div>
-      {["Google Ads", "Pinterest", "Klaviyo", "GA4"].map((p) => (
+      {[["google_ads", "Google Ads"], ["pinterest", "Pinterest"], ["klaviyo", "Klaviyo"], ["ga4", "GA4"]].map(([id, p]) => (
         <div key={p} className="flex items-center justify-between rounded-xl border border-border px-4 py-3 text-sm text-text-muted">
-          {p}
+          <span className="flex items-center gap-2"><BrandIcon provider={id} title={p} />{p}</span>
           <span className="rounded-full border border-border px-2 text-[10px] uppercase tracking-wide text-text-faint">Soon</span>
         </div>
       ))}
@@ -304,6 +304,7 @@ function ConnectionDialog({ row, onClose, onSync }: { row: Integration; onClose:
   const syncable = row.provider === "shopify" || row.provider === "meta";
   return (
     <Modal title={`${PROVIDER_LABEL[row.provider] ?? row.provider} connection`} onClose={onClose}>
+      <BrandIcon provider={row.provider} size={32} title={PROVIDER_LABEL[row.provider]} />
       <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
         <dt className="text-text-muted">Account</dt>
         <dd>{row.account_name ?? row.account_id}</dd>
