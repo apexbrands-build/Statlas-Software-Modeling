@@ -70,10 +70,11 @@ export interface Range {
   to: string;
 }
 
-export type CompareModeName = "plan" | "yoy" | "prev";
+export type CompareModeName = "plan" | "yoy" | "prev" | "custom";
 
 /** Range whose actuals are the comparison baseline for `mode`, given the data-clamped current range. */
-export function comparisonRange(mode: CompareModeName, cur: Range): Range {
+export function comparisonRange(mode: CompareModeName, cur: Range, custom?: Range): Range {
+  if (mode === "custom" && custom) return custom;
   if (mode === "yoy") return { from: addYears(cur.from, -1), to: addYears(cur.to, -1) };
   const len = diffDays(cur.from, cur.to) + 1;
   if (mode === "prev") return { from: addDays(cur.from, -len), to: addDays(cur.from, -1) };

@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { DailyChart } from "./DailyChart";
 import { theme } from "@/theme/theme";
-import { addYears, type CompareModeName } from "@/lib/dates";
-import { COMPARE_LABEL, tileNumbers, type DashData } from "@/lib/dashboard-data";
+import type { CompareModeName } from "@/lib/dates";
+import { compareSource, COMPARE_LABEL, tileNumbers, type DashData } from "@/lib/dashboard-data";
 import { formatDiff, formatValue } from "@/lib/format";
 import { aggregate, cmParts, type MetricDef } from "@/lib/metrics";
 import { metricSeries } from "@/lib/series";
@@ -30,16 +30,15 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
   const f = (v: number | null, fmt = def.format) => formatValue(v, fmt, cur);
   const nums = tileNumbers(def, data, mode);
 
-  const allFacts = new Map(data.lyFacts);
-  data.facts.forEach((v, k) => allFacts.set(k, v));
-  const s = metricSeries(def, { dates: data.dates, facts: data.facts, allFacts, plan: data.plan, settings: data.settings });
+  const cmp = compareSource(data, mode);
+  const s = metricSeries(def, { dates: data.dates, facts: data.facts, cmpFacts: cmp.facts, cmpDate: cmp.date, plan: data.plan, settings: data.settings });
 
   const hasTarget = s.target.some((v) => v !== null);
-  const hasLy = s.lastYear.some((v) => v !== null);
+  const hasLy = s.compare.some((v) => v !== null);
   const series = [
     { id: "actual", label: title ?? def.label, kind: "line" as const, color: theme.colors.chartPrimary, values: s.actual },
     ...(hasTarget ? [{ id: "target", label: "Plan target", kind: "line" as const, color: theme.colors.chartTarget, values: s.target }] : []),
-    ...(hasLy ? [{ id: "ly", label: "Last year", kind: "line" as const, color: theme.colors.chartCompare, values: s.lastYear, dashed: true }] : []),
+    ...(hasLy ? [{ id: "ly", label: cmp.label, kind: "line" as const, color: theme.colors.chartCompare, values: s.compare, dashed: true }] : []),
   ];
 
   const isCm = def.key === "cm";
@@ -101,7 +100,7 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
                   <>
                     <th className="px-3 py-2 font-medium">Actual</th>
                     <th className="px-3 py-2 font-medium">Plan target</th>
-                    <th className="px-3 py-2 font-medium">Last year</th>
+                    <th className="px-3 py-2 font-medium">{cmp.label}</th>
                   </>
                 )}
               </tr>
@@ -128,7 +127,7 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
                       <>
                         <td className="px-3 py-1.5">{s.actual[i] === null ? "" : f(s.actual[i])}</td>
                         <td className="px-3 py-1.5 text-text-muted">{s.target[i] === null ? "" : f(s.target[i])}</td>
-                        <td className="px-3 py-1.5 text-text-muted">{s.lastYear[i] === null ? "" : f(s.lastYear[i])}</td>
+                        <td className="px-3 py-1.5 text-text-muted">{s.compare[i] === null ? "" : f(s.compare[i])}</td>
                       </>
                     )}
                   </tr>
@@ -138,7 +137,7 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
           </table>
         </div>
         <p className="mt-2 text-[11px] text-text-faint">
-          Last year compares against {addYears(dates[0], -1)} → {addYears(dates[dates.length - 1], -1)}. Seed data only.
+          {cmp.label} compares against {cmp.date(dates[0])} → {cmp.date(dates[dates.length - 1])}. Seed data only.
         </p>
       </div>
     </div>

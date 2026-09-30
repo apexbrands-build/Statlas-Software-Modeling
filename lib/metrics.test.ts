@@ -132,6 +132,11 @@ describe("dates", () => {
     expect(prev).toEqual({ from: "2026-08-21", to: "2026-08-31" });
     expect(diffDays(prev.from, prev.to)).toBe(10);
   });
+  it("custom comparison uses the range the user picked", () => {
+    const cur = { from: "2026-09-01", to: "2026-09-11" };
+    const custom = { from: "2026-03-01", to: "2026-03-31" };
+    expect(comparisonRange("custom", cur, custom)).toEqual(custom);
+  });
 });
 
 describe("seed repository", () => {

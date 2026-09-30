@@ -6,10 +6,11 @@ import { MetricModal } from "./MetricModal";
 import { MetricTile } from "./MetricTile";
 import { theme } from "@/theme/theme";
 import { useApp } from "@/lib/app-context";
-import { COMPARE_LABEL, tileNumbers, useDashboardData, type DashData } from "@/lib/dashboard-data";
+import { compareSource, COMPARE_LABEL, tileNumbers, useDashboardData, type DashData } from "@/lib/dashboard-data";
 import {
   addDays,
   addMonths,
+  comparisonRange,
   endOfMonth,
   startOfMonth,
   todayLocal,
@@ -77,12 +78,18 @@ export function Dashboard() {
   const [preset, setPreset] = useState<Preset>("this_month");
   const [custom, setCustom] = useState<Range>({ from: "2026-01-01", to: "2026-01-31" });
   const [mode, setMode] = useState<CompareModeName>("yoy");
+  const [customCmp, setCustomCmp] = useState<Range | null>(null);
   const [breakout, setBreakout] = useState(true);
   const [chartType, setChartType] = useState<"sales" | "cm" | "mer">("sales");
   const [open, setOpen] = useState<Open | null>(null);
 
   const range = useMemo(() => (today ? presetRange(preset, today, custom) : null), [preset, today, custom]);
-  const data = useDashboardData(client, settings, range);
+  // Custom comparison period defaults to the period right before the selected range.
+  const cmpRange = useMemo(
+    () => (mode === "custom" && range ? (customCmp ?? comparisonRange("prev", range)) : null),
+    [mode, range, customCmp],
+  );
+  const data = useDashboardData(client, settings, range, cmpRange);
 
   if (!mounted || !client || !settings || !range) return <Skeleton />;
 
@@ -99,6 +106,8 @@ export function Dashboard() {
         mode={mode}
         setMode={setMode}
         hasPlan={data?.hasPlan ?? false}
+        cmpRange={cmpRange}
+        setCmpRange={setCustomCmp}
       />
       {!data ? (
         <Skeleton />
@@ -136,8 +145,10 @@ function Controls(props: {
   mode: CompareModeName;
   setMode: (m: CompareModeName) => void;
   hasPlan: boolean;
+  cmpRange: Range | null;
+  setCmpRange: (r: Range) => void;
 }) {
-  const { preset, setPreset, range, setCustom, mode, setMode, hasPlan } = props;
+  const { preset, setPreset, range, setCustom, mode, setMode, hasPlan, cmpRange, setCmpRange } = props;
   const sel = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-accent";
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -162,8 +173,16 @@ function Controls(props: {
           {hasPlan && <option value="plan">Plan</option>}
           <option value="yoy">Last year (YoY)</option>
           <option value="prev">Previous period</option>
+          <option value="custom">Custom period</option>
         </select>
       </label>
+      {mode === "custom" && cmpRange && (
+        <div className="flex items-center gap-1.5 text-sm text-text-muted">
+          <input aria-label="Comparison from" type="date" className={sel} value={cmpRange.from} max={cmpRange.to} onChange={(e) => e.target.value && setCmpRange({ from: e.target.value, to: cmpRange.to })} />
+          →
+          <input aria-label="Comparison to" type="date" className={sel} value={cmpRange.to} min={cmpRange.from} onChange={(e) => e.target.value && setCmpRange({ from: cmpRange.from, to: e.target.value })} />
+        </div>
+      )}
     </div>
   );
 }
@@ -208,7 +227,11 @@ function Body(props: {
       <p className="text-xs text-text-faint">
         {data.range.from} → {data.range.to}
         {partial ? ` · actuals through ${data.effTo}, ${COMPARE_LABEL[mode]} covers the same elapsed days` : ""} · {data.client.name} ·{" "}
-        {mode === "plan" && data.planName ? data.planName : COMPARE_LABEL[mode]}
+        {mode === "plan" && data.planName
+          ? data.planName
+          : mode === "custom" && data.customRange
+            ? `vs ${data.customRange.from} → ${data.customRange.to}`
+            : COMPARE_LABEL[mode]}
       </p>
 
       {/* Hero: contribution margin */}
@@ -323,12 +346,8 @@ function Grid({ cols, children }: { cols: 4 | 5; children: React.ReactNode }) {
 
 function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" | "mer"; mode: CompareModeName }) {
   const cur = data.client.currency;
-  const allFacts = useMemo(() => {
-    const m = new Map(data.lyFacts);
-    data.facts.forEach((v, k) => m.set(k, v));
-    return m;
-  }, [data]);
-  const ctx = { dates: data.dates, facts: data.facts, allFacts, plan: data.plan, settings: data.settings };
+  const cmp = compareSource(data, mode);
+  const ctx = { dates: data.dates, facts: data.facts, cmpFacts: cmp.facts, cmpDate: cmp.date, plan: data.plan, settings: data.settings };
   const c = theme.colors;
 
   const series: ChartSeries[] = useMemo(() => {
@@ -341,7 +360,7 @@ function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" 
         { id: "trev", label: "Target revenue", kind: "line", color: c.chartTarget, values: rev.target, dashed: true },
         { id: "tsp", label: "Target spend", kind: "line", color: c.bad, values: sp.target, dashed: true },
       ];
-      if (mode === "yoy" || !data.hasPlan) out.push({ id: "ly", label: "Revenue last year", kind: "line", color: c.chartCompare, values: rev.lastYear, dashed: true });
+      if (mode !== "plan" || !data.hasPlan) out.push({ id: "ly", label: `Revenue ${cmp.label.toLowerCase()}`, kind: "line", color: c.chartCompare, values: rev.compare, dashed: true });
       // No plan = no targets: drop any series with no values.
       return out.filter((s) => s.values.some((v) => v !== null));
     }
@@ -350,7 +369,7 @@ function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" 
     const out: ChartSeries[] = [
       { id: "a", label: def.label, kind: "line", color: c.chartPrimary, values: s.actual },
       { id: "t", label: "Plan target", kind: "line", color: c.chartTarget, values: s.target, dashed: true },
-      { id: "ly", label: "Last year", kind: "line", color: c.chartCompare, values: s.lastYear, dashed: true },
+      { id: "ly", label: cmp.label, kind: "line", color: c.chartCompare, values: s.compare, dashed: true },
     ];
     return out.filter((x) => x.values.some((v) => v !== null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
