@@ -1,11 +1,12 @@
 import "server-only";
 import { getAdminClient } from "@/lib/supabase/server";
-import { fetchCampaignDays, isReturningCampaign } from "./meta";
+import { fetchCampaignDays, isExistingSegment } from "./meta";
+import { splitCampaignDays } from "./meta-split";
 
 const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
 
 /** Pulls Meta spend for one connected ad account and rebuilds the Meta channel rows. */
-export async function syncMeta(integrationId: string, days: number): Promise<{ rows: number }> {
+export async function syncMeta(integrationId: string, days: number): Promise<{ rows: number; note?: string }> {
   const admin = getAdminClient();
   const { data: integration } = await admin.from("integrations").select("id,client_id,provider,account_id").eq("id", integrationId).single();
   if (!integration || integration.provider !== "meta") throw new Error("Not a Meta connection");
@@ -14,22 +15,34 @@ export async function syncMeta(integrationId: string, days: number): Promise<{ r
   try {
     const until = addDays(new Date().toISOString().slice(0, 10), -1);
     const since = addDays(until, -(Math.min(Math.max(days, 1), 800) - 1));
+    // 1) Total spend per campaign and day (source of truth for spend).
     const campaignDays = await fetchCampaignDays(integration.account_id, since, until);
 
-    const spendRows = campaignDays.map((c) => ({
-      client_id: integration.client_id,
-      date: c.date,
-      platform: "meta",
-      campaign_id: c.campaignId,
-      campaign_name: c.campaignName,
-      category: isReturningCampaign(c.campaignName) ? "retention" : "acquisition",
-      audience_type: isReturningCampaign(c.campaignName) ? "returning" : "new",
-      spend: c.spend,
-      platform_revenue: c.revenue,
-      platform_purchases: c.purchases,
-    }));
+    // 2) Existing-customer spend: Advantage+ Shopping breakdown by audience segment.
+    let note: string | undefined;
+    const existing = new Map<string, { spend: number; purchases: number; revenue: number }>();
+    try {
+      const segmented = await fetchCampaignDays(integration.account_id, since, until, "user_segment_key");
+      for (const r of segmented) {
+        if (!isExistingSegment(r.segment)) continue;
+        const k = `${r.date}|${r.campaignId}`;
+        const e = existing.get(k) ?? { spend: 0, purchases: 0, revenue: 0 };
+        e.spend += r.spend;
+        e.purchases += r.purchases;
+        e.revenue += r.revenue;
+        existing.set(k, e);
+      }
+      if (segmented.length === 0) note = "No audience-segment data returned: set the existing-customer definition in the ad account's audience settings, and use Advantage+ shopping campaigns.";
+    } catch (e) {
+      note = `Existing-customer split unavailable: ${e instanceof Error ? e.message : "error"}`;
+    }
+
+    // 3) Acquisition = total minus existing, per campaign-day. Existing rows get their own campaign id suffix.
+    const spendRows = splitCampaignDays(campaignDays, existing).map((r) => ({ ...r, client_id: integration.client_id, platform: "meta" }));
+    // Rebuild the window so rows from earlier syncs (old splits) cannot double count.
+    await admin.from("ad_spend_daily").delete().eq("client_id", integration.client_id).eq("platform", "meta").gte("date", since).lte("date", until);
     for (let i = 0; i < spendRows.length; i += 500) {
-      const { error } = await admin.from("ad_spend_daily").upsert(spendRows.slice(i, i + 500));
+      const { error } = await admin.from("ad_spend_daily").insert(spendRows.slice(i, i + 500));
       if (error) throw new Error(error.message);
     }
 
@@ -55,9 +68,9 @@ export async function syncMeta(integrationId: string, days: number): Promise<{ r
     }
 
     const now = new Date().toISOString();
-    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: null, coverage_end: until }).eq("id", integrationId);
-    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length }).eq("id", run?.id ?? "");
-    return { rows: spendRows.length };
+    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: since, coverage_end: until }).eq("id", integrationId);
+    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: note ?? null }).eq("id", run?.id ?? "");
+    return { rows: spendRows.length, note };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";
     await admin.from("integrations").update({ status: "error", last_error: message.slice(0, 300) }).eq("id", integrationId);

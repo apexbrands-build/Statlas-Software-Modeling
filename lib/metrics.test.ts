@@ -4,6 +4,7 @@ import { aggregate, channelGroups, channelMetricDefs, cmParts, compare, METRICS 
 import { defaultExtra } from "./defaults";
 import { SeedRepository } from "./repository/seed";
 import { markFirstOrders } from "./sync/first-orders";
+import { splitCampaignDays } from "./sync/meta-split";
 import type { ChannelKey, ClientSettings, DailyFact } from "./types";
 import { CHANNEL_KEYS } from "./types";
 
@@ -218,5 +219,29 @@ describe("new vs returning classification", () => {
     const r = markFirstOrders([o("a", "x", "2026-09-01", null), o("b", "x", "2026-09-03", null)]);
     expect(r.get("a")).toBe(true);
     expect(r.get("b")).toBe(false);
+  });
+});
+
+describe("Meta existing-customer split", () => {
+  const day = { date: "2026-09-01", campaignId: "c1", campaignName: "ASC", spend: 100, purchases: 10, revenue: 500 };
+  it("splits a campaign-day into acquisition and existing without changing totals", () => {
+    const rows = splitCampaignDays([day], new Map([["2026-09-01|c1", { spend: 30, purchases: 4, revenue: 200 }]]));
+    expect(rows).toHaveLength(2);
+    const acq = rows.find((r) => r.audience_type === "new")!;
+    const ret = rows.find((r) => r.audience_type === "returning")!;
+    expect(acq.spend).toBe(70);
+    expect(ret.spend).toBe(30);
+    expect(ret.campaign_id).toBe("c1:existing");
+    expect(rows.reduce((s, r) => s + r.spend, 0)).toBe(100);
+    expect(rows.reduce((s, r) => s + r.platform_revenue, 0)).toBe(500);
+  });
+  it("campaigns without segment data are all acquisition", () => {
+    const rows = splitCampaignDays([day], new Map());
+    expect(rows).toHaveLength(1);
+    expect(rows[0].category).toBe("acquisition");
+  });
+  it("never produces negative acquisition when the breakdown slightly exceeds the total", () => {
+    const rows = splitCampaignDays([day], new Map([["2026-09-01|c1", { spend: 101, purchases: 11, revenue: 510 }]]));
+    expect(rows.every((r) => r.spend >= 0 && r.platform_revenue >= 0)).toBe(true);
   });
 });

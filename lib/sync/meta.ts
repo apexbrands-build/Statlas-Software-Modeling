@@ -12,6 +12,7 @@ interface InsightRow {
   campaign_id: string;
   campaign_name: string;
   date_start: string;
+  user_segment_key?: string;
   spend: string;
   actions?: Action[];
   action_values?: Action[];
@@ -56,6 +57,8 @@ function pickPurchase(list: Action[] | undefined): number {
 }
 
 export interface CampaignDay {
+  /** Audience segment (only when requested with breakdown user_segment_key). */
+  segment?: string;
   date: string;
   campaignId: string;
   campaignName: string;
@@ -64,8 +67,12 @@ export interface CampaignDay {
   revenue: number;
 }
 
-/** Campaign-level daily insights, 7-day click attribution. */
-export async function fetchCampaignDays(adAccountId: string, since: string, until: string): Promise<CampaignDay[]> {
+/**
+ * Campaign-level daily insights, 7-day click attribution.
+ * breakdown "user_segment_key" splits Advantage+ Shopping campaigns into new / existing / engaged customers,
+ * using the existing-customer definition saved in the ad account's audience settings.
+ */
+export async function fetchCampaignDays(adAccountId: string, since: string, until: string, breakdown?: string): Promise<CampaignDay[]> {
   const out: CampaignDay[] = [];
   let page = await graph<{ data: InsightRow[]; paging?: { next?: string } }>(`${adAccountId}/insights`, {
     level: "campaign",
@@ -74,10 +81,12 @@ export async function fetchCampaignDays(adAccountId: string, since: string, unti
     fields: "campaign_id,campaign_name,spend,actions,action_values",
     action_attribution_windows: JSON.stringify(["7d_click"]),
     limit: "500",
+    ...(breakdown ? { breakdowns: breakdown } : {}),
   });
   for (;;) {
     for (const r of page.data) {
       out.push({
+        segment: r.user_segment_key,
         date: r.date_start,
         campaignId: r.campaign_id,
         campaignName: r.campaign_name,
@@ -92,13 +101,7 @@ export async function fetchCampaignDays(adAccountId: string, since: string, unti
   return out;
 }
 
-/**
- * Returning (existing-customer) spend. Current rule: campaign name contains one of these words.
- * To be confirmed with the team; Advantage+ existing-customer budget splits would need ad-set level data.
- */
-export const RETURNING_KEYWORDS = ["retention", "existing", "returning", "crm", "lapsed", "reactivation"];
-
-export function isReturningCampaign(name: string): boolean {
-  const n = name.toLowerCase();
-  return RETURNING_KEYWORDS.some((k) => n.includes(k));
+/** True for the existing-customer segment returned by the user_segment_key breakdown. */
+export function isExistingSegment(segment: string | undefined): boolean {
+  return (segment ?? "").toLowerCase().includes("existing");
 }
