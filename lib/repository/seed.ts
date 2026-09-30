@@ -69,6 +69,7 @@ const DTC = ["Online Store", "Shop"];
 const baseSettings = (over: Partial<Omit<ClientSettings, "clientId">> = {}): Omit<ClientSettings, "clientId"> => ({
   multipliers: { ...DEFAULT_MULTIPLIERS },
   otherVariablePct: 6,
+  cogsFallbackPct: 0,
   deliveryCostPerOrder: 1.2,
   monthlyFixedCosts: 0,
   attributionWindow: "7d_click",
@@ -232,6 +233,7 @@ function buildFact(p: Profile, date: string): DailyFact {
     returningOrders: retOrders,
     refunds,
     cogs,
+    cogsUnmappedSales: 0,
     emailRevenue,
     emailCampaignRevenue: emailRevenue * campaignShare,
     emailFlowRevenue: emailRevenue * (1 - campaignShare),

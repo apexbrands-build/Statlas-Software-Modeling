@@ -286,3 +286,23 @@ revoke execute on function public.is_admin() from public, anon;
 revoke execute on function public.has_client_access(uuid) from public, anon;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.has_client_access(uuid) to authenticated;
+
+/* ---------- applied later as migration "shopify_returns_and_cogs_coverage" ---------- */
+alter table orders add column if not exists order_revenue numeric not null default 0;
+alter table orders add column if not exists cogs_unmapped_sales numeric not null default 0;
+alter table daily_facts add column if not exists cogs_unmapped_sales numeric not null default 0;
+alter table client_settings add column if not exists cogs_fallback_pct numeric not null default 0;
+
+create table if not exists order_refunds (
+  client_id uuid not null references clients(id) on delete cascade,
+  refund_id text not null,
+  order_id text not null,
+  refund_date date not null,
+  created_at timestamptz not null,
+  total_refunded numeric not null default 0,
+  items_subtotal numeric not null default 0,
+  primary key (client_id, refund_id)
+);
+create index if not exists order_refunds_client_date on order_refunds (client_id, refund_date);
+alter table order_refunds enable row level security;
+create policy order_refunds_read on order_refunds for select to authenticated using (public.has_client_access(client_id));

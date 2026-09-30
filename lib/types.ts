@@ -53,10 +53,12 @@ export interface DailyFact {
   returningOrderRevenue: number;
   newOrders: number;
   returningOrders: number;
-  /** Memo only: already deducted from netSales. */
+  /** Returns/refunds dated when they happened (Shopify "Returns"); already deducted from netSales. */
   refunds: number;
-  /** From Shopify variant costs. */
+  /** From Shopify variant costs (only lines whose cost is known). */
   cogs: number;
+  /** Net sales of lines whose product cost is unknown; the COGS fallback % applies to this. */
+  cogsUnmappedSales: number;
   emailRevenue: number;
   emailCampaignRevenue: number;
   emailFlowRevenue: number;
@@ -73,6 +75,8 @@ export interface ClientSettings {
   otherVariablePct: number;
   /** Optional fulfilment cost per order, also part of cost of delivery. */
   deliveryCostPerOrder: number;
+  /** COGS estimate (% of sales) for products with no cost per item. */
+  cogsFallbackPct: number;
   /** Monthly fixed costs. Not part of CM; reserved for the future P&L output. */
   monthlyFixedCosts: number;
   attributionWindow: "7d_click";

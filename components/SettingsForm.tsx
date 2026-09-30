@@ -118,6 +118,9 @@ function Editor(props: {
         <Row label="Cost of delivery / other variable costs (% of net sales + shipping)" note="Payment fees, packaging, etc.">
           <input aria-label="Other variable costs percent" type="number" step="0.5" min="0" className={inputCls} value={draft.otherVariablePct} onChange={(e) => set("otherVariablePct", num(e.target.value))} />
         </Row>
+        <Row label="COGS estimate for products without a cost (% of sales)" note="Applied only to sales whose product has no cost per item in Shopify">
+          <input aria-label="COGS fallback percent" type="number" step="0.5" min="0" className={inputCls} value={draft.cogsFallbackPct} onChange={(e) => set("cogsFallbackPct", num(e.target.value))} />
+        </Row>
         <Row label="Monthly fixed costs" note="Not part of CM. Reserved for the future P&L output">
           <input aria-label="Monthly fixed costs" type="number" step="100" min="0" className={inputCls} value={draft.monthlyFixedCosts} onChange={(e) => set("monthlyFixedCosts", num(e.target.value))} />
         </Row>

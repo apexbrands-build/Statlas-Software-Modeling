@@ -14,6 +14,7 @@ export function defaultSettings(clientId: string): ClientSettings {
     clientId,
     multipliers: { ...DEFAULT_MULTIPLIERS },
     otherVariablePct: 0,
+    cogsFallbackPct: 0,
     deliveryCostPerOrder: 0,
     monthlyFixedCosts: 0,
     attributionWindow: "7d_click",

@@ -10,6 +10,7 @@ const settings: ClientSettings = {
   clientId: "t",
   multipliers: { google_nonbrand: 0.75, google_brand: 0.3, meta_acquisition: 1.2, meta_returning: 0.6, pinterest: 0.3 },
   otherVariablePct: 10,
+  cogsFallbackPct: 0,
   deliveryCostPerOrder: 2,
   monthlyFixedCosts: 3650,
   attributionWindow: "7d_click",
@@ -36,6 +37,7 @@ function fact(over: Partial<DailyFact> = {}, ch: Partial<Record<ChannelKey, Part
     returningOrders: 5,
     refunds: 80,
     cogs: 200,
+    cogsUnmappedSales: 0,
     emailRevenue: 200,
     emailCampaignRevenue: 100,
     emailFlowRevenue: 100,
@@ -54,6 +56,14 @@ describe("contribution margin", () => {
     expect(p.shipping).toBe(60);
     expect(p.costOfDelivery).toBeCloseTo(136);
     expect(p.cm).toBeCloseTo(574);
+  });
+});
+
+describe("COGS fallback", () => {
+  it("estimates COGS for sales whose product has no cost", () => {
+    const t = aggregate([fact({ cogs: 100, cogsUnmappedSales: 400 })]);
+    expect(cmParts(t, { ...settings, cogsFallbackPct: 25 }).cogs).toBeCloseTo(200);
+    expect(cmParts(t, settings).cogs).toBeCloseTo(100);
   });
 });
 

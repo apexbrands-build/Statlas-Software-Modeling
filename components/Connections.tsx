@@ -29,6 +29,8 @@ export function Connections() {
   const [shop, setShop] = useState(() => (typeof window === "undefined" ? "" : (new URLSearchParams(window.location.search).get("shop") ?? "")));
   const [adAccount, setAdAccount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [csv, setCsv] = useState("");
+  const [costStats, setCostStats] = useState<{ total: number; withCost: number } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [newName, setNewName] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -42,6 +44,9 @@ export function Connections() {
       .eq("client_id", client.id)
       .order("created_at");
     setRows((data ?? []) as Integration[]);
+    const total = await db.from("products").select("variant_id", { count: "exact", head: true }).eq("client_id", client.id);
+    const withCost = await db.from("products").select("variant_id", { count: "exact", head: true }).eq("client_id", client.id).gt("unit_cost", 0);
+    setCostStats({ total: total.count ?? 0, withCost: withCost.count ?? 0 });
   }, [client]);
 
   useEffect(() => {
@@ -98,6 +103,19 @@ export function Connections() {
     await load();
   }
 
+  async function uploadCosts() {
+    if (!client) return;
+    setBusy("csv");
+    const res = await fetch("/api/costs/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: client.id, csv }) });
+    const json = await res.json();
+    setBusy(null);
+    setMsg(res.ok ? `Costs saved for ${json.matched} variants (of ${json.received} lines). Run Sync now to apply them.` : (json.error ?? "Upload failed"));
+    if (res.ok) {
+      setCsv("");
+      await load();
+    }
+  }
+
   async function syncMeta(id: string, provider: "meta" | "shopify" = "meta") {
     setBusy(id);
     setMsg(null);
@@ -141,6 +159,18 @@ export function Connections() {
                     </span>
                   </div>
                 ))}
+                {costStats && (
+                  <div className="space-y-2 rounded-lg border border-border p-3 text-xs text-text-muted">
+                    <div>
+                      Product costs: <span className="text-text">{costStats.withCost}</span> of {costStats.total} variants have a cost per item.
+                      {costStats.total > 0 && costStats.withCost / costStats.total < 0.9 && " Add costs in Shopify, upload them below, or set a COGS estimate in the settings section."}
+                    </div>
+                    <textarea className="h-20 w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-accent" placeholder={"Optional cost upload, one per line:\nSKU-123,8.50\nSKU-456,12.00"} value={csv} onChange={(e) => setCsv(e.target.value)} />
+                    <button disabled={!csv.trim() || busy === "csv"} onClick={uploadCosts} className="rounded-lg border border-border px-3 py-1 text-text-muted hover:text-text disabled:opacity-50">
+                      {busy === "csv" ? "Saving…" : "Save costs"}
+                    </button>
+                  </div>
+                )}
                 <form
                   className="flex flex-wrap items-center gap-2"
                   onSubmit={(e) => {

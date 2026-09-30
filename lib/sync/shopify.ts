@@ -21,7 +21,9 @@ interface OrderNode {
   totalShippingPriceSet: Money;
   totalTaxSet: Money;
   totalRefundedSet: Money;
-  lineItems: { nodes: { quantity: number; variant: { id: string } | null }[] };
+  taxesIncluded: boolean;
+  refunds: { id: string; createdAt: string; totalRefundedSet: Money; refundLineItems: { nodes: { subtotalSet: Money }[] } }[];
+  lineItems: { nodes: { quantity: number; variant: { id: string } | null; discountedTotalSet: Money }[] };
 }
 interface OrdersPage {
   orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: OrderNode[] };
@@ -40,7 +42,9 @@ const orderFields = (withCustomerCount: boolean) => `
   totalShippingPriceSet { shopMoney { amount } }
   totalTaxSet { shopMoney { amount } }
   totalRefundedSet { shopMoney { amount } }
-  lineItems(first: 100) { nodes { quantity variant { id } } }`;
+  taxesIncluded
+  refunds { id createdAt totalRefundedSet { shopMoney { amount } } refundLineItems(first: 100) { nodes { subtotalSet { shopMoney { amount } } } } }
+  lineItems(first: 100) { nodes { quantity variant { id } discountedTotalSet { shopMoney { amount } } } }`;
 
 export interface VariantCost {
   variantId: string;
@@ -87,13 +91,15 @@ export interface RawOrder {
   createdAt: string;
   channel: string;
   tags: string[];
-  orderRevenue: number; // total price: net sales + shipping + tax + refunds (refunds not deducted)
-  subtotal: number;
+  /** Order Revenue = gross - discounts + shipping + tax, refunds NOT deducted (Shopify "total sales" before returns). */
+  orderRevenue: number;
+  subtotal: number; // after discounts, before shipping and tax
   discounts: number;
   shipping: number;
   tax: number;
-  refunds: number;
-  lines: { variantId: string | null; quantity: number }[];
+  totalRefunded: number;
+  refunds: { id: string; createdAt: string; total: number; itemsSubtotal: number }[];
+  lines: { variantId: string | null; quantity: number; sales: number }[];
 }
 
 const SOURCE_TO_CHANNEL: Record<string, string> = {
@@ -115,7 +121,7 @@ export async function fetchOrders(shop: string, token: string, sinceIso: string)
       pageInfo { hasNextPage endCursor } nodes { ${orderFields(c)} } } }`;
     let data: OrdersPage;
     try {
-      data = await shopifyGraphql<OrdersPage>(shop, token, queryFor(withCount), { cursor, q: `created_at:>=${sinceIso}` });
+      data = await shopifyGraphql<OrdersPage>(shop, token, queryFor(withCount), { cursor, q: `created_at:>=${sinceIso} OR updated_at:>=${sinceIso}` });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (withCount && /ACCESS_DENIED|protected|not approved/i.test(msg)) {
@@ -128,6 +134,9 @@ export async function fetchOrders(shop: string, token: string, sinceIso: string)
     for (const o of data.orders.nodes) {
       if (o.test || o.cancelledAt) continue;
       const channel = o.channelInformation?.channelDefinition?.channelName ?? SOURCE_TO_CHANNEL[o.sourceName ?? ""] ?? o.sourceName ?? "Unknown";
+      const subtotal = num(o.subtotalPriceSet);
+      const shipping = num(o.totalShippingPriceSet);
+      const tax = num(o.totalTaxSet);
       out.push({
         orderId: numericId(o.id),
         customerId: o.customer ? numericId(o.customer.id) : null,
@@ -135,13 +144,20 @@ export async function fetchOrders(shop: string, token: string, sinceIso: string)
         createdAt: o.createdAt,
         channel,
         tags: o.tags,
-        orderRevenue: num(o.totalPriceSet),
-        subtotal: num(o.subtotalPriceSet),
+        // Tax-inclusive stores already have tax inside the subtotal, so it is not added twice.
+        orderRevenue: subtotal + shipping + (o.taxesIncluded ? 0 : tax),
+        subtotal,
         discounts: num(o.totalDiscountsSet),
-        shipping: num(o.totalShippingPriceSet),
-        tax: num(o.totalTaxSet),
-        refunds: num(o.totalRefundedSet),
-        lines: o.lineItems.nodes.map((l) => ({ variantId: l.variant ? numericId(l.variant.id) : null, quantity: l.quantity })),
+        shipping,
+        tax,
+        totalRefunded: num(o.totalRefundedSet),
+        refunds: o.refunds.map((r) => ({
+          id: numericId(r.id),
+          createdAt: r.createdAt,
+          total: num(r.totalRefundedSet),
+          itemsSubtotal: r.refundLineItems.nodes.reduce((sum, n) => sum + num(n.subtotalSet), 0),
+        })),
+        lines: o.lineItems.nodes.map((l) => ({ variantId: l.variant ? numericId(l.variant.id) : null, quantity: l.quantity, sales: num(l.discountedTotalSet) })),
       });
     }
     if (!data.orders.pageInfo.hasNextPage) break;

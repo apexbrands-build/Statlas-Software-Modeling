@@ -24,6 +24,7 @@ export interface Totals {
   returningOrders: number;
   refunds: number;
   cogs: number;
+  cogsUnmappedSales: number;
   emailRevenue: number;
   emailCampaignRevenue: number;
   emailFlowRevenue: number;
@@ -49,6 +50,7 @@ export function emptyTotals(): Totals {
     returningOrders: 0,
     refunds: 0,
     cogs: 0,
+    cogsUnmappedSales: 0,
     emailRevenue: 0,
     emailCampaignRevenue: 0,
     emailFlowRevenue: 0,
@@ -71,6 +73,7 @@ export function aggregate(facts: DailyFact[]): Totals {
     t.returningOrders += f.returningOrders;
     t.refunds += f.refunds;
     t.cogs += f.cogs;
+    t.cogsUnmappedSales += f.cogsUnmappedSales;
     t.emailRevenue += f.emailRevenue;
     t.emailCampaignRevenue += f.emailCampaignRevenue;
     t.emailFlowRevenue += f.emailFlowRevenue;
@@ -157,8 +160,10 @@ export function cmParts(t: Totals, s: ClientSettings): CmParts {
   const adSpend = totalSpend(t);
   const revenue = t.netSales + t.shippingCollected;
   const costOfDelivery = (s.otherVariablePct / 100) * revenue + s.deliveryCostPerOrder * orders(t);
-  const cm = revenue - t.cogs - adSpend - costOfDelivery;
-  return { netSales: t.netSales, shipping: t.shippingCollected, cogs: t.cogs, costOfDelivery, adSpend, cm };
+  // Known product costs plus an estimate (fallback %) for sales whose product has no cost.
+  const cogs = t.cogs + (s.cogsFallbackPct / 100) * t.cogsUnmappedSales;
+  const cm = revenue - cogs - adSpend - costOfDelivery;
+  return { netSales: t.netSales, shipping: t.shippingCollected, cogs, costOfDelivery, adSpend, cm };
 }
 
 export interface GroupStats {
