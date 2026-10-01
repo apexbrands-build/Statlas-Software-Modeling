@@ -26,7 +26,7 @@ import {
   multiplierLabel,
   type MetricDef,
 } from "@/lib/metrics";
-import { monthRows } from "@/lib/monthly";
+import { chartGranularity, dayRows, monthRows } from "@/lib/monthly";
 
 interface Open {
   def: MetricDef;
@@ -232,7 +232,7 @@ function Body(props: {
       {/* Chart */}
       <section className="rounded-2xl border border-border bg-surface p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-text-muted">Monthly trend</h3>
+          <h3 className="text-sm font-medium text-text-muted">{chartGranularity(data.range) === "day" ? "Daily trend" : "Monthly trend"}</h3>
           <select
             aria-label="Chart"
             value={chartType}
@@ -303,17 +303,19 @@ function Grid({ cols, children }: { cols: 4 | 5; children: React.ReactNode }) {
   return <div className={`grid grid-cols-2 gap-3 ${cols === 5 ? "md:grid-cols-5" : "md:grid-cols-4"}`}>{children}</div>;
 }
 
-/** Monthly trend (peak months matter more than single days). */
+/** Trend chart: per day for ranges up to ~2 months, per month for longer ranges. */
 function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" | "mer"; mode: CompareModeName }) {
   const cur = data.client.currency;
   const cmp = compareSource(data, mode);
   const c = theme.colors;
   const compareName = mode === "prev" ? "Previous period" : mode === "custom" ? "Comparison period" : "Last year";
+  const gran = chartGranularity(data.range);
+  const rowsFor = (def: MetricDef) => (gran === "day" ? dayRows(def, data, cmp) : monthRows(def, data, cmp));
 
   const view = useMemo(() => {
     if (type === "sales") {
-      const rev = monthRows(METRICS.orderRevenue, data, cmp, data.trendRange);
-      const sp = monthRows(METRICS.adSpend, data, cmp, data.trendRange);
+      const rev = rowsFor(METRICS.orderRevenue);
+      const sp = rowsFor(METRICS.adSpend);
       const out: ChartSeries[] = [
         { id: "rev", label: "Order revenue", kind: "bar", color: c.chartPrimary, values: rev.map((r) => r.actual) },
         { id: "spend", label: "Ad spend", kind: "bar", color: c.chartSecondary, values: sp.map((r) => r.actual) },
@@ -324,7 +326,7 @@ function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" 
       return { keys: rev.map((r) => r.key), series: out.filter((x) => x.values.some((v) => v !== null)) };
     }
     const def = type === "cm" ? METRICS.cm : METRICS.mer;
-    const rows = monthRows(def, data, cmp, data.trendRange);
+    const rows = rowsFor(def);
     const out: ChartSeries[] = [
       { id: "a", label: def.label, kind: "line", color: c.chartPrimary, values: rows.map((r) => r.actual) },
       { id: "t", label: "Plan target", kind: "line", color: c.chartTarget, values: rows.map((r) => r.target), dashed: true },
@@ -332,22 +334,22 @@ function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" 
     ];
     return { keys: rows.map((r) => r.key), series: out.filter((x) => x.values.some((v) => v !== null)) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, type, mode]);
+  }, [data, type, mode, gran]);
 
   const isRatio = type === "mer";
   return (
     <>
       <DailyChart
         dates={view.keys}
-        labels={view.keys}
+        labels={gran === "month" ? view.keys : undefined}
         series={view.series}
         height={340}
-        smooth={type !== "sales"}
-        maxBarWidth={44}
+        smooth={type !== "sales" && gran === "month"}
+        maxBarWidth={gran === "month" ? 44 : 28}
         formatValue={(v) => (isRatio ? v.toFixed(2) : formatValue(v, "currency0", cur))}
         formatAxis={(v) => (isRatio ? v.toFixed(1) : compactCurrency(v, cur))}
       />
-      <p className="mt-2 text-xs text-text-faint">Shows the 12 months ending at the selected range (or the whole range if it is longer). The tiles above follow your exact selection.</p>
+      <p className="mt-2 text-xs text-text-faint">{gran === "day" ? "Daily view (ranges up to about 2 months). Choose a longer range to group by month." : "Monthly view (ranges longer than about 2 months). Choose a shorter range to see days."}</p>
     </>
   );
 }

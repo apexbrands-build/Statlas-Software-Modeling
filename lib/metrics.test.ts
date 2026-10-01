@@ -6,6 +6,7 @@ import { SeedRepository } from "./repository/seed";
 import { splitCampaignDays } from "./sync/meta-split";
 import { isBrandCampaign, mergeGoogleRows } from "./sync/google-split";
 import { buildGroups } from "../components/DateRangePicker";
+import { chartGranularity } from "./monthly";
 import type { ChannelKey, ClientSettings, DailyFact } from "./types";
 import { CHANNEL_KEYS } from "./types";
 
@@ -288,5 +289,14 @@ describe("date picker presets (today = 2026-09-30)", () => {
   it("BFCM runs Black Friday through Cyber Monday", () => {
     expect(range("bfcm", "BFCM 2025")).toEqual({ from: "2025-11-28", to: "2025-12-01" });
     expect(range("bfcm", "BFCM 2024")).toEqual({ from: "2024-11-29", to: "2024-12-02" });
+  });
+});
+
+describe("trend chart granularity", () => {
+  it("up to about two months is daily, longer is monthly", () => {
+    expect(chartGranularity({ from: "2026-09-01", to: "2026-09-30" })).toBe("day");
+    expect(chartGranularity({ from: "2026-07-31", to: "2026-09-30" })).toBe("day"); // 62 days
+    expect(chartGranularity({ from: "2026-07-30", to: "2026-09-30" })).toBe("month"); // 63 days
+    expect(chartGranularity({ from: "2026-01-01", to: "2026-09-30" })).toBe("month");
   });
 });

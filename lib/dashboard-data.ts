@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addDays, addMonths, addYears, comparisonRange, diffDays, eachDay, min, startOfMonth, type CompareModeName, type Range } from "./dates";
+import { addDays, addYears, comparisonRange, diffDays, eachDay, min, type CompareModeName, type Range } from "./dates";
 import { aggregate, aggregatePlan, compare, type Comparison, type MetricDef, type PlanTotals, type Totals } from "./metrics";
 import { getRepository } from "./repository";
 import { toMap } from "./series";
@@ -26,7 +26,7 @@ export interface DashData {
   effTo: string;
   lastData: string;
   dates: string[];
-  /** Window for the monthly trend chart: 12 months ending at the selected range (or the range itself if longer). */
+  /** Range shown by the trend chart (the selected range). */
   trendRange: Range;
   facts: Map<string, DailyFact>;
   lyFacts: Map<string, DailyFact>;
@@ -67,7 +67,7 @@ export function useDashboardData(
       const prevRange = comparisonRange("prev", elapsed);
       const plans = await repo.listPlans(client.id);
       const plan = plans.find((p) => p.isDefault) ?? plans[0];
-      const trendFrom = min(startOfMonth(range.from), startOfMonth(addMonths(range.to, -11)));
+      const trendFrom = range.from;
       const [facts, lyFacts, prevFacts, customFacts, planRows] = await Promise.all([
         repo.getFacts(client.id, trendFrom, effTo),
         repo.getFacts(client.id, addYears(trendFrom, -1), addYears(range.to, -1)),
@@ -92,7 +92,7 @@ export function useDashboardData(
       effTo: raw.effTo,
       lastData: raw.lastData,
       dates: eachDay(range.from, range.to),
-      trendRange: { from: min(startOfMonth(range.from), startOfMonth(addMonths(range.to, -11))), to: range.to },
+      trendRange: range,
       facts: toMap(raw.facts),
       lyFacts: toMap(raw.lyFacts),
       prevFacts: toMap(raw.prevFacts),

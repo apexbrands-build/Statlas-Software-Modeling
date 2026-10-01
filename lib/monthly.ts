@@ -1,5 +1,5 @@
 import { aggregate, aggregatePlan, type MetricDef, type Totals } from "./metrics";
-import { eachDay, monthKey, monthKeys, type Range } from "./dates";
+import { diffDays, eachDay, monthKey, monthKeys, type Range } from "./dates";
 import type { CompareSource, DashData } from "./dashboard-data";
 
 export interface MonthRow {
@@ -34,6 +34,32 @@ export function monthRows(def: MetricDef, data: DashData, cmp: CompareSource, wi
       actual: facts.length ? def.value(tot, data.settings) : null,
       target: planRows.length && def.target ? def.target(aggregatePlan(planRows)) : null,
       compare: cmpFacts.length ? def.value(aggregate(cmpFacts), data.settings) : null,
+    };
+  });
+}
+
+/** Up to about two months the trend is shown per day; longer ranges are grouped by month. */
+export const DAILY_MAX_DAYS = 62;
+export type Granularity = "day" | "month";
+
+export function chartGranularity(range: Range): Granularity {
+  return diffDays(range.from, range.to) + 1 <= DAILY_MAX_DAYS ? "day" : "month";
+}
+
+/** One row per day of the selected range (same shape as the monthly rows; key = YYYY-MM-DD). */
+export function dayRows(def: MetricDef, data: DashData, cmp: CompareSource): MonthRow[] {
+  return data.dates.map((d) => {
+    const f = data.facts.get(d);
+    const tot = aggregate(f ? [f] : []);
+    const c = cmp.facts.get(cmp.date(d));
+    const p = d <= data.effTo ? data.plan.get(d) : undefined;
+    return {
+      key: d,
+      tot,
+      hasActual: Boolean(f),
+      actual: f ? def.value(tot, data.settings) : null,
+      target: p && def.target ? def.target(aggregatePlan([p])) : null,
+      compare: c ? def.value(aggregate([c]), data.settings) : null,
     };
   });
 }
