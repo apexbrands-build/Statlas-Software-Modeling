@@ -63,7 +63,10 @@ async function shopifyGraphqlOnce<T>(shop: string, token: string, query: string,
     headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
     body: JSON.stringify({ query, variables }),
   });
-  if (!res.ok) throw new Error(`Shopify ${res.status}`);
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    throw new Error(`Shopify ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
   const json = (await res.json()) as { data?: T; errors?: unknown };
   if (json.errors || !json.data) throw new Error(`Shopify GraphQL error: ${JSON.stringify(json.errors)}`);
   return json.data;
