@@ -328,3 +328,9 @@ alter table agency_secrets enable row level security;
 
 /* ---------- applied later: default brand keyword is "brand" ---------- */
 alter table client_settings alter column brand_campaign_keyword set default 'brand';
+
+/* ---------- applied later as migration "history_rollup_functions" ---------- */
+alter table orders add column if not exists customer_lifetime_orders int;
+-- rebuild_daily_facts(client, from, to): daily rollup of DTC orders (by order date) and returns (by refund date).
+-- recompute_first_orders(client): new vs returning from stored orders + Shopify lifetime order counts.
+-- Both are executable by service_role only. (See the live migration for the full function bodies.)

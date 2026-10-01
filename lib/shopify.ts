@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION ?? "2025-10";
 /** Read-only scopes. read_all_orders needs Shopify approval; add it once granted (needed for orders older than 60 days). */
-export const SHOPIFY_SCOPES = "read_orders,read_customers,read_products,read_inventory";
+export const SHOPIFY_SCOPES = `read_orders,read_customers,read_products,read_inventory${process.env.SHOPIFY_ALL_ORDERS === "true" ? ",read_all_orders" : ""}`;
 
 export const SHOP_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 

@@ -28,6 +28,15 @@ UI names below are from memory and platforms rename things often: if a menu is d
 5. For each client store: open the install link as a store admin (or ask the client's admin to). This grants the app read access. Nothing is written to the store.
 6. Copy Client ID and Client Secret into Vercel.
 
+### Longer Shopify history (read_all_orders)
+
+Without it Shopify only returns the last 60 days. To load years (and enable year-over-year):
+1. Shopify Dev Dashboard → the app → **API access requests** → request `read_all_orders` and explain the use (internal analytics, read-only, no customer personal data stored).
+2. When Shopify approves it, add the variable `SHOPIFY_ALL_ORDERS=true` in Vercel and redeploy. The app then requests the extra scope.
+3. In the app's configuration add `read_all_orders` to the access scopes and release a new version.
+4. Re-run **Connect Shopify** for each store (the store admin approves the extra scope once).
+5. Open Edit on the Shopify row → **Load history**.
+
 ## 2. Meta (ad spend): exact steps
 
 Do these yourself (not automated, to keep the Meta account safe). UI names may differ slightly.

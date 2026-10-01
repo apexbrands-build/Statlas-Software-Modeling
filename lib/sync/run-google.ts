@@ -2,11 +2,11 @@ import "server-only";
 import { adsSearch } from "@/lib/google";
 import { getAdminClient } from "@/lib/supabase/server";
 import { isBrandCampaign, mergeGoogleRows } from "./google-split";
+import { resolveRange } from "./range";
 
-const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
 
 /** Pulls Google Ads spend and purchase conversions for one client account; brand vs non-brand by campaign name. */
-export async function syncGoogle(integrationId: string, days: number): Promise<{ rows: number; note?: string }> {
+export async function syncGoogle(integrationId: string, body: { from?: string; to?: string; days?: number }): Promise<{ rows: number; note?: string }> {
   const admin = getAdminClient();
   const { data: integration } = await admin.from("integrations").select("id,client_id,provider,account_id").eq("id", integrationId).single();
   if (!integration || integration.provider !== "google_ads") throw new Error("Not a Google Ads connection");
@@ -17,8 +17,7 @@ export async function syncGoogle(integrationId: string, days: number): Promise<{
     const keyword = (settings?.brand_campaign_keyword as string | undefined) ?? "brand";
     const nonBrandTag = ((settings?.extra as { nonBrandTag?: string } | null)?.nonBrandTag ?? "NB") as string;
 
-    const until = addDays(new Date().toISOString().slice(0, 10), -1);
-    const since = addDays(until, -(Math.min(Math.max(days, 1), 800) - 1));
+    const { from: since, to: until } = resolveRange(body, 30);
     const range = `segments.date BETWEEN '${since}' AND '${until}'`;
 
     const costRows = await adsSearch(integration.account_id, `SELECT segments.date, campaign.id, campaign.name, metrics.cost_micros FROM campaign WHERE ${range} AND metrics.cost_micros > 0`);
@@ -74,7 +73,10 @@ export async function syncGoogle(integrationId: string, days: number): Promise<{
 
     const brandSpend = spendRows.filter((r) => r.category === "brand").reduce((s, r) => s + r.spend, 0);
     const now = new Date().toISOString();
-    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: since, coverage_end: until }).eq("id", integrationId);
+    const { data: cov } = await admin.from("integrations").select("coverage_start,coverage_end").eq("id", integrationId).single();
+    const covStart = cov?.coverage_start && cov.coverage_start < since ? cov.coverage_start : since;
+    const covEnd = cov?.coverage_end && cov.coverage_end > until ? cov.coverage_end : until;
+    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
     await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: [note, `Brand spend (name contains "${keyword}", not tagged ${nonBrandTag || "–"}): ${brandSpend.toFixed(2)}`].filter(Boolean).join(" | ") }).eq("id", run?.id ?? "");
     return { rows: spendRows.length, note };
   } catch (e) {

@@ -110,8 +110,8 @@ const SOURCE_TO_CHANNEL: Record<string, string> = {
   android: "Online Store",
 };
 
-/** Orders created since `sinceIso` (Shopify only exposes the last 60 days without the read_all_orders scope). */
-export async function fetchOrders(shop: string, token: string, sinceIso: string): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean }> {
+/** Orders matching a Shopify search query. Without the read_all_orders scope Shopify only exposes the last 60 days. */
+export async function fetchOrders(shop: string, token: string, searchQuery: string): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean }> {
   const out: RawOrder[] = [];
   let withCount = true;
   let approximate = false;
@@ -121,7 +121,7 @@ export async function fetchOrders(shop: string, token: string, sinceIso: string)
       pageInfo { hasNextPage endCursor } nodes { ${orderFields(c)} } } }`;
     let data: OrdersPage;
     try {
-      data = await shopifyGraphql<OrdersPage>(shop, token, queryFor(withCount), { cursor, q: `created_at:>=${sinceIso} OR updated_at:>=${sinceIso}` });
+      data = await shopifyGraphql<OrdersPage>(shop, token, queryFor(withCount), { cursor, q: searchQuery });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (withCount && /ACCESS_DENIED|protected|not approved/i.test(msg)) {
@@ -166,4 +166,9 @@ export async function fetchOrders(shop: string, token: string, sinceIso: string)
   return { orders: out, approximateNewReturning: approximate };
 }
 
-export { markFirstOrders } from "./first-orders";
+
+/** Scopes the store actually granted (read_all_orders decides how far back orders can be read). */
+export async function fetchGrantedScopes(shop: string, token: string): Promise<string[]> {
+  const data = await shopifyGraphql<{ currentAppInstallation: { accessScopes: { handle: string }[] } }>(shop, token, "{ currentAppInstallation { accessScopes { handle } } }");
+  return data.currentAppInstallation.accessScopes.map((s) => s.handle);
+}

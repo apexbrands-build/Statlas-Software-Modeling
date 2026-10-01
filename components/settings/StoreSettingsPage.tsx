@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { BrandIcon } from "@/components/BrandIcon";
 import { EditStoreDialog } from "./EditStoreDialog";
@@ -8,6 +8,7 @@ import { inputCls, Modal } from "./ui";
 import { useApp } from "@/lib/app-context";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { dataMode } from "@/lib/supabase/env";
+import { addDays, todayLocal } from "@/lib/dates";
 import type { ClientSettings } from "@/lib/types";
 
 interface Integration {
@@ -339,6 +340,7 @@ function ConnectionDialog({ row, onClose, onSync }: { row: Integration; onClose:
           {busy ? "Syncing…" : "Sync now"}
         </button>
       )}
+      {syncable && <HistoryLoader row={row} />}
       <p className="text-xs text-text-faint">Connections are read-only. To disconnect, remove the app in the store or ad account.</p>
     </Modal>
   );
@@ -467,6 +469,116 @@ function GoogleConnect({ clientId, isAdmin, onChanged, onClose, setMsg }: { clie
         </form>
       )}
       {err && <p className="text-xs text-bad">{err}</p>}
+    </div>
+  );
+}
+
+const ENDPOINT: Record<string, string> = { shopify: "shopify", meta: "meta", google_ads: "google" };
+const CHUNK_DAYS: Record<string, number> = { shopify: 30, meta: 90, google_ads: 90 };
+
+function chunksOf(from: string, to: string, size: number) {
+  const out: { from: string; to: string }[] = [];
+  let end = to;
+  while (end >= from) {
+    const start = addDays(end, -(size - 1)) < from ? from : addDays(end, -(size - 1));
+    out.push({ from: start, to: end });
+    end = addDays(start, -1);
+  }
+  return out; // newest first, so recent days appear on the dashboard first
+}
+
+/** Loads a longer history in chunks with a progress bar (so no single request runs long). */
+function HistoryLoader({ row }: { row: Integration }) {
+  const [months, setMonths] = useState(12);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [allOrders, setAllOrders] = useState<boolean | null>(row.provider === "shopify" ? null : true);
+  const cancel = useRef(false);
+
+  useEffect(() => {
+    if (row.provider !== "shopify") return;
+    fetch(`/api/sync/shopify?integrationId=${row.id}`)
+      .then((r) => r.json())
+      .then((j) => setAllOrders(Boolean(j.hasAllOrders)))
+      .catch(() => setAllOrders(false));
+  }, [row.id, row.provider]);
+
+  const limited = row.provider === "shopify" && allOrders === false;
+
+  async function post(body: Record<string, unknown>) {
+    const res = await fetch(`/api/sync/${ENDPOINT[row.provider]}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: row.id, ...body }) });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? "Request failed");
+    return json;
+  }
+
+  async function start() {
+    cancel.current = false;
+    setRunning(true);
+    setMsg(null);
+    const end = addDays(todayLocal(), -1);
+    const begin = addDays(end, -(months * 30));
+    const list = chunksOf(begin, end, CHUNK_DAYS[row.provider] ?? 90);
+    try {
+      for (let i = 0; i < list.length; i++) {
+        if (cancel.current) throw new Error("Stopped. What was loaded so far is saved.");
+        setProgress({ done: i, total: list.length, label: `${list[i].from} → ${list[i].to}` });
+        await post({ from: list[i].from, to: list[i].to, first: i === 0 });
+      }
+      if (row.provider === "shopify") {
+        setProgress({ done: list.length, total: list.length, label: "Classifying new vs returning customers…" });
+        await post({ action: "finalize", from: begin, to: end });
+      }
+      setProgress({ done: list.length, total: list.length, label: "Done" });
+      setMsg(`Loaded ${months} months (${begin} → ${end}). Open Home and compare with last year.`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Load failed");
+    }
+    setRunning(false);
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border p-4">
+      <div className="text-sm font-semibold">Load history</div>
+      {limited ? (
+        <p className="text-xs text-yellow-300">
+          Shopify only allows the last 60 days for this app until the <code>read_all_orders</code> permission is approved and the store re-authorizes it. Meta and Google can load years today. See docs/connector-setup.md.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-text-muted">Loads daily data in chunks (safe to stop and resume). Needed for year-over-year comparisons.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select aria-label="History length" value={months} onChange={(e) => setMonths(Number(e.target.value))} disabled={running} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+              {[3, 6, 12, 24, 36].map((m) => (
+                <option key={m} value={m}>
+                  Last {m} months
+                </option>
+              ))}
+            </select>
+            {!running ? (
+              <button onClick={start} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black">
+                Load history
+              </button>
+            ) : (
+              <button onClick={() => (cancel.current = true)} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text">
+                Stop
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {progress && (
+        <div className="space-y-1">
+          <div className="h-1.5 rounded-full bg-surface-raised">
+            <div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${Math.round((progress.done / Math.max(1, progress.total)) * 100)}%` }} />
+          </div>
+          <div className="text-xs text-text-muted">
+            {progress.done}/{progress.total} · {progress.label}
+          </div>
+        </div>
+      )}
+      {msg && <p className="text-xs text-text-muted">{msg}</p>}
     </div>
   );
 }

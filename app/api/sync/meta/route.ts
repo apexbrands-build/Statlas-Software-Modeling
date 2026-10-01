@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 // Manual "Sync now" for a Meta connection. The user must have access to the client (row-level security).
 export async function POST(request: Request) {
-  const body = (await request.json()) as { integrationId?: string; days?: number };
+  const body = (await request.json()) as { integrationId?: string; days?: number; from?: string; to?: string };
   if (!body.integrationId) return NextResponse.json({ error: "integrationId required" }, { status: 400 });
 
   const supabase = await getServerClient();
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!integration || integration.provider !== "meta") return NextResponse.json({ error: "Connection not found" }, { status: 404 });
 
   try {
-    const result = await syncMeta(integration.id, body.days ?? 30);
+    const result = await syncMeta(integration.id, body);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Sync failed" }, { status: 500 });

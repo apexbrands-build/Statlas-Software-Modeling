@@ -2,19 +2,18 @@ import "server-only";
 import { getAdminClient } from "@/lib/supabase/server";
 import { fetchCampaignDays, isExistingSegment } from "./meta";
 import { splitCampaignDays } from "./meta-split";
+import { resolveRange } from "./range";
 
-const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
 
 /** Pulls Meta spend for one connected ad account and rebuilds the Meta channel rows. */
-export async function syncMeta(integrationId: string, days: number): Promise<{ rows: number; note?: string }> {
+export async function syncMeta(integrationId: string, body: { from?: string; to?: string; days?: number }): Promise<{ rows: number; note?: string }> {
   const admin = getAdminClient();
   const { data: integration } = await admin.from("integrations").select("id,client_id,provider,account_id").eq("id", integrationId).single();
   if (!integration || integration.provider !== "meta") throw new Error("Not a Meta connection");
 
   const { data: run } = await admin.from("sync_runs").insert({ client_id: integration.client_id, integration_id: integrationId, provider: "meta" }).select("id").single();
   try {
-    const until = addDays(new Date().toISOString().slice(0, 10), -1);
-    const since = addDays(until, -(Math.min(Math.max(days, 1), 800) - 1));
+    const { from: since, to: until } = resolveRange(body, 30);
     // 1) Total spend per campaign and day (source of truth for spend).
     const campaignDays = await fetchCampaignDays(integration.account_id, since, until);
 
@@ -73,7 +72,10 @@ export async function syncMeta(integrationId: string, days: number): Promise<{ r
     }
 
     const now = new Date().toISOString();
-    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: since, coverage_end: until }).eq("id", integrationId);
+    const { data: cov } = await admin.from("integrations").select("coverage_start,coverage_end").eq("id", integrationId).single();
+    const covStart = cov?.coverage_start && cov.coverage_start < since ? cov.coverage_start : since;
+    const covEnd = cov?.coverage_end && cov.coverage_end > until ? cov.coverage_end : until;
+    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
     const existingSpend = [...existing.values()].reduce((s, e) => s + e.spend, 0);
     const runMessage = [note, diagnostics, `Existing-customer spend: ${existingSpend.toFixed(2)}`].filter(Boolean).join(" | ");
     await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: runMessage }).eq("id", run?.id ?? "");
