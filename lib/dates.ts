@@ -80,3 +80,50 @@ export function comparisonRange(mode: CompareModeName, cur: Range, custom?: Rang
   if (mode === "prev") return { from: addDays(cur.from, -len), to: addDays(cur.from, -1) };
   return cur; // plan: targets for the same days
 }
+
+/* ---------- calendar helpers for the date picker and monthly trend windows ---------- */
+
+export function monthKey(d: string): string {
+  return d.slice(0, 4) + d.slice(5, 7); // 202601
+}
+
+/** Month keys (YYYYMM) from the month of `from` through the month of `to`. */
+export function monthKeys(from: string, to: string): string[] {
+  const out: string[] = [];
+  let d = startOfMonth(from);
+  while (d <= to) {
+    out.push(monthKey(d));
+    d = addMonths(d, 1);
+  }
+  return out;
+}
+
+export function startOfWeek(d: string, weekStartsOn = 1): string {
+  const dow = dayOfWeek(d);
+  return addDays(d, -((dow - weekStartsOn + 7) % 7));
+}
+
+export function startOfQuarter(d: string): string {
+  const m = Number(d.slice(5, 7));
+  const qm = Math.floor((m - 1) / 3) * 3 + 1;
+  return `${d.slice(0, 4)}-${String(qm).padStart(2, "0")}-01`;
+}
+
+export function endOfQuarter(d: string): string {
+  return endOfMonth(addMonths(startOfQuarter(d), 2));
+}
+
+/** Black Friday (day after the 4th Thursday of November) through Cyber Monday. */
+export function bfcmRange(year: number): Range {
+  const nov1 = `${year}-11-01`;
+  const dow = dayOfWeek(nov1); // 0 Sun
+  const firstThu = addDays(nov1, (4 - dow + 7) % 7);
+  const blackFriday = addDays(firstThu, 22);
+  return { from: blackFriday, to: addDays(blackFriday, 3) };
+}
+
+/** US-style label used by the picker: 1/1/2026 */
+export function usDate(d: string): string {
+  const [y, m, day] = d.split("-").map(Number);
+  return `${m}/${day}/${y}`;
+}

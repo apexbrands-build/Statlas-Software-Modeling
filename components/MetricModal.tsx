@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DailyChart } from "./DailyChart";
 import { theme } from "@/theme/theme";
-import type { CompareModeName } from "@/lib/dates";
-import { compareSource, COMPARE_LABEL, tileNumbers, type DashData } from "@/lib/dashboard-data";
-import { formatDiff, formatValue } from "@/lib/format";
-import { aggregate, cmParts, type MetricDef } from "@/lib/metrics";
-import { metricSeries } from "@/lib/series";
+import { monthKey, monthKeys, type CompareModeName } from "@/lib/dates";
+import { compareSource, tileNumbers, type DashData } from "@/lib/dashboard-data";
+import { formatDiff, formatValue, type Format } from "@/lib/format";
+import { aggregate, aggregatePlan, cmParts, totalSpend, type MetricDef, type Totals } from "@/lib/metrics";
+import { PLATFORMS, platformOf } from "@/lib/channels";
+import { CHANNEL_KEYS, type ChannelKey } from "@/lib/types";
 
 interface Props {
   def: MetricDef;
@@ -17,9 +18,83 @@ interface Props {
   onClose: () => void;
 }
 
+interface MonthRow {
+  key: string;
+  tot: Totals;
+  hasActual: boolean;
+  actual: number | null;
+  target: number | null;
+  compare: number | null;
+}
+
+interface Col {
+  label: string;
+  get: (r: MonthRow) => number | null;
+  format: Format;
+  bold?: boolean;
+}
+
 const TONE = { good: "text-good", bad: "text-bad", neutral: "text-text-muted" } as const;
+const COMPARE_NAME: Record<CompareModeName, string> = { plan: "Target", yoy: "Last year", prev: "Previous", custom: "Comparison" };
+
+const sumChannels = (t: Totals, keys: ChannelKey[]) => keys.reduce((s, k) => s + t.channels[k].spend, 0);
+
+/** Columns of the monthly table, specific to the metric (like the reference tool's windows). */
+function columnsFor(def: MetricDef, data: DashData, rows: MonthRow[], compareLabel: string): Col[] {
+  const s = data.settings;
+  const parts = (r: MonthRow) => cmParts(r.tot, s);
+  const target: Col = { label: "Target", get: (r) => r.target, format: def.format };
+
+  if (def.key === "cm") {
+    return [
+      { label: "Net Sales + Shipping", get: (r) => (r.hasActual ? r.tot.netSales + r.tot.shippingCollected : null), format: "currency0" },
+      { label: "Refunds", get: (r) => (r.hasActual ? -r.tot.refunds : null), format: "currency0" },
+      { label: "COGS", get: (r) => (r.hasActual ? parts(r).cogs : null), format: "currency0" },
+      { label: "Spend", get: (r) => (r.hasActual ? parts(r).adSpend : null), format: "currency0" },
+      { label: "Other", get: (r) => (r.hasActual ? parts(r).costOfDelivery : null), format: "currency0" },
+      { label: "Contribution Margin", get: (r) => r.actual, format: "currency0", bold: true },
+      target,
+    ];
+  }
+  if (def.key === "orderRevenue") {
+    return [
+      { label: "New Revenue", get: (r) => (r.hasActual ? r.tot.newOrderRevenue : null), format: "currency0" },
+      { label: "Returning Revenue", get: (r) => (r.hasActual ? r.tot.returningOrderRevenue : null), format: "currency0" },
+      { label: "Revenue", get: (r) => r.actual, format: "currency0", bold: true },
+      target,
+    ];
+  }
+  if (def.key === "adSpend") {
+    const used = PLATFORMS.filter((p) => rows.some((r) => sumChannels(r.tot, [p.acquisition, p.nonAcquisition]) > 0));
+    const order = ["google", "meta", "pinterest"];
+    used.sort((a, b) => (order.indexOf(a.id) + 1 || 99) - (order.indexOf(b.id) + 1 || 99));
+    return [
+      ...used.map((p) => ({ label: p.id === "meta" ? "Facebook" : p.label, get: (r: MonthRow) => (r.hasActual ? sumChannels(r.tot, [p.acquisition, p.nonAcquisition]) : null), format: "currency0" as Format })),
+      { label: "Spend", get: (r) => (r.hasActual ? totalSpend(r.tot) : null), format: "currency0", bold: true },
+      target,
+    ];
+  }
+  if (def.key.endsWith(".spend")) {
+    const id = def.key.slice(0, -".spend".length);
+    const platform = CHANNEL_KEYS.includes(id as ChannelKey) ? platformOf(id as ChannelKey).platform : PLATFORMS.find((p) => p.id === id);
+    if (platform) {
+      return [
+        { label: "Acquisition Spend", get: (r) => (r.hasActual ? sumChannels(r.tot, [platform.acquisition]) : null), format: "currency0" },
+        { label: "Retention Spend", get: (r) => (r.hasActual ? sumChannels(r.tot, [platform.nonAcquisition]) : null), format: "currency0" },
+        { label: "Total Spend", get: (r) => r.actual, format: "currency0", bold: true },
+        target,
+      ];
+    }
+  }
+  return [
+    { label: def.label, get: (r) => r.actual, format: def.format, bold: true },
+    target,
+    { label: compareLabel, get: (r) => r.compare, format: def.format },
+  ];
+}
 
 export function MetricModal({ def, title, data, mode, onClose }: Props) {
+  const [asc, setAsc] = useState(true);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -27,128 +102,132 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
   }, [onClose]);
 
   const cur = data.client.currency;
-  const f = (v: number | null, fmt = def.format) => formatValue(v, fmt, cur);
   const nums = tileNumbers(def, data, mode);
-
   const cmp = compareSource(data, mode);
-  const s = metricSeries(def, { dates: data.dates, facts: data.facts, cmpFacts: cmp.facts, cmpDate: cmp.date, plan: data.plan, settings: data.settings });
+  const compareName = COMPARE_NAME[mode];
 
-  const hasTarget = s.target.some((v) => v !== null);
-  const hasLy = s.compare.some((v) => v !== null);
+  // Group the selected range by month (YYYYMM), like the reference tool.
+  const keys = useMemo(() => monthKeys(data.range.from, data.range.to), [data.range]);
+  const rows: MonthRow[] = useMemo(() => {
+    const byMonth: Record<string, string[]> = {};
+    for (const d of data.dates) (byMonth[monthKey(d)] ??= []).push(d);
+    return keys.map((k) => {
+      const ds = byMonth[k] ?? [];
+      const facts = ds.map((d) => data.facts.get(d)).filter((f): f is NonNullable<typeof f> => Boolean(f));
+      const tot = aggregate(facts);
+      const cmpFacts = ds.map((d) => cmp.facts.get(cmp.date(d))).filter((f): f is NonNullable<typeof f> => Boolean(f));
+      const planRows = ds.filter((d) => d <= data.effTo).map((d) => data.plan.get(d)).filter((p): p is NonNullable<typeof p> => Boolean(p));
+      return {
+        key: k,
+        tot,
+        hasActual: facts.length > 0,
+        actual: facts.length ? def.value(tot, data.settings) : null,
+        target: planRows.length && def.target ? def.target(aggregatePlan(planRows)) : null,
+        compare: cmpFacts.length ? def.value(aggregate(cmpFacts), data.settings) : null,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, def, keys]);
+
+  const hasTarget = rows.some((r) => r.target !== null);
+  const hasCompare = rows.some((r) => r.compare !== null);
+  const compareLabel = hasTarget ? "Target" : compareName;
+  // With no plan, the "Target" column shows the comparison (last year / previous / custom period) instead.
+  const cols = columnsFor(def, data, rows, compareName).map((c) => (c.label === "Target" && !hasTarget ? { ...c, label: compareName, get: (r: MonthRow) => r.compare } : c));
+
+  const refValue = nums.ref;
+  const refLabel = hasTarget && mode === "plan" ? "Target" : compareName;
+  const f = (v: number | null, fmt: Format = def.format) => formatValue(v, fmt, cur);
+
   const series = [
-    { id: "actual", label: title ?? def.label, kind: "line" as const, color: theme.colors.chartPrimary, values: s.actual },
-    ...(hasTarget ? [{ id: "target", label: "Plan target", kind: "line" as const, color: theme.colors.chartTarget, values: s.target }] : []),
-    ...(hasLy ? [{ id: "ly", label: cmp.label, kind: "line" as const, color: theme.colors.chartCompare, values: s.compare, dashed: true }] : []),
+    { id: "actual", label: title ?? def.label, kind: "line" as const, color: theme.colors.chartPrimary, values: rows.map((r) => r.actual) },
+    ...(hasTarget ? [{ id: "target", label: "Target", kind: "line" as const, color: theme.colors.chartTarget, values: rows.map((r) => r.target) }] : []),
+    ...(hasCompare && (mode !== "plan" || !hasTarget) ? [{ id: "cmp", label: compareName, kind: "line" as const, color: theme.colors.chartTarget, values: rows.map((r) => r.compare), dashed: !hasTarget ? false : true }] : []),
   ];
 
-  const isCm = def.key === "cm";
-  const dates = data.dates;
+  const shown = asc ? rows : [...rows].reverse();
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 md:p-10" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${title ?? def.label} trend`}
-        className="w-full max-w-4xl rounded-2xl border border-border bg-surface p-5 md:p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div role="dialog" aria-modal="true" aria-label={`${title ?? def.label} trend`} className="w-full max-w-4xl rounded-2xl border border-border bg-surface p-5 md:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
-              {title ?? def.label}
-            </h2>
-            <p className="mt-1 text-xs text-text-muted">{def.formula}</p>
-            <span className="mt-2 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted">
-              Source: {def.source}
-            </span>
+          <h2 className="text-sm font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
+            {title ?? def.label}
+          </h2>
+          <div className="flex items-start gap-4">
+            <p className="max-w-md text-right text-xs text-text-muted">{def.formula}</p>
+            <button onClick={onClose} className="rounded-lg border border-border px-3 py-1 text-sm text-text-muted hover:text-text" aria-label="Close">
+              Close
+            </button>
           </div>
-          <button onClick={onClose} className="rounded-lg border border-border px-3 py-1 text-sm text-text-muted hover:text-text" aria-label="Close">
-            Close
-          </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Total" value={f(nums.actual)} />
-          <Stat label={`${COMPARE_LABEL[mode].replace("vs ", "")}`} value={f(nums.ref)} />
-          <Stat label="Diff" value={nums.ref !== null && nums.actual !== null ? f(nums.actual - nums.ref) : "–"} tone={nums.tone} />
-          <Stat label="Diff %" value={formatDiff(nums.diff) || "–"} tone={nums.tone} />
-        </div>
+        <div className="mt-4 rounded-xl border border-border bg-bg p-4">
+          <div className="mx-auto w-fit space-y-0.5 text-lg font-bold" style={{ fontFamily: "var(--apex-font-heading)" }}>
+            <Line label="Total :" value={f(nums.actual)} />
+            <Line label={`${refLabel}:`} value={f(refValue)} />
+            <Line label="Diff :" value={refValue !== null && nums.actual !== null ? f(nums.actual - refValue) : "–"} tone={nums.tone} />
+            <Line label="Diff %:" value={formatDiff(nums.diff) || "–"} tone={nums.tone} />
+          </div>
 
-        <div className="mt-5">
-          <DailyChart
-            dates={dates}
-            series={series}
-            height={280}
-            formatValue={(v) => f(v)}
-            formatAxis={(v) => (def.format === "currency0" || def.format === "currency2" ? formatValue(v, "currency0", cur) : f(v))}
-          />
-        </div>
+          <div className="mt-4 rounded-xl border border-border bg-surface p-3">
+            <DailyChart
+              dates={rows.map((r) => r.key)}
+              labels={rows.map((r) => r.key)}
+              series={series}
+              height={280}
+              smooth
+              legendTop
+              formatValue={(v) => f(v)}
+              formatAxis={(v) => (def.format === "currency0" || def.format === "currency2" ? new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(v) : f(v))}
+            />
+          </div>
 
-        <div className="mt-5 max-h-80 overflow-auto rounded-lg border border-border">
-          <table className="tabular w-full text-right text-xs">
-            <thead className="sticky top-0 bg-surface-raised text-text-muted">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">Date</th>
-                {isCm ? (
-                  ["Net Sales", "Shipping", "COGS", "Ad Spend", "Delivery", "CM", "Target"].map((h) => (
-                    <th key={h} className="px-3 py-2 font-medium">
-                      {h}
+          <div className="mt-5 overflow-auto">
+            <table className="tabular w-full text-right text-xs">
+              <thead className="text-text-muted">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">
+                    <button type="button" onClick={() => setAsc(!asc)} className="border-b border-text-faint pb-1 hover:text-text" aria-label="Sort by date">
+                      Date {asc ? "↑" : "↓"}
+                    </button>
+                  </th>
+                  {cols.map((c) => (
+                    <th key={c.label} className="px-3 py-2 font-medium">
+                      {c.label}
                     </th>
-                  ))
-                ) : (
-                  <>
-                    <th className="px-3 py-2 font-medium">Actual</th>
-                    <th className="px-3 py-2 font-medium">Plan target</th>
-                    <th className="px-3 py-2 font-medium">{cmp.label}</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {dates.map((d, i) => {
-                const fact = data.facts.get(d);
-                const c = fact ? cmParts(aggregate([fact]), data.settings) : null;
-                const c0 = (v: number | null | undefined) => (v === null || v === undefined ? "" : formatValue(v, "currency0", cur));
-                return (
-                  <tr key={d} className="border-t border-border">
-                    <td className="px-3 py-1.5 text-left text-text-muted">{d}</td>
-                    {isCm ? (
-                      <>
-                        <td className="px-3 py-1.5">{c0(c?.netSales)}</td>
-                        <td className="px-3 py-1.5">{c ? `+${c0(c.shipping)}` : ""}</td>
-                        <td className="px-3 py-1.5">{c ? `-${c0(c.cogs)}` : ""}</td>
-                        <td className="px-3 py-1.5">{c ? `-${c0(c.adSpend)}` : ""}</td>
-                        <td className="px-3 py-1.5">{c ? `-${c0(c.costOfDelivery)}` : ""}</td>
-                        <td className={`px-3 py-1.5 font-medium ${c ? (c.cm >= (s.target[i] ?? -Infinity) ? "text-good" : "text-bad") : ""}`}>{c0(c?.cm)}</td>
-                        <td className="px-3 py-1.5 text-text-muted">{c0(s.target[i])}</td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="px-3 py-1.5">{s.actual[i] === null ? "" : f(s.actual[i])}</td>
-                        <td className="px-3 py-1.5 text-text-muted">{s.target[i] === null ? "" : f(s.target[i])}</td>
-                        <td className="px-3 py-1.5 text-text-muted">{s.compare[i] === null ? "" : f(s.compare[i])}</td>
-                      </>
-                    )}
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((r) => (
+                  <tr key={r.key} className="border-t border-border">
+                    <td className="px-3 py-3 text-left text-text-muted">{r.key}</td>
+                    {cols.map((c) => {
+                      const v = c.get(r);
+                      return (
+                        <td key={c.label} className={`px-3 py-3 ${c.bold ? "font-semibold text-text" : "text-text-muted"}`}>
+                          {v === null ? "" : f(v, c.format)}
+                        </td>
+                      );
+                    })}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <p className="mt-2 text-[11px] text-text-faint">
-          {cmp.label} compares against {cmp.date(dates[0])} → {cmp.date(dates[dates.length - 1])}. Seed data only.
-        </p>
+        <p className="mt-2 text-[11px] text-text-faint">Grouped by month ({data.range.from} → {data.range.to}); {cmp.label.toLowerCase()} compares like for like. {data.client.name}.</p>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: keyof typeof TONE }) {
+function Line({ label, value, tone }: { label: string; value: string; tone?: keyof typeof TONE }) {
   return (
-    <div className="rounded-lg border border-border bg-surface-raised p-3">
-      <div className="text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
-      <div className={`tabular mt-1 text-lg font-semibold ${tone ? TONE[tone] : "text-text"}`}>{value}</div>
+    <div className="flex justify-between gap-8">
+      <span className={tone ? TONE[tone] : "text-text"}>{label}</span>
+      <span className={`tabular ${tone ? TONE[tone] : "text-text"}`}>{value}</span>
     </div>
   );
 }

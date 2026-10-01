@@ -32,7 +32,7 @@ export function MetricTile({ label, value, refValue, diff, tone, source, formula
         i
       </button>
       <div className="pr-6 text-xs font-medium uppercase tracking-wide text-text-muted">{label}</div>
-      <div className="tabular mt-2 text-2xl font-semibold text-text" style={{ fontFamily: "var(--apex-font-heading)" }}>
+      <div className={`tabular mt-2 font-semibold text-text ${value.length > 10 ? "text-base" : value.length > 8 ? "text-xl" : "text-2xl"}`} style={{ fontFamily: "var(--apex-font-heading)" }}>
         {value}
       </div>
       <div className={`tabular mt-1 flex items-baseline gap-2 text-xs ${TONE_CLASS[tone]}`}>

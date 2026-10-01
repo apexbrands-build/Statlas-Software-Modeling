@@ -2,14 +2,13 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { DailyChart, type ChartSeries } from "./DailyChart";
+import { DateRangePicker } from "./DateRangePicker";
 import { MetricModal } from "./MetricModal";
 import { MetricTile } from "./MetricTile";
 import { theme } from "@/theme/theme";
 import { useApp } from "@/lib/app-context";
 import { compareSource, COMPARE_LABEL, tileNumbers, useDashboardData, type DashData } from "@/lib/dashboard-data";
 import {
-  addDays,
-  addMonths,
   comparisonRange,
   endOfMonth,
   startOfMonth,
@@ -29,39 +28,6 @@ import {
 } from "@/lib/metrics";
 import { metricSeries } from "@/lib/series";
 
-type Preset = "this_month" | "last_7" | "last_30" | "last_month" | "last_90" | "ytd" | "custom";
-
-const PRESETS: { id: Preset; label: string }[] = [
-  { id: "this_month", label: "This month" },
-  { id: "last_7", label: "Last 7 days" },
-  { id: "last_30", label: "Last 30 days" },
-  { id: "last_month", label: "Last month" },
-  { id: "last_90", label: "Last 90 days" },
-  { id: "ytd", label: "Year to date" },
-  { id: "custom", label: "Custom" },
-];
-
-function presetRange(p: Preset, today: string, custom: Range): Range {
-  switch (p) {
-    case "this_month":
-      return { from: startOfMonth(today), to: endOfMonth(today) };
-    case "last_7":
-      return { from: addDays(today, -7), to: addDays(today, -1) };
-    case "last_30":
-      return { from: addDays(today, -30), to: addDays(today, -1) };
-    case "last_month": {
-      const m = addMonths(today, -1);
-      return { from: startOfMonth(m), to: endOfMonth(m) };
-    }
-    case "last_90":
-      return { from: addDays(today, -90), to: addDays(today, -1) };
-    case "ytd":
-      return { from: `${today.slice(0, 4)}-01-01`, to: addDays(today, -1) };
-    default:
-      return custom;
-  }
-}
-
 interface Open {
   def: MetricDef;
   title?: string;
@@ -76,8 +42,7 @@ export function Dashboard() {
   );
   const today = useMemo(() => (mounted ? todayLocal() : null), [mounted]);
 
-  const [preset, setPreset] = useState<Preset>("this_month");
-  const [custom, setCustom] = useState<Range>({ from: "2026-01-01", to: "2026-01-31" });
+  const [range, setRange] = useState<Range | null>(null);
   const [mode, setMode] = useState<CompareModeName>("yoy");
   const [customCmp, setCustomCmp] = useState<Range | null>(null);
   const [breakout, setBreakout] = useState(true);
@@ -85,26 +50,22 @@ export function Dashboard() {
   const [chartType, setChartType] = useState<"sales" | "cm" | "mer">("sales");
   const [open, setOpen] = useState<Open | null>(null);
 
-  const range = useMemo(() => (today ? presetRange(preset, today, custom) : null), [preset, today, custom]);
+  // Default: the current month (set once the page is running in the browser).
+  const activeRange = useMemo(() => range ?? (today ? { from: startOfMonth(today), to: endOfMonth(today) } : null), [range, today]);
   // Custom comparison period defaults to the period right before the selected range.
   const cmpRange = useMemo(
-    () => (mode === "custom" && range ? (customCmp ?? comparisonRange("prev", range)) : null),
-    [mode, range, customCmp],
+    () => (mode === "custom" && activeRange ? (customCmp ?? comparisonRange("prev", activeRange)) : null),
+    [mode, activeRange, customCmp],
   );
-  const data = useDashboardData(client, settings, range, cmpRange);
+  const data = useDashboardData(client, settings, activeRange, cmpRange);
 
-  if (!mounted || !client || !settings || !range) return <Skeleton />;
+  if (!mounted || !client || !settings || !activeRange) return <Skeleton />;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <Controls
-        preset={preset}
-        setPreset={setPreset}
-        range={range}
-        setCustom={(r) => {
-          setCustom(r);
-          setPreset("custom");
-        }}
+        range={activeRange}
+        setRange={setRange}
         mode={mode}
         setMode={setMode}
         hasPlan={data?.hasPlan ?? false}
@@ -140,35 +101,22 @@ function Skeleton() {
 }
 
 function Controls(props: {
-  preset: Preset;
-  setPreset: (p: Preset) => void;
   range: Range;
-  setCustom: (r: Range) => void;
+  setRange: (r: Range) => void;
   mode: CompareModeName;
   setMode: (m: CompareModeName) => void;
   hasPlan: boolean;
   cmpRange: Range | null;
   setCmpRange: (r: Range) => void;
 }) {
-  const { preset, setPreset, range, setCustom, mode, setMode, hasPlan, cmpRange, setCmpRange } = props;
+  const { range, setRange, mode, setMode, hasPlan, cmpRange, setCmpRange } = props;
   const sel = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-accent";
   return (
     <div className="flex flex-wrap items-center gap-3">
       <h1 className="mr-auto text-xl font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
         Home
       </h1>
-      <select aria-label="Period" className={sel} value={preset} onChange={(e) => setPreset(e.target.value as Preset)}>
-        {PRESETS.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-          </option>
-        ))}
-      </select>
-      <div className="flex items-center gap-1.5 text-sm text-text-muted">
-        <input aria-label="From" type="date" className={sel} value={range.from} max={range.to} onChange={(e) => e.target.value && setCustom({ from: e.target.value, to: range.to })} />
-        →
-        <input aria-label="To" type="date" className={sel} value={range.to} min={range.from} onChange={(e) => e.target.value && setCustom({ from: range.from, to: e.target.value })} />
-      </div>
+      <DateRangePicker value={range} onChange={setRange} />
       <label className="flex items-center gap-2 text-sm text-text-muted">
         Compare
         <select aria-label="Compare" className={sel} value={mode} onChange={(e) => setMode(e.target.value as CompareModeName)}>

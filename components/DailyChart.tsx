@@ -18,6 +18,49 @@ interface Props {
   formatValue: (v: number) => string;
   formatAxis?: (v: number) => string;
   height?: number;
+  /** Axis/tooltip labels instead of formatted dates (e.g. 202601 for monthly charts). */
+  labels?: string[];
+  /** Curved lines instead of straight segments. */
+  smooth?: boolean;
+  legendTop?: boolean;
+}
+
+/** Monotone cubic curve through the points (no overshoot between them). */
+function smoothSegment(pts: [number, number][]): string {
+  const n = pts.length;
+  if (n === 0) return "";
+  if (n === 1) return `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  const dx: number[] = [];
+  const m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(pts[i + 1][0] - pts[i][0]);
+    m.push((pts[i + 1][1] - pts[i][1]) / (pts[i + 1][0] - pts[i][0] || 1));
+  }
+  const t: number[] = new Array(n).fill(0);
+  t[0] = m[0];
+  t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) {
+      t[i] = 0;
+      t[i + 1] = 0;
+    } else {
+      const a = t[i] / m[i];
+      const b = t[i + 1] / m[i];
+      const s = a * a + b * b;
+      if (s > 9) {
+        const tau = 3 / Math.sqrt(s);
+        t[i] = tau * a * m[i];
+        t[i + 1] = tau * b * m[i];
+      }
+    }
+  }
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i];
+    d += `C${(pts[i][0] + h / 3).toFixed(1)},${(pts[i][1] + (t[i] * h) / 3).toFixed(1)} ${(pts[i + 1][0] - h / 3).toFixed(1)},${(pts[i + 1][1] - (t[i + 1] * h) / 3).toFixed(1)} ${pts[i + 1][0].toFixed(1)},${pts[i + 1][1].toFixed(1)}`;
+  }
+  return d;
 }
 
 function niceTicks(min: number, max: number, count = 5): number[] {
@@ -32,7 +75,7 @@ function niceTicks(min: number, max: number, count = 5): number[] {
   return out;
 }
 
-export function DailyChart({ dates, series, formatValue, formatAxis, height = 320 }: Props) {
+export function DailyChart({ dates, series, formatValue, formatAxis, height = 320, labels, smooth = false, legendTop = false }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(720);
   const [hover, setHover] = useState<number | null>(null);
@@ -72,6 +115,21 @@ export function DailyChart({ dates, series, formatValue, formatAxis, height = 32
   const fmtAxis = formatAxis ?? formatValue;
 
   const linePath = (vals: (number | null)[]) => {
+    if (smooth) {
+      // Break into runs of consecutive values and curve each run.
+      let d = "";
+      let run: [number, number][] = [];
+      const flush = () => {
+        d += smoothSegment(run);
+        run = [];
+      };
+      vals.forEach((v, i) => {
+        if (v === null || !Number.isFinite(v)) return flush();
+        run.push([x(i), y(v)]);
+      });
+      flush();
+      return d;
+    }
     let d = "";
     let pen = false;
     vals.forEach((v, i) => {
@@ -84,9 +142,31 @@ export function DailyChart({ dates, series, formatValue, formatAxis, height = 32
     });
     return d;
   };
+  const labelAt = (i: number) => labels?.[i] ?? shortLabel(dates[i]);
+
+  const legendNode = (
+<div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+        {series.map((s) => (
+          <span key={s.id} className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-0.5 w-4"
+              style={{
+                background: s.kind === "bar" ? undefined : s.color,
+                borderTop: s.dashed ? `2px dashed ${s.color}` : undefined,
+                height: s.kind === "bar" ? 8 : s.dashed ? 0 : 2,
+                width: s.kind === "bar" ? 8 : 16,
+                ...(s.kind === "bar" ? { background: s.color } : {}),
+              }}
+            />
+            {s.label}
+          </span>
+        ))}
+      </div>
+  );
 
   return (
     <div ref={wrap} className="relative w-full">
+      {legendTop && <div className="mb-1 flex justify-center">{legendNode}</div>}
       <svg
         width={width}
         height={height}
@@ -109,7 +189,7 @@ export function DailyChart({ dates, series, formatValue, formatAxis, height = 32
         {dates.map((d, i) =>
           i % labelEvery === 0 ? (
             <text key={d} x={x(i)} y={height - 8} textAnchor="middle" fontSize="10" fill="var(--apex-text-faint)">
-              {shortLabel(d)}
+              {labelAt(i)}
             </text>
           ) : null,
         )}
@@ -148,7 +228,7 @@ export function DailyChart({ dates, series, formatValue, formatAxis, height = 32
           className="pointer-events-none absolute top-2 z-10 min-w-40 rounded-lg border border-border bg-surface-raised p-2 text-xs shadow-lg"
           style={{ left: Math.min(Math.max(0, x(hover) + 12), width - 180) }}
         >
-          <div className="mb-1 font-medium text-text">{shortLabel(dates[hover])}</div>
+          <div className="mb-1 font-medium text-text">{labelAt(hover)}</div>
           {series.map((s) => (
             <div key={s.id} className="tabular flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5 text-text-muted">
@@ -160,23 +240,7 @@ export function DailyChart({ dates, series, formatValue, formatAxis, height = 32
           ))}
         </div>
       )}
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
-        {series.map((s) => (
-          <span key={s.id} className="flex items-center gap-1.5">
-            <span
-              className="inline-block h-0.5 w-4"
-              style={{
-                background: s.kind === "bar" ? undefined : s.color,
-                borderTop: s.dashed ? `2px dashed ${s.color}` : undefined,
-                height: s.kind === "bar" ? 8 : s.dashed ? 0 : 2,
-                width: s.kind === "bar" ? 8 : 16,
-                ...(s.kind === "bar" ? { background: s.color } : {}),
-              }}
-            />
-            {s.label}
-          </span>
-        ))}
-      </div>
+      {!legendTop && <div className="mt-2">{legendNode}</div>}
     </div>
   );
 }
