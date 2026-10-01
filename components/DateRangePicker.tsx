@@ -41,10 +41,13 @@ export function buildGroups(today: string): Group[] {
     return { label: ago(i, "week"), range: { from: start, to: addDays(start, 6) } };
   });
 
-  const singleMonths: Option[] = Array.from({ length: 7 }, (_, i) => {
-    const m = addMonths(today, -i);
-    return { label: ago(i, "month"), range: { from: startOfMonth(m), to: endOfMonth(m) } };
-  });
+  // Single months: This month, Next month, Last month, 2 months ago ... 6 months ago
+  const monthOf = (m: string): Range => ({ from: startOfMonth(m), to: endOfMonth(m) });
+  const singleMonths: Option[] = [
+    { label: "This month", range: monthOf(today) },
+    { label: "Next month", range: monthOf(addMonths(today, 1)) },
+    ...Array.from({ length: 6 }, (_, i) => ({ label: ago(i + 1, "month"), range: monthOf(addMonths(today, -(i + 1))) })),
+  ];
   const lastMonthsEnd = endOfMonth(addMonths(today, -1));
   const monthRanges: Option[] = [2, 3, 4, 5, 6].map((n) => ({ label: `Last ${n} months`, range: { from: startOfMonth(addMonths(today, -n)), to: lastMonthsEnd } }));
 
@@ -55,17 +58,21 @@ export function buildGroups(today: string): Group[] {
     return { label, range: { from: start, to: endOfQuarter(start) } };
   });
 
-  const years: Option[] = Array.from({ length: 6 }, (_, i) => {
-    const y = year - 1 - i;
-    return { label: i === 0 ? "Last year" : String(y), range: { from: `${y}-01-01`, to: `${y}-12-31` } };
-  });
+  const years: Option[] = [
+    { label: "This year (YTD)", range: { from: `${year}-01-01`, to: addDays(today, -1) } },
+    ...Array.from({ length: 6 }, (_, i) => {
+      const y = year - 1 - i;
+      return { label: i === 0 ? "Last year" : String(y), range: { from: `${y}-01-01`, to: `${y}-12-31` } };
+    }),
+  ];
 
   const bfcm: Option[] = Array.from({ length: 6 }, (_, i) => ({ label: `BFCM ${year - 1 - i}`, range: bfcmRange(year - 1 - i) }));
 
   return [
     { id: "days", title: "Days", options: days },
     { id: "weeks", title: "Weeks", options: weeks },
-    { id: "months", title: "Months", options: [...singleMonths, ...monthRanges] },
+    { id: "months", title: "Months", options: singleMonths },
+    { id: "lastmonths", title: "Last X months", options: monthRanges },
     { id: "quarters", title: "Quarters", options: quarters },
     { id: "years", title: "Years", options: years },
     { id: "bfcm", title: "BFCM", options: bfcm },

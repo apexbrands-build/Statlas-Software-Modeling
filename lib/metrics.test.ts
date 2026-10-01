@@ -270,13 +270,15 @@ describe("date picker presets (today = 2026-09-30)", () => {
     expect(labels("days")).toEqual(["Last 7 days", "Last 14 days", "Last 30 days", "Last 60 days", "Last 90 days"]);
     expect(labels("weeks")).toEqual(["This week", "Last week", "2 weeks ago", "3 weeks ago", "4 weeks ago", "5 weeks ago", "6 weeks ago"]);
     expect(labels("quarters")).toEqual(["This quarter", "Last quarter", "2026 Q1", "2025 Q4", "2025 Q3", "2025 Q2", "2025 Q1"]);
-    expect(labels("years")).toEqual(["Last year", "2024", "2023", "2022", "2021", "2020"]);
+    expect(labels("years")).toEqual(["This year (YTD)", "Last year", "2024", "2023", "2022", "2021", "2020"]);
     expect(labels("bfcm")).toEqual(["BFCM 2025", "BFCM 2024", "BFCM 2023", "BFCM 2022", "BFCM 2021", "BFCM 2020"]);
   });
-  it("months: single months back to 6 months ago, then Last 2 to 6 months", () => {
-    expect(labels("months")).toEqual(["This month", "Last month", "2 months ago", "3 months ago", "4 months ago", "5 months ago", "6 months ago", "Last 2 months", "Last 3 months", "Last 4 months", "Last 5 months", "Last 6 months"]);
+  it("months are two groups: single months, and Last X months", () => {
+    expect(labels("months")).toEqual(["This month", "Next month", "Last month", "2 months ago", "3 months ago", "4 months ago", "5 months ago", "6 months ago"]);
+    expect(labels("lastmonths")).toEqual(["Last 2 months", "Last 3 months", "Last 4 months", "Last 5 months", "Last 6 months"]);
     expect(range("months", "Last month")).toEqual({ from: "2026-08-01", to: "2026-08-31" });
-    expect(range("months", "Last 3 months")).toEqual({ from: "2026-06-01", to: "2026-08-31" });
+    expect(range("months", "Next month")).toEqual({ from: "2026-10-01", to: "2026-10-31" });
+    expect(range("lastmonths", "Last 3 months")).toEqual({ from: "2026-06-01", to: "2026-08-31" });
   });
   it("ranges are correct", () => {
     expect(range("days", "Last 7 days")).toEqual({ from: "2026-09-23", to: "2026-09-29" });
@@ -285,6 +287,7 @@ describe("date picker presets (today = 2026-09-30)", () => {
     expect(range("quarters", "This quarter")).toEqual({ from: "2026-07-01", to: "2026-09-30" });
     expect(range("quarters", "2025 Q4")).toEqual({ from: "2025-10-01", to: "2025-12-31" });
     expect(range("years", "Last year")).toEqual({ from: "2025-01-01", to: "2025-12-31" });
+    expect(range("years", "This year (YTD)")).toEqual({ from: "2026-01-01", to: "2026-09-29" });
   });
   it("BFCM runs Black Friday through Cyber Monday", () => {
     expect(range("bfcm", "BFCM 2025")).toEqual({ from: "2025-11-28", to: "2025-12-01" });
