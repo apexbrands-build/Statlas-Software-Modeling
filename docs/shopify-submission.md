@@ -28,7 +28,7 @@ Keep the existing "Apex Data" app untouched until the new one works.
 ## 2. Switch the deployment to the new app (you, in Vercel)
 
 1. Vercel → Environment Variables: replace `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` with the new app's values. Redeploy.
-2. The test store's token belongs to the old app: in the dashboard re-run **Connect Shopify** for it (and install the new app on it from the Dev Dashboard's test-store install link). From then on every store installs the same app.
+2. The test store keeps working: its saved access key belongs to the old app and syncs do not use the client ID/secret. Keep the old "Apex Data" app installed and do NOT click Reconnect on that store. New stores install the new app. Keep the old ID/secret stored safely in case you need to swap back.
 3. Push this code first (GitHub Desktop). The migration `0002_shopify_installs` is already applied in Supabase.
 
 ## 3. Requests inside the app (Dev Dashboard → app → API access requests)
