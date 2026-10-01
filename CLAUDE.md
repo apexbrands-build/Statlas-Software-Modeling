@@ -7,22 +7,29 @@ Internal app for Apex Brands (e-commerce growth agency, 30+ clients) that replic
 - `docs/build-plan.md`: phases, metric formulas, data model, integrations, stack, decisions
 - `docs/forecasting-context.md`: the strategist's intent and returning-revenue method
 
-## Status
-Phase 1 UI is built (`app/`, `components/`, `lib/`, `theme/`): home dashboard with tiles, "i" trend modals, plan/YoY/previous-period comparison, channel performance with editable incrementality factors, email/organic, and a Store Settings page. Runs on seed data via `lib/repository`. **First functional version has no forecasting/plan targets**: with no plan the dashboard shows store data only (no target lines, no plan comparison; default compare = last year). Plan code stays in the repo behind `ENABLE_SEED_PLANS` in `lib/repository/seed.ts` for Phase 2. Tests: `npm test`. GitHub repo: `datasoftwarebuild` (user imports it into Vercel after the push).
+## Status (updated 2026-10-01)
+Live at https://apex-data-beta.vercel.app (Vercel, auto-deploys from GitHub `apexbrands-build/Statlas-Software-Modeling`, branch main; the user pushes with GitHub Desktop, Claude cannot push). Supabase project `ccejjijwrdnzljizzwsw` (Apex Brands org, us-east-1) holds the real schema (see `supabase/migrations/0001_init.sql`, applied incrementally via the Supabase connector).
 
-Next: Shopify app and Meta/Google Ads spend connectors (read-only), Supabase; plan targets/forecasting later.
+Built and working:
+- **Auth:** Supabase email/password, sign-up restricted to @apexbrands.io, `admin@apexbrands.io` is admin. `proxy.ts` protects every page. Sessions last a year.
+- **Dashboard (Home):** CM hero, tiles, trend chart (daily up to 62 days, monthly beyond), returning/new/paid blocks, channel performance with ROAS/iROAS selector, email/organic, YoY / previous / custom-period compare, calendar date picker (Days, Weeks, Months, Last X months, Quarters, Years incl. YTD, BFCM 2025-2020). "i" windows are monthly (YYYYMM) with metric-specific tables. No plan/targets in v1 (`ENABLE_SEED_PLANS=false`).
+- **Store Settings** mirrors the reference tool: header card, integrations table, Add Connection, Cost Settings, pop-up Edit with accordions (many options saved but "not applied yet"). Brand icons from simple-icons.
+- **Connectors (read-only):** Shopify (OAuth via custom-distribution app "Apex Data", one app per store, orders/refunds/costs, DB rollups `rebuild_daily_facts` + `recompute_first_orders`), Meta (System User token, spend + purchases, existing-customer split via `user_segment_key` breakdown, no name rules), Google Ads (agency OAuth refresh token in `agency_secrets`, MCC login-customer-id, no developer token needed, brand rule = name contains "brand" except NB/non-brand tags).
+- **Background jobs:** `sync_jobs` queue, chunked history loads that keep running server-side (each chunk its own task, auto-split on timeout), daily cron `/api/jobs/tick` (needs `CRON_SECRET`).
+- Tests: `npm test` (31). Local dev: `.env.local` (gitignored) has the Supabase URL and publishable key.
 
-Ideas the user wants later (not built): marketing-event calendar inferred from Klaviyo/SMS sends (past) plus a register for future initiatives and any actions that may shift the business (creatives, funnels, tests); this feeds the event-effect model. The user's `Jack-7xyz/aMER_ModelV2` repo (C pipeline: linear fit of day-of-week-adjusted aMER vs spend and revenue vs spend, IQR/z-score outlier filtering) is the reference for the new-revenue forecast.
+Vercel env vars (names only): NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or _ANON_KEY), NEXT_PUBLIC_APP_URL, NEXT_PUBLIC_DATA_MODE=supabase, SUPABASE_SERVICE_ROLE_KEY, TOKEN_ENCRYPTION_KEY, SHOPIFY_CLIENT_ID/SECRET, SHOPIFY_ALL_ORDERS=true, META_SYSTEM_USER_TOKEN, GOOGLE_CLIENT_ID/SECRET, GOOGLE_ADS_LOGIN_CUSTOMER_ID, CRON_SECRET. Setup steps are in `docs/connector-setup.md`.
 
-## Current priority
-Build the **home dashboard** only (tiles, "i" trend modals, YoY comparison, store + cost settings), on realistic **seed data** behind a repository interface. No database and no API integrations yet. Supabase and connectors come later. Forecasting is later.
+Open items: (1) Point6 has almost no product costs in Shopify, so COGS is ~0: use the COGS % / flat rate in Edit or upload costs by SKU; (2) compare September Shopify numbers (gross, discounts, returns, net, shipping, taxes, total, orders) against the database; (3) verify Meta existing-customer spend and Google brand spend against the platforms; (4) check the first Shopify history load finishes; (5) set `CRON_SECRET`; (6) later: forecasting layer, reports, Klaviyo/GA4, more platforms, onboarding more clients (one Shopify app per store unless a public app is approved).
+
+Ideas wanted later (not built): marketing-event calendar inferred from Klaviyo/SMS sends plus a register for future initiatives (feeds the event-effect model). The user's `Jack-7xyz/aMER_ModelV2` repo (C pipeline: linear fit of day-of-week-adjusted aMER vs spend, IQR/z-score outliers) is the reference for the new-revenue forecast.
 
 ## Rules
 - Read-only in Statlas and in every integration. Never change Statlas settings or click Save/Calculate/Sync there.
 - No agent messages a client without human approval.
 - Never type credentials anywhere; ask the user.
 - If browser tools fail 2–3 times, stop and ask instead of retrying.
-- Get the user's go-ahead before starting the next phase (Supabase, connectors, forecasting). Phase 1 UI was approved to build.
+- Get the user's go-ahead before starting a new phase (forecasting, reports, new connectors). Keep answers short: the user is not technical and values saving tokens/time.
 
 ## Confirmed decisions
 - Revenue definition = **Order Revenue** for all clients (gross − discounts + shipping + tax, returns excluded). Used for MER, AOV, iROAS; refunds are a separate CM line.
