@@ -7,6 +7,7 @@ Internal app for Apex Brands (e-commerce growth agency, 30+ clients) that replic
 - `docs/statlas-findings.md`: what Statlas does (observed, read-only), incl. planning at `/goals`
 - `docs/build-plan.md`: phases, metric formulas, data model, integrations, stack, decisions
 - `docs/forecasting-context.md`: the strategist's intent and returning-revenue method
+- `docs/planning-layer.md`: plans, daily targets, Plan P&L (built 2026-10-01), next phases
 
 ## Status (updated 2026-10-01)
 Live at https://apex-data-beta.vercel.app (Vercel, auto-deploys from GitHub `apexbrands-build/Statlas-Software-Modeling`, branch main; the user pushes with GitHub Desktop, Claude cannot push). Supabase project `ccejjijwrdnzljizzwsw` (Apex Brands org, us-east-1) holds the real schema (see `supabase/migrations/0001_init.sql`, applied incrementally via the Supabase connector).
@@ -26,6 +27,8 @@ Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in 
 **Gross sales and discounts (2026-10-01, migration 0003, applied):** `daily_facts` stores `gross_sales` and `discounts` (net_sales = gross - discounts - refunds); `plan_targets` has optional `gross_sales`, `discounts`, `shipping`, `refunds` so the forecasting layer can plan shipping/refund/discount % and a plan-level P&L.
 
 **Reports (user-approved scope and order):** library `/reporting`, Marketing Efficiency, P&L and Paid Media Overview are built; the rest waits for the plan layer. Never build Best Creatives, DTC Index, Trend Explorer, Global Creatives. Status, order and how they work: `docs/reports-plan.md`; what Statlas does in each: `docs/statlas-findings.md` ("Reports"). Reports show Goal columns automatically once a plan exists (via `useDashboardData` / `aggregatePlan`).
+
+**Planning layer (2026-10-01):** `/planning` plan editor (phases A and B built: monthly plan, daily targets, Plan P&L, P/F in `/reporting/pnl`); migration 0004 applied. Next phases (cohort returning model, aMER model, tracker targets) wait for the user's go-ahead: `docs/planning-layer.md`.
 
 Open items: (1) Point6 has almost no product costs in Shopify, so COGS is ~0: use the COGS % / flat rate in Edit or upload costs by SKU; (2) compare September Shopify numbers (gross, discounts, returns, net, shipping, taxes, total, orders) against the database; (3) verify Meta existing-customer spend and Google brand spend against the platforms; (4) check the first Shopify history load finishes; (5) set `CRON_SECRET`; (6) later: forecasting layer, reports, Klaviyo/GA4, more platforms, onboarding more clients (one Shopify app per store unless a public app is approved).
 

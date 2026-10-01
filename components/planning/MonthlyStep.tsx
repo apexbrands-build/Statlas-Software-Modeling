@@ -194,6 +194,16 @@ export function MonthlyStep({ ctx }: { ctx: PlanCtx }) {
                   <td />
                 </Row>
               ))}
+            {showRates && (
+              <Row label="Fixed costs (SG&A)" hint={`per month, only in Plan P&L, not CM (client default ${money(settings.monthlyFixedCosts)})`}>
+                {months.map((m, i) => (
+                  <td key={m.month} className={td}>
+                    {hasInputs(i) ? <NumField value={m.inputs!.fixedCosts ?? settings.monthlyFixedCosts} disabled={m.locked} onCommit={(v) => setField(m.month, (x) => ({ ...x, fixedCosts: Math.max(0, v) }))} /> : <Dash />}
+                  </td>
+                ))}
+                <td className={td}>{money(months.reduce((a, m) => a + (m.inputs ? (m.inputs.fixedCosts ?? settings.monthlyFixedCosts) : 0), 0))}</td>
+              </Row>
+            )}
           </tbody>
         </table>
       </div>

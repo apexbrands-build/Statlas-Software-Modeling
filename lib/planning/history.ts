@@ -89,6 +89,7 @@ export function inputsFromFacts(facts: DailyFact[], monthsCount: number, setting
       newAov: round2(div(t.newOrderRevenue, t.newOrders) ?? 0),
       returningAov: round2(div(t.returningOrderRevenue, t.returningOrders) ?? 0),
     },
+    fixedCosts: settings.monthlyFixedCosts,
     source,
   };
 }

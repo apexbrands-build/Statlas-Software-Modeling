@@ -15,6 +15,7 @@ import type { PlanCtx } from "./ctx";
 import { DetailsStep } from "./DetailsStep";
 import { InputStep } from "./InputStep";
 import { MonthlyStep } from "./MonthlyStep";
+import { PnlStep } from "./PnlStep";
 import { SpendStep } from "./SpendStep";
 import { btn, btnPrimary, monthKey, MONTHS } from "./ui";
 import { usePlanHistory } from "./useHistory";
@@ -24,6 +25,7 @@ const STEPS = [
   { id: "spend", label: "Spend & days" },
   { id: "details", label: "Returning revenue" },
   { id: "input", label: "Daily input" },
+  { id: "pnl", label: "Plan P&L" },
 ] as const;
 type StepId = (typeof STEPS)[number]["id"];
 
@@ -112,7 +114,7 @@ export function PlanEditor({ planId }: { planId: string }) {
       if (!target || !settings) return null;
       if (target.locked) return `${MONTHS[Number(month.slice(5, 7)) - 1]} is locked.`;
       let inputs: PlanMonthInputs | null = null;
-      if (source === "blank") inputs = { ...blankInputs(), rates: { ...ZERO_RATES, otherVarPct: settings.otherVariablePct } };
+      if (source === "blank") inputs = { ...blankInputs(), fixedCosts: settings.monthlyFixedCosts, rates: { ...ZERO_RATES, otherVarPct: settings.otherVariablePct } };
       else if (source !== "clear") {
         const r = sourceRange(source, month, todayLocal());
         if (source === "actuals" && month > history.lastData) return "That month has no actuals yet.";
@@ -238,6 +240,7 @@ export function PlanEditor({ planId }: { planId: string }) {
       {step === "spend" && <SpendStep ctx={ctx} />}
       {step === "details" && <DetailsStep ctx={ctx} />}
       {step === "input" && <InputStep ctx={ctx} />}
+      {step === "pnl" && <PnlStep ctx={ctx} />}
     </div>
   );
 }

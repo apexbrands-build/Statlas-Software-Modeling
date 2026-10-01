@@ -57,6 +57,8 @@ export interface PlanMonthInputs {
   altPct: Record<string, number>;
   lockedPlatforms?: string[];
   rates: PlanRates;
+  /** Fixed costs (SG&A) for the month. Only used in the Plan P&L, never in CM. Falls back to the client's setting. */
+  fixedCosts?: number;
   /** Fixed daily values (a locked day keeps them; the rest of the month absorbs the difference). */
   overrides?: Record<string, DayOverride>;
   source?: "manual" | "last_year" | "recent" | "actuals";

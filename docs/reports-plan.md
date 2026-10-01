@@ -10,7 +10,7 @@ Build all Recommended reports from Statlas **except** Best Creatives, DTC Index,
 |---|---|---|
 | Report library | `/reporting` | Built |
 | Marketing Efficiency Report | `mer` | Built (Goal columns appear when a plan exists) |
-| P&L | `pnl` | Built (#s As: Whole / Thousands / % of revenue; Revenue By: Simplified / New vs Returning / Paid vs Organic; Compare A/P/F, P and F disabled until the plan layer) |
+| P&L | `pnl` | Built (#s As: Whole / Thousands / % of revenue; Revenue By: Simplified / New vs Returning / Paid vs Organic; Compare A/P/F: P and F live now, see docs/planning-layer.md) |
 | Paid Media Overview | `ads` | Built (columns are our design; Statlas's table never loaded) |
 | Facebook / Google Trackers | `facebook-tracker`, `google-tracker` | Paused: needs per-campaign daily targets from the plan layer |
 | Total Net Customer, Variable Costs Dashboard, Calendar Report | `total-net-customer`, `variable-costs`, `calendar` | Not built (Calendar needs plan goals and events) |
@@ -18,7 +18,7 @@ Build all Recommended reports from Statlas **except** Best Creatives, DTC Index,
 | Hourly, Email Metrics, Email/SMS Trackers, Pinterest/TikTok/Snapchat/Bing/YouTube/AppLovin Trackers | see registry | Not built: layout only, "waiting for data source" |
 
 ## Order of work
-1. Forecasting / planning layer first (most reports compare to the plan).
+1. Forecasting / planning layer (phases A and B built, see `docs/planning-layer.md`; C/D are the statistical models).
 2. Then Facebook/Google Trackers, Total Net Customer, Variable Costs, Calendar, LTV reports, and the waiting-for-data pages.
 
 ## How reports are built

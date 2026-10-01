@@ -20,6 +20,9 @@ export const REVENUE_BY_LABELS: Record<RevenueBy, string> = {
   paidOrganic: "Paid vs Organic",
 };
 
+/** Totals that carry their own cost settings (plan and forecast columns). */
+export type PnlTotals = Totals & { cmSettings?: ClientSettings };
+
 export interface PnlSection {
   title: string;
   rows: PnlRow[];
@@ -83,7 +86,9 @@ function revenueRows(row: RowFn, opRev: (t: Totals) => number, s: ClientSettings
  * Monthly P&L. Operating revenue = gross - discounts + shipping - refunds (= net sales + shipping), the same base the
  * dashboard's contribution margin uses. Fixed costs (SG&A) come from Store Settings and sit below the CM line.
  */
-export function buildPnl(totals: (Totals | null)[], s: ClientSettings, revenueBy: RevenueBy = "simplified"): PnlSection[] {
+export function buildPnl(totals: (Totals | null)[], s: ClientSettings, revenueBy: RevenueBy = "simplified", fixedCosts?: (number | null)[]): PnlSection[] {
+  // Plan columns carry their own cost settings (the plan's rates differ month to month).
+  const cmOf = (t: Totals) => cmParts(t, (t as PnlTotals).cmSettings ?? s);
   const row = (key: string, label: string, format: Format, f: (t: Totals) => number | null, extra: Partial<PnlRow> = {}): PnlRow => ({
     key,
     label,
@@ -97,18 +102,19 @@ export function buildPnl(totals: (Totals | null)[], s: ClientSettings, revenueBy
   const opRev = (t: Totals) => t.netSales + t.shippingCollected;
   // Fixed costs are monthly: months with data x monthly amount (total column = sum of those months).
   const monthsWithData = totals.slice(0, 12).map((t) => (t && t.days > 0 ? 1 : 0));
-  const sgaValues: (number | null)[] = [...monthsWithData.map((m) => (m ? s.monthlyFixedCosts : null)), monthsWithData.reduce<number>((a, b) => a + b, 0) * s.monthlyFixedCosts || null];
-  const profitValues = totals.map((t, i) => (t && t.days > 0 ? cmParts(t, s).cm - (sgaValues[i] ?? 0) : null));
-  const cmRow = row("cm", "Contribution Margin", "currency0", (t) => cmParts(t, s).cm, { bold: true, pctOfRevenue: true });
+  const monthlyFixed = monthsWithData.map((m, i) => (m ? (fixedCosts ? fixedCosts[i] ?? 0 : s.monthlyFixedCosts) : null));
+  const sgaValues: (number | null)[] = [...monthlyFixed, monthlyFixed.reduce<number>((a, b) => a + (b ?? 0), 0) || null];
+  const profitValues = totals.map((t, i) => (t && t.days > 0 ? cmOf(t).cm - (sgaValues[i] ?? 0) : null));
+  const cmRow = row("cm", "Contribution Margin", "currency0", (t) => cmOf(t).cm, { bold: true, pctOfRevenue: true });
 
   return [
     { title: "Revenue", rows: revenueRows(row, opRev, s, revenueBy) },
     {
       title: "Cost of delivery",
       rows: [
-        row("cogs", "COGS", "currency0", (t) => -cmParts(t, s).cogs),
-        row("cod", "Other variable costs", "currency0", (t) => -cmParts(t, s).costOfDelivery),
-        row("totalCod", "Total Cost of Delivery", "currency0", (t) => -(cmParts(t, s).cogs + cmParts(t, s).costOfDelivery), { bold: true }),
+        row("cogs", "COGS", "currency0", (t) => -cmOf(t).cogs),
+        row("cod", "Other variable costs", "currency0", (t) => -cmOf(t).costOfDelivery),
+        row("totalCod", "Total Cost of Delivery", "currency0", (t) => -(cmOf(t).cogs + cmOf(t).costOfDelivery), { bold: true }),
       ],
     },
     {
@@ -131,10 +137,10 @@ export function buildPnl(totals: (Totals | null)[], s: ClientSettings, revenueBy
     {
       title: "4 Quarter Accounting (% of operating revenue)",
       rows: [
-        row("codPct", "COD", "percent1", (t) => div(cmParts(t, s).cogs + cmParts(t, s).costOfDelivery, opRev(t))),
+        row("codPct", "COD", "percent1", (t) => div(cmOf(t).cogs + cmOf(t).costOfDelivery, opRev(t))),
         row("adPct", "Ad Spend", "percent1", (t) => div(totalSpend(t), opRev(t))),
         row("opexPct", "Opex", "percent1", () => null),
-        row("profitPct", "Profit", "percent1", (t) => div(cmParts(t, s).cm, opRev(t))),
+        row("profitPct", "Profit", "percent1", (t) => div(cmOf(t).cm, opRev(t))),
       ],
     },
     {
@@ -151,7 +157,7 @@ export function buildPnl(totals: (Totals | null)[], s: ClientSettings, revenueBy
         row("retAov", "Returning AOV", "currency2", (t) => div(t.returningOrderRevenue, t.returningOrders)),
         row("repeat", "Repeat Rate", "percent1", (t) => div(t.returningOrders, orders(t))),
         row("refundRate", "Refund Rate", "percent1", (t) => div(t.refunds, t.netSales + t.refunds)),
-        row("cogsRate", "COGS Rate", "percent1", (t) => div(cmParts(t, s).cogs, opRev(t))),
+        row("cogsRate", "COGS Rate", "percent1", (t) => div(cmOf(t).cogs, opRev(t))),
         row("mer", "MER", "ratio2", (t) => div(orderRevenue(t), totalSpend(t))),
         row("amer", "aMER", "ratio2", (t) => div(t.newOrderRevenue, amerSpend(t, s))),
         row("acqSpend", "Acquisition Spend", "currency0", (t) => amerSpend(t, s)),
