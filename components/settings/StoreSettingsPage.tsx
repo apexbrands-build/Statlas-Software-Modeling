@@ -610,7 +610,7 @@ function HistoryLoader({ row }: { row: Integration }) {
       <div className="text-sm font-semibold">Load history</div>
       {limited ? (
         <p className="text-xs text-yellow-300">
-          Shopify only allows the last 60 days until this store approves the <code>read_all_orders</code> permission. Release the new app version in Shopify, then open the app&apos;s install link (Dev Dashboard → Apex Data → Distribution) as a store admin and approve the updated permissions. Then reopen this window. Meta and Google can load years today.
+          Shopify only allows the last 60 days until this store approves the <code>read_all_orders</code> permission. Release the new app version in Shopify, then open the app&apos;s install link (Dev Dashboard → Apex Analytics → Distribution) as a store admin and approve the updated permissions. Then reopen this window. Meta and Google can load years today.
         </p>
       ) : (
         <>
