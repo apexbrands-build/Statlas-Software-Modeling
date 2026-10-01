@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import { decrypt } from "@/lib/crypto";
-import { linkInstallToClient } from "@/lib/shopify-installs";
+import { installTokens, linkInstallToClient } from "@/lib/shopify-installs";
 import { normalizeShop, scopesCover, SHOPIFY_SCOPES } from "@/lib/shopify";
 import { getAdminClient, getServerClient } from "@/lib/supabase/server";
 
@@ -26,10 +25,10 @@ export async function GET(request: Request) {
     const { data: client } = await supabase.from("clients").select("id").eq("id", clientId).maybeSingle();
     if (!client) return NextResponse.json({ error: "No access to this client" }, { status: 403 });
 
-    const { data: install } = await getAdminClient().from("shopify_installs").select("ciphertext, scope").eq("shop", shop).maybeSingle();
-    if (install?.ciphertext && scopesCover(install.scope, SHOPIFY_SCOPES)) {
-      const secret = JSON.parse(decrypt(install.ciphertext)) as { access_token: string; scope: string };
-      const ok = await linkInstallToClient(shop, clientId, secret.access_token, secret.scope);
+    const { data: install } = await getAdminClient().from("shopify_installs").select("scope").eq("shop", shop).maybeSingle();
+    const tokens = install && scopesCover(install.scope, SHOPIFY_SCOPES) ? await installTokens(shop).catch(() => null) : null;
+    if (tokens) {
+      const ok = await linkInstallToClient(shop, clientId, tokens);
       return NextResponse.redirect(new URL(ok ? "/settings?connected=shopify" : "/settings?error=save_failed", request.url));
     }
   }

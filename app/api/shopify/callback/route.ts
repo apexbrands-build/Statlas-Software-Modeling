@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { linkInstallToClient, saveInstall } from "@/lib/shopify-installs";
+import { exchangeCode, linkInstallToClient, saveInstall } from "@/lib/shopify-installs";
 import { normalizeShop, verifyShopifyHmac } from "@/lib/shopify";
 import { getServerClient } from "@/lib/supabase/server";
 
@@ -29,16 +29,11 @@ export async function GET(request: Request) {
   }
   if (!saved || saved.state !== state || saved.shop !== shop) return back(request, "error=shopify_state_mismatch", false);
 
-  const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ client_id: process.env.SHOPIFY_CLIENT_ID, client_secret: process.env.SHOPIFY_CLIENT_SECRET, code }),
-  });
-  if (!tokenRes.ok) return back(request, "error=shopify_token_exchange_failed", Boolean(saved.clientId));
-  const { access_token, scope } = (await tokenRes.json()) as { access_token: string; scope: string };
+  const tokens = await exchangeCode(shop, code);
+  if (!tokens) return back(request, "error=shopify_token_exchange_failed", Boolean(saved.clientId));
 
   // Every install is recorded, signed in or not (merchants installing from the App Store have no Apex account).
-  await saveInstall(shop, access_token, scope);
+  await saveInstall(shop, tokens);
 
   if (!saved.clientId) {
     const res = NextResponse.redirect(new URL(`/shopify?shop=${encodeURIComponent(shop)}&installed=1`, request.url));
@@ -52,7 +47,7 @@ export async function GET(request: Request) {
   if (!user.user) return back(request, "error=not_signed_in");
   const { data: client } = await supabase.from("clients").select("id").eq("id", saved.clientId).maybeSingle();
   if (!client) return back(request, "error=no_client_access");
-  if (!(await linkInstallToClient(shop, saved.clientId, access_token, scope))) return back(request, "error=save_failed");
+  if (!(await linkInstallToClient(shop, saved.clientId, tokens))) return back(request, "error=save_failed");
 
   const res = back(request, "connected=shopify");
   res.cookies.delete({ name: "shopify_oauth", path: "/api/shopify" });

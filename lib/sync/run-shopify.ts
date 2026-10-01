@@ -1,5 +1,6 @@
 import "server-only";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/crypto";
+import { freshTokens, saveInstallTokens, type ShopifyTokens } from "@/lib/shopify-installs";
 import { getAdminClient } from "@/lib/supabase/server";
 import { fetchGrantedScopes, fetchOrders, fetchVariantCosts } from "./shopify";
 import { resolveRange, type SyncRange } from "./range";
@@ -17,8 +18,12 @@ async function loadConnection(integrationId: string) {
   if (!integration || integration.provider !== "shopify") throw new Error("Not a Shopify connection");
   const { data: secret } = await admin.from("integration_secrets").select("ciphertext").eq("integration_id", integrationId).single();
   if (!secret) throw new Error("No saved credentials: reconnect the store");
-  const { access_token: token } = JSON.parse(decrypt(secret.ciphertext)) as { access_token: string };
-  return { admin, integration, token, shop: integration.account_id as string, clientId: integration.client_id as string };
+  const shop = integration.account_id as string;
+  const tokens = await freshTokens(shop, JSON.parse(decrypt(secret.ciphertext)) as ShopifyTokens, async (t) => {
+    await admin.from("integration_secrets").update({ ciphertext: encrypt(JSON.stringify(t)), updated_at: new Date().toISOString() }).eq("integration_id", integrationId);
+    await saveInstallTokens(shop, t);
+  });
+  return { admin, integration, token: tokens.access_token, shop, clientId: integration.client_id as string };
 }
 
 export async function shopifyHistoryAccess(integrationId: string): Promise<{ hasAllOrders: boolean }> {
