@@ -5,6 +5,7 @@ import { defaultExtra } from "./defaults";
 import { SeedRepository } from "./repository/seed";
 import { splitCampaignDays } from "./sync/meta-split";
 import { isBrandCampaign, mergeGoogleRows } from "./sync/google-split";
+import { buildGroups } from "../components/DateRangePicker";
 import type { ChannelKey, ClientSettings, DailyFact } from "./types";
 import { CHANNEL_KEYS } from "./types";
 
@@ -256,5 +257,36 @@ describe("Google brand rule and merge", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ spend: 12.34, purchases: 2, revenue: 150 });
     expect(rows[1]).toMatchObject({ spend: 0, purchases: 1, revenue: 40 });
+  });
+});
+
+describe("date picker presets (today = 2026-09-30)", () => {
+  const groups = buildGroups("2026-09-30");
+  const labels = (id: string) => groups.find((g) => g.id === id)!.options.map((o) => o.label);
+  const range = (id: string, label: string) => groups.find((g) => g.id === id)!.options.find((o) => o.label === label)!.range;
+
+  it("days, weeks, quarters, years and BFCM follow the requested lists", () => {
+    expect(labels("days")).toEqual(["Last 7 days", "Last 14 days", "Last 30 days", "Last 60 days", "Last 90 days"]);
+    expect(labels("weeks")).toEqual(["This week", "Last week", "2 weeks ago", "3 weeks ago", "4 weeks ago", "5 weeks ago", "6 weeks ago"]);
+    expect(labels("quarters")).toEqual(["This quarter", "Last quarter", "2026 Q1", "2025 Q4", "2025 Q3", "2025 Q2", "2025 Q1"]);
+    expect(labels("years")).toEqual(["Last year", "2024", "2023", "2022", "2021", "2020"]);
+    expect(labels("bfcm")).toEqual(["BFCM 2025", "BFCM 2024", "BFCM 2023", "BFCM 2022", "BFCM 2021", "BFCM 2020"]);
+  });
+  it("months: single months back to 6 months ago, then Last 2 to 6 months", () => {
+    expect(labels("months")).toEqual(["This month", "Last month", "2 months ago", "3 months ago", "4 months ago", "5 months ago", "6 months ago", "Last 2 months", "Last 3 months", "Last 4 months", "Last 5 months", "Last 6 months"]);
+    expect(range("months", "Last month")).toEqual({ from: "2026-08-01", to: "2026-08-31" });
+    expect(range("months", "Last 3 months")).toEqual({ from: "2026-06-01", to: "2026-08-31" });
+  });
+  it("ranges are correct", () => {
+    expect(range("days", "Last 7 days")).toEqual({ from: "2026-09-23", to: "2026-09-29" });
+    expect(range("weeks", "This week")).toEqual({ from: "2026-09-28", to: "2026-10-04" });
+    expect(range("weeks", "Last week")).toEqual({ from: "2026-09-21", to: "2026-09-27" });
+    expect(range("quarters", "This quarter")).toEqual({ from: "2026-07-01", to: "2026-09-30" });
+    expect(range("quarters", "2025 Q4")).toEqual({ from: "2025-10-01", to: "2025-12-31" });
+    expect(range("years", "Last year")).toEqual({ from: "2025-01-01", to: "2025-12-31" });
+  });
+  it("BFCM runs Black Friday through Cyber Monday", () => {
+    expect(range("bfcm", "BFCM 2025")).toEqual({ from: "2025-11-28", to: "2025-12-01" });
+    expect(range("bfcm", "BFCM 2024")).toEqual({ from: "2024-11-29", to: "2024-12-02" });
   });
 });

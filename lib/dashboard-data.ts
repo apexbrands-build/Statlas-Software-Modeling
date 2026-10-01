@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addDays, addYears, comparisonRange, diffDays, eachDay, min, type CompareModeName, type Range } from "./dates";
+import { addDays, addMonths, addYears, comparisonRange, diffDays, eachDay, min, startOfMonth, type CompareModeName, type Range } from "./dates";
 import { aggregate, aggregatePlan, compare, type Comparison, type MetricDef, type PlanTotals, type Totals } from "./metrics";
 import { getRepository } from "./repository";
 import { toMap } from "./series";
@@ -26,6 +26,8 @@ export interface DashData {
   effTo: string;
   lastData: string;
   dates: string[];
+  /** Window for the monthly trend chart: 12 months ending at the selected range (or the range itself if longer). */
+  trendRange: Range;
   facts: Map<string, DailyFact>;
   lyFacts: Map<string, DailyFact>;
   prevFacts: Map<string, DailyFact>;
@@ -65,12 +67,13 @@ export function useDashboardData(
       const prevRange = comparisonRange("prev", elapsed);
       const plans = await repo.listPlans(client.id);
       const plan = plans.find((p) => p.isDefault) ?? plans[0];
+      const trendFrom = min(startOfMonth(range.from), startOfMonth(addMonths(range.to, -11)));
       const [facts, lyFacts, prevFacts, customFacts, planRows] = await Promise.all([
-        repo.getFacts(client.id, range.from, effTo),
-        repo.getFacts(client.id, addYears(range.from, -1), addYears(range.to, -1)),
+        repo.getFacts(client.id, trendFrom, effTo),
+        repo.getFacts(client.id, addYears(trendFrom, -1), addYears(range.to, -1)),
         repo.getFacts(client.id, prevRange.from, prevRange.to),
         customCompare ? repo.getFacts(client.id, customCompare.from, customCompare.to) : Promise.resolve([]),
-        plan ? repo.getPlanTargets(client.id, plan.id, range.from, range.to) : Promise.resolve([]),
+        plan ? repo.getPlanTargets(client.id, plan.id, trendFrom, range.to) : Promise.resolve([]),
       ]);
       if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, customFacts, plan: planRows, planName: plan?.name ?? null });
     })();
@@ -89,6 +92,7 @@ export function useDashboardData(
       effTo: raw.effTo,
       lastData: raw.lastData,
       dates: eachDay(range.from, range.to),
+      trendRange: { from: min(startOfMonth(range.from), startOfMonth(addMonths(range.to, -11))), to: range.to },
       facts: toMap(raw.facts),
       lyFacts: toMap(raw.lyFacts),
       prevFacts: toMap(raw.prevFacts),
@@ -98,11 +102,11 @@ export function useDashboardData(
       plan: toMap(raw.plan),
       planName: raw.planName,
       hasPlan: raw.planName !== null,
-      cur: aggregate(raw.facts),
-      ly: aggregate(raw.lyFacts.filter((f) => f.date <= lyLimit)),
+      cur: aggregate(raw.facts.filter((f) => f.date >= range.from)),
+      ly: aggregate(raw.lyFacts.filter((f) => f.date >= addYears(range.from, -1) && f.date <= lyLimit)),
       prev: aggregate(raw.prevFacts),
       custom: aggregate(raw.customFacts),
-      planTotals: aggregatePlan(raw.plan.filter((p) => p.date <= raw.effTo)),
+      planTotals: aggregatePlan(raw.plan.filter((p) => p.date >= range.from && p.date <= raw.effTo)),
     };
   }, [raw, client, settings, range, key, customCompare]);
 }

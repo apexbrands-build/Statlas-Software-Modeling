@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { DailyChart } from "./DailyChart";
 import { theme } from "@/theme/theme";
-import { monthKey, monthKeys, type CompareModeName } from "@/lib/dates";
+import type { CompareModeName } from "@/lib/dates";
+import { monthRows, type MonthRow } from "@/lib/monthly";
 import { compareSource, tileNumbers, type DashData } from "@/lib/dashboard-data";
 import { formatDiff, formatValue, type Format } from "@/lib/format";
-import { aggregate, aggregatePlan, cmParts, totalSpend, type MetricDef, type Totals } from "@/lib/metrics";
+import { cmParts, totalSpend, type MetricDef, type Totals } from "@/lib/metrics";
 import { PLATFORMS, platformOf } from "@/lib/channels";
 import { CHANNEL_KEYS, type ChannelKey } from "@/lib/types";
 
@@ -16,15 +17,6 @@ interface Props {
   data: DashData;
   mode: CompareModeName;
   onClose: () => void;
-}
-
-interface MonthRow {
-  key: string;
-  tot: Totals;
-  hasActual: boolean;
-  actual: number | null;
-  target: number | null;
-  compare: number | null;
 }
 
 interface Col {
@@ -106,32 +98,11 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
   const cmp = compareSource(data, mode);
   const compareName = COMPARE_NAME[mode];
 
-  // Group the selected range by month (YYYYMM), like the reference tool.
-  const keys = useMemo(() => monthKeys(data.range.from, data.range.to), [data.range]);
-  const rows: MonthRow[] = useMemo(() => {
-    const byMonth: Record<string, string[]> = {};
-    for (const d of data.dates) (byMonth[monthKey(d)] ??= []).push(d);
-    return keys.map((k) => {
-      const ds = byMonth[k] ?? [];
-      const facts = ds.map((d) => data.facts.get(d)).filter((f): f is NonNullable<typeof f> => Boolean(f));
-      const tot = aggregate(facts);
-      const cmpFacts = ds.map((d) => cmp.facts.get(cmp.date(d))).filter((f): f is NonNullable<typeof f> => Boolean(f));
-      const planRows = ds.filter((d) => d <= data.effTo).map((d) => data.plan.get(d)).filter((p): p is NonNullable<typeof p> => Boolean(p));
-      return {
-        key: k,
-        tot,
-        hasActual: facts.length > 0,
-        actual: facts.length ? def.value(tot, data.settings) : null,
-        target: planRows.length && def.target ? def.target(aggregatePlan(planRows)) : null,
-        compare: cmpFacts.length ? def.value(aggregate(cmpFacts), data.settings) : null,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, def, keys]);
+  // Grouped by month (YYYYMM), like the reference tool.
+  const rows: MonthRow[] = useMemo(() => monthRows(def, data, cmp), [def, data, cmp]);
 
   const hasTarget = rows.some((r) => r.target !== null);
   const hasCompare = rows.some((r) => r.compare !== null);
-  const compareLabel = hasTarget ? "Target" : compareName;
   // With no plan, the "Target" column shows the comparison (last year / previous / custom period) instead.
   const cols = columnsFor(def, data, rows, compareName).map((c) => (c.label === "Target" && !hasTarget ? { ...c, label: compareName, get: (r: MonthRow) => r.compare } : c));
 

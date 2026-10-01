@@ -26,7 +26,7 @@ import {
   multiplierLabel,
   type MetricDef,
 } from "@/lib/metrics";
-import { metricSeries } from "@/lib/series";
+import { monthRows } from "@/lib/monthly";
 
 interface Open {
   def: MetricDef;
@@ -232,7 +232,7 @@ function Body(props: {
       {/* Chart */}
       <section className="rounded-2xl border border-border bg-surface p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-text-muted">Daily trend</h3>
+          <h3 className="text-sm font-medium text-text-muted">Monthly trend</h3>
           <select
             aria-label="Chart"
             value={chartType}
@@ -303,45 +303,51 @@ function Grid({ cols, children }: { cols: 4 | 5; children: React.ReactNode }) {
   return <div className={`grid grid-cols-2 gap-3 ${cols === 5 ? "md:grid-cols-5" : "md:grid-cols-4"}`}>{children}</div>;
 }
 
+/** Monthly trend (peak months matter more than single days). */
 function MainChart({ data, type, mode }: { data: DashData; type: "sales" | "cm" | "mer"; mode: CompareModeName }) {
   const cur = data.client.currency;
   const cmp = compareSource(data, mode);
-  const ctx = { dates: data.dates, facts: data.facts, cmpFacts: cmp.facts, cmpDate: cmp.date, plan: data.plan, settings: data.settings };
   const c = theme.colors;
+  const compareName = mode === "prev" ? "Previous period" : mode === "custom" ? "Comparison period" : "Last year";
 
-  const series: ChartSeries[] = useMemo(() => {
+  const view = useMemo(() => {
     if (type === "sales") {
-      const rev = metricSeries(METRICS.orderRevenue, ctx);
-      const sp = metricSeries(METRICS.adSpend, ctx);
+      const rev = monthRows(METRICS.orderRevenue, data, cmp, data.trendRange);
+      const sp = monthRows(METRICS.adSpend, data, cmp, data.trendRange);
       const out: ChartSeries[] = [
-        { id: "rev", label: "Order revenue", kind: "bar", color: c.chartPrimary, values: rev.actual },
-        { id: "spend", label: "Ad spend", kind: "bar", color: c.chartSecondary, values: sp.actual },
-        { id: "trev", label: "Target revenue", kind: "line", color: c.chartTarget, values: rev.target, dashed: true },
-        { id: "tsp", label: "Target spend", kind: "line", color: c.bad, values: sp.target, dashed: true },
+        { id: "rev", label: "Order revenue", kind: "bar", color: c.chartPrimary, values: rev.map((r) => r.actual) },
+        { id: "spend", label: "Ad spend", kind: "bar", color: c.chartSecondary, values: sp.map((r) => r.actual) },
+        { id: "trev", label: "Target revenue", kind: "line", color: c.chartTarget, values: rev.map((r) => r.target), dashed: true },
+        { id: "tsp", label: "Target spend", kind: "line", color: c.bad, values: sp.map((r) => r.target), dashed: true },
       ];
-      if (mode !== "plan" || !data.hasPlan) out.push({ id: "ly", label: `Revenue ${cmp.label.toLowerCase()}`, kind: "line", color: c.chartCompare, values: rev.compare, dashed: true });
-      // No plan = no targets: drop any series with no values.
-      return out.filter((s) => s.values.some((v) => v !== null));
+      if (mode !== "plan" || !data.hasPlan) out.push({ id: "ly", label: `Revenue ${compareName.toLowerCase()}`, kind: "line", color: c.chartCompare, values: rev.map((r) => r.compare), dashed: true });
+      return { keys: rev.map((r) => r.key), series: out.filter((x) => x.values.some((v) => v !== null)) };
     }
     const def = type === "cm" ? METRICS.cm : METRICS.mer;
-    const s = metricSeries(def, ctx);
+    const rows = monthRows(def, data, cmp, data.trendRange);
     const out: ChartSeries[] = [
-      { id: "a", label: def.label, kind: "line", color: c.chartPrimary, values: s.actual },
-      { id: "t", label: "Plan target", kind: "line", color: c.chartTarget, values: s.target, dashed: true },
-      { id: "ly", label: cmp.label, kind: "line", color: c.chartCompare, values: s.compare, dashed: true },
+      { id: "a", label: def.label, kind: "line", color: c.chartPrimary, values: rows.map((r) => r.actual) },
+      { id: "t", label: "Plan target", kind: "line", color: c.chartTarget, values: rows.map((r) => r.target), dashed: true },
+      { id: "ly", label: compareName, kind: "line", color: c.chartCompare, values: rows.map((r) => r.compare), dashed: true },
     ];
-    return out.filter((x) => x.values.some((v) => v !== null));
+    return { keys: rows.map((r) => r.key), series: out.filter((x) => x.values.some((v) => v !== null)) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, type, mode]);
 
   const isRatio = type === "mer";
   return (
-    <DailyChart
-      dates={data.dates}
-      series={series}
-      height={340}
-      formatValue={(v) => (isRatio ? v.toFixed(2) : formatValue(v, "currency0", cur))}
-      formatAxis={(v) => (isRatio ? v.toFixed(1) : compactCurrency(v, cur))}
-    />
+    <>
+      <DailyChart
+        dates={view.keys}
+        labels={view.keys}
+        series={view.series}
+        height={340}
+        smooth={type !== "sales"}
+        maxBarWidth={44}
+        formatValue={(v) => (isRatio ? v.toFixed(2) : formatValue(v, "currency0", cur))}
+        formatAxis={(v) => (isRatio ? v.toFixed(1) : compactCurrency(v, cur))}
+      />
+      <p className="mt-2 text-xs text-text-faint">Shows the 12 months ending at the selected range (or the whole range if it is longer). The tiles above follow your exact selection.</p>
+    </>
   );
 }

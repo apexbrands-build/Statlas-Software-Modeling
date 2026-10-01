@@ -23,6 +23,8 @@ interface Props {
   /** Curved lines instead of straight segments. */
   smooth?: boolean;
   legendTop?: boolean;
+  /** Widest a bar may get (monthly charts have few, wide bars). */
+  maxBarWidth?: number;
 }
 
 /** Monotone cubic curve through the points (no overshoot between them). */
@@ -75,7 +77,7 @@ function niceTicks(min: number, max: number, count = 5): number[] {
   return out;
 }
 
-export function DailyChart({ dates, series, formatValue, formatAxis, height = 320, labels, smooth = false, legendTop = false }: Props) {
+export function DailyChart({ dates, series, formatValue, formatAxis, height = 320, labels, smooth = false, legendTop = false, maxBarWidth = 28 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(720);
   const [hover, setHover] = useState<number | null>(null);
@@ -110,7 +112,7 @@ export function DailyChart({ dates, series, formatValue, formatAxis, height = 32
   const x = (i: number) => m.l + slot * i + slot / 2;
 
   const bars = series.filter((s) => s.kind === "bar");
-  const barW = Math.max(1, Math.min(28, (slot * 0.8) / Math.max(1, bars.length)));
+  const barW = Math.max(1, Math.min(maxBarWidth, (slot * 0.8) / Math.max(1, bars.length)));
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(innerW / 64))));
   const fmtAxis = formatAxis ?? formatValue;
 
