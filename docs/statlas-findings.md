@@ -236,3 +236,65 @@ Observed in the Plan P&L KPI block only: Returning Orders shows 0 and Returning 
 ## Addendum: Store Settings Edit pop-up (from the user's screenshots, 2026-09-30)
 
 Screens in `Statlas Original UX/Store Settings/`. Main page: header card (Store Code, Timezone, Currency, Revenue Definition, Channels, Edit), Integrations table (Provider, Account, Details, Value, Status with date range and progress bar, Edit; "Add Connection"), Costs and Expenses (Cost Settings), Other Options (Manage Email Reports, RSGS Maps, Add New Store). The **Edit pop-up** has: Logo URL, Industry, Currency, Time Zone, **Revenue Definition** dropdown (Order Revenue, Order Revenue before Taxes, Order Revenue (no Shipping), Gross Sales, Discounted Sales, Net Sales, Net Sales before Taxes, Net Sales (no Shipping), Total Sales) and accordions: Starting Day of the Week; Facebook Settings (Use Incremental by default, Click Window, View Window, Click Type, Exclude FB Onsite Conversions); Google Settings (Revenue Timing); Pinterest Attribution; **Incrementality (iROAS)** (show iROAS instead of ROAS; rows Publisher + Acquisition/NON-Acquisition + Factor, Delete, Add); aMER/CAC Calculation (exclude brand/non-acq spend, don't separate brand/retention/reactivation, exclude test campaigns + keyword); **P&L / CM Calculation** (Reduce CM by Ad Spend, Include Shipping Fees as Profits, Cost % of Sales, Cost Per Order, Monthly Fixed Cost, Use flat rate for COGS, Use rate to accrue returns, Don't use Shopify to calculate COGS); Define Test Campaigns; Channels (toggle per Shopify sales channel); Exclude Order Tags; Gift Card; Email/Organic (Email/SMS revenue by Klaviyo or GA, Organic definition options); Customer Churn (distribution table + two day fields); Cash Conversion Cycle (DIO, DSO, DPO); TikTok Shop (referral fee, GMV share, GMV share commission). Footer: Close, Submit, Recalculate.
+
+
+# Reports (explored 2026-10-01, read-only, store D.Louise Jewellery)
+
+Library `/reporting`: tabs Report List / Saved Reports / History; category chips Recommended, Visitor, Conversion, LTV, Costs, Revenue, All; search box; star to favourite; each card has title, description, tags (NEW, category) and a Go button. Recommended = 22 reports (Calendar Report, Paid Media Overview, Marketing Efficiency Report, P&L, Email Metrics Report, Total Net Customer, Global Creatives, Trend Explorer, Hourly Report, Facebook/Google/YouTube/AppLovin/Bing/Pinterest/TikTok/Snapchat/Email/SMS Trackers, Variable Costs Dashboard, Best Creatives, DTC Index). LTV chip = 6 reports: New Vs Returning Overview, Revenue Over Time, Product By First Product, Net Active Customer Detail, Highest Value Cohorts by LTV, LTV Dashboard. Not to build: Global Creatives, Trend Explorer, Best Creatives, DTC Index.
+
+Common report chrome: global date range picker (top), store switcher, back arrow.
+
+## Marketing Efficiency Report (`/reporting/mer`)
+- Controls: **Group By** (Daily, Weekly, Bi-Weekly, Monthly, Quarterly, Yearly, Day Of Week); **Comparison** (plan version, e.g. "1. 2026 | 90th Percentil - Official"); **Columns** (checklist of metric groups, default All). Toolbar: Reload, Save, Export, HeatMap, Chart, Copy, Targets, Percents. Footer "Parameters" panel. Header says "Calculated By: Daily".
+- Table: one row per period (date + weekday letter), TOTAL row at the bottom, wide with horizontal scroll. Every metric has three columns: **Actual, Goal, Goal %** (actual vs goal). Cells are heat-coloured green/red against the goal.
+- Metric groups in order: Contribution Margin; Website Revenue; Website Spend; Marketing Efficiency Rating (MER); Acquisition Revenue; Acquisition Spend; Acquisition MER; Facebook Ad Spend, Conversion Value, ROAS; Google Ad Spend, Return, ROAS.
+- Checked on 9/1: CM £2,707 vs goal £2,514 (8%); Website Revenue £14,593; Spend £7,192; MER 2.03 = 14,593/7,192 (goal 3.37); Acquisition MER 1.43 = acq. revenue / acq. spend; Facebook ROAS 1.56 = 7,123/4,562. TOTAL row sums amounts and recomputes ratios (MER 1.83 = 224,050/122,643).
+
+## P&L (`/pnl`)
+- Controls: plan name + "Official" badge, **Year** selector, **Compare To** (A / P / F = Actual / Plan / Forecast toggles), **#s As** (Whole), **Revenue By** (Simplified).
+- Columns Jan..Dec each tagged Actual / Projected / Plan (past months actual, current projected, future plan), plus **2026 Totals**.
+- Rows: Gross Sales, Discounts, Shipping, Refunds -> **Operating Revenue** ("store settings includes shipping as collected revenue"); COGS, Credit Card Fees, Variable Fees, TikTok Shop Costs -> Total Cost of Delivery; Advertising: Search, Social, Other -> Total Advertising Spend; **Contribution Margin** (amount and % of revenue); SG&A; Total Expenses; **Profit**.
+- Check (Sep): 202,589 - 65,092 - 122,643 = 14,854 = CM. Operating Rev = gross - discounts + shipping - refunds (257,739-37,119+3,430-21,461 = 202,589).
+- **4 Quarter Accounting** (per column): COD %, Ad Spend %, Opex %, Profit % (all as % of Operating Revenue).
+- **Key Performance Metrics**: Order Revenue, New / Returning Order Revenue, Total / New / Returning Orders, Total / New / Returning AOV, Repeat Rate (returning orders / total orders), Refund Rate, COGS Rate, MER, aMER, Acquisition Spend, Paid Orders, Weighted CAC, Paid CAC. **Ad Performance** per channel (FB, Google, Pinterest): Spend, Revenue, Conversions, AOV, CPA. Organic Revenue. **Other Metrics**: Email Revenue, SMS Revenue.
+- Future months (Oct-Dec) show plan values; plan columns show Returning Orders 0 and AOV infinity (returning orders not planned).
+
+## Calendar Report (`/reporting/calendar`, page title "Calendar MER")
+- Top bar: **Goals** (plan version), **Ads** (All / platform filter), **Presets**, **Links**, **Columns** (All), **Graph items** (default "Total Spend (+0)"), **Projection** checkbox, **IROAS** toggle; toolbar Reload, Save, Export, HeatMap, Deltas, Chart, Copy. "Calculated By: Daily". Page loads slowly (progress %).
+- One row per day (`Tue, Sep 1`) plus TOTAL. Columns: **Marketing Actions** (events/emails/launches overlaid on the day), then pairs of Actual/Proj. and Goal: Contribution Margin, ECommerce Revenue, Total Spend, MER, Acquisition Revenue, Acquisition Spend, Acquisition MER, Returning Revenue, AOV, CAC, Organic Rev.
+- "/Proj." = actual for elapsed days, projected value for future days (shown greyed). Goals come from the plan (Sep goals: CM £2,514..., MER 3.37, aMER 1.92).
+- A graph above the table (Chart toggle) overlays the chosen "Graph items" with the events.
+
+## Paid Media Overview (`/reporting/ads`)
+- Controls: **Group By** (default Campaign), **Comparison** (plan), **Columns** (All), toolbar Reload, Save, Export, HeatMap, Copy, Targets, Percents. **Parameters** panel: Campaign filter (with CLEAR), Filter on Campaign Name, Remove Campaign Names, Exclude Tests, **Facebook Only** block: Click Attribution (1 Day), View Attribution (Off), Include Onsite Conversions, Target (All), Click Type (Unique Outbound).
+- Table loads slowly (stuck at 95% in my session, so columns not observed). Expect per-campaign spend, revenue, ROAS/iROAS, CPA with plan targets.
+
+## Hourly Report (`/reporting/hourly`)
+- Controls: Group By "Compare Target / Hourly", **Goals** (plan), **Columns**, **Chart** metric (Order Revenue), Projection, IROAS, **Cumulative** toggle, HeatMap, Deltas, day/night icons. Subtitle "Hour by Hour Data Report (GBP) - GMT+0000 Europe/London", flag "No Update Data" (no hourly actuals for this store).
+- Rows: every hour of every day in range (`2026-09-29 12AM`, ...), plus a TOTAL row. Per metric columns: actual, target (and delta, delta %): Order Revenue, Orders, AOV, New Order Revenue, New Orders, New AOV, Total Spend, MER, aMER, CAC, Facebook (Spend, Conversion Value, iROAS), Google (Spend, Return, iROAS), Pinterest (Spend, Conversion Value, iROAS).
+- Targets per hour = daily target spread across 24 hours by an hourly curve (identical for every hour of a day here).
+
+## Facebook Tracker (`/tracker/facebook`; Google tracker follows the same layout)
+- Left panel: **Settings**, link to Calendar Report, **Action Log Totals** (Ads Created, Ads Paused, Budget up/down, Bid up/down), **Recommendations** link. Below it a month table (`This Month`, Moments, Target Spend, Projected Spend, Actual Spend, Spend Delta), one row per day.
+- Right: horizontally scrolling **campaign cards**, ranked 1..N: objective tag (ACQ), number of ads, age in days, recommendation text ("increase campaign budget", "decrease bid", "Nothing"), daily budget and bid, campaign name, % change badges. Under each card, per-day columns: Projected Spend, Actual Spend, Target iROAS, Actual iROAS (iROAS target 2.06 on every day, actuals filled as days pass).
+- Purpose: day-by-day pacing of each campaign against a planned spend and iROAS target.
+
+## LTV Dashboard (`/reporting/ltv-dashboard`)
+- Header: refresh, period label, currency/timezone, checkbox **Reduce LTV by refunds**, Play Tutorial.
+- Three tiles: **AOV** (£80.93), **Cash Multiplier (60 Day LTV)** (+1.4%), **LTV** (£82.07 = AOV x (1 + multiplier)).
+- Chart **LTV Over Time**: horizontal stacked bar per acquisition month (Y = year-month), segments **AOV** (first order), **0-60 Day LTV**, **61 Day+ LTV**; x axis in currency. Section title "60 Day LTV % Increase By Product - M0" with a **Top 50** selector, "Show Full Product Names", Copy Data.
+
+## Revenue Over Time (`/reporting/legacy?report=RevenueOverTimeAdvanced`)
+- "Portrays the number of new customers each month and the revenue periods of days from their first order." Controls: Back, **Group By**, download/copy/link/refresh icons, Parameters.
+- Group By options: Margin By Customer, Margin By Month, Margin By Customer (paid CAC), Margin By Month (paid CAC), Revenue By Month, Order Count, Unique Customers, AOV, Cumulative LTV, Incremental LTV.
+- Rows = acquisition month + TOTAL. Fixed columns: **New Customers, Weighted CAC, COGS+COD (% of revenue), First Order Margin / First Order AOV** (depends on Group By), then one column per period of days since first order (not visible with a single-month range) and Total. Cohorts limited to customers acquired inside the date range.
+
+## Net Active Customer Detail (`/reporting/legacy?report=NetActiveCustomers`)
+- "Takes the date range and shows the path of new customers within that range. Customers acquired outside the range are not included." Calculated by Monthly.
+- Columns: **Period, New, Returning, Reactivated, At-Risk, Churned, Net Active Change**. Uses the churn thresholds in Store Settings (at-risk / churned days). Data loads via a background job ("Net Active Customer table started loading").
+
+## Not opened (no URL yet): New Vs Returning Overview, Total Net Customer, Variable Costs Dashboard, Google Tracker, Email Metrics Report, other platform trackers. Build from the library descriptions and the layouts above.
+
+## Build log (reports)
+- Library + Marketing Efficiency Report: built 2026-10-01 (`/reporting`, `/reporting/mer`).
+- P&L: built (`/reporting/pnl`) with Gross Sales, Discounts, Shipping, Refunds -> Operating Revenue. View options (from the user, not opened in Statlas because the dropdowns would not open in the browser tools): **#s As** = Whole / Thousands / % of operating revenue; **Revenue By** = Simplified / New vs Returning / Paid vs Organic (all reconcile to the same Operating Revenue); **Compare To** A/P/F (Plan and Forecast disabled until the planning layer). Exact Statlas rows for the New vs Returning and Paid vs Organic views are our interpretation.

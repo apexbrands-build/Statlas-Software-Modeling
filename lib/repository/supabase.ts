@@ -112,6 +112,8 @@ export class SupabaseRepository implements Repository {
       return {
         clientId,
         date: r.date as string,
+        grossSales: n(r.gross_sales),
+        discounts: n(r.discounts),
         netSales: n(r.net_sales),
         shippingCollected: n(r.shipping_collected),
         tax: n(r.tax),
@@ -158,6 +160,10 @@ export class SupabaseRepository implements Repository {
       spend: n(r.spend),
       cm: n(r.cm),
       spendByChannel: (r.spend_by_channel as PlanTargetDay["spendByChannel"]) ?? {},
+      ...(r.gross_sales != null ? { grossSales: n(r.gross_sales) } : {}),
+      ...(r.discounts != null ? { discounts: n(r.discounts) } : {}),
+      ...(r.shipping != null ? { shipping: n(r.shipping) } : {}),
+      ...(r.refunds != null ? { refunds: n(r.refunds) } : {}),
     }));
   }
 }

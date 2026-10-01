@@ -19,6 +19,8 @@ UI names below are from memory and platforms rename things often: if a menu is d
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth client |
 | `GOOGLE_ADS_DEVELOPER_TOKEN` / `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | Google Ads MCC |
 
+> Superseded for new stores by the public app: see `docs/shopify-submission.md`. The steps below describe the old custom-distribution app.
+
 ## 1. Shopify: one app ("Apex Data"), installed on every store
 
 1. Create the app in the Shopify **Dev Dashboard** (dev.shopify.com, sign in with the agency's Partner login).

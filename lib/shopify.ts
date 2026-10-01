@@ -27,6 +27,21 @@ export function verifyShopifyHmac(params: URLSearchParams, secret: string): bool
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** Verifies X-Shopify-Hmac-Sha256 on a webhook: base64 HMAC-SHA256 of the raw body with the app's client secret. */
+export function verifyWebhookHmac(rawBody: string, header: string | null, secret: string): boolean {
+  if (!header) return false;
+  const digest = createHmac("sha256", secret).update(rawBody, "utf8").digest("base64");
+  const a = Buffer.from(digest);
+  const b = Buffer.from(header);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** True when every scope in `required` is present in `granted` (both comma-separated). */
+export function scopesCover(granted: string | null | undefined, required: string): boolean {
+  const have = new Set((granted ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+  return required.split(",").every((s) => have.has(s.trim()));
+}
+
 export async function shopifyGraphql<T>(shop: string, token: string, query: string, variables?: Record<string, unknown>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {

@@ -1,0 +1,27 @@
+# Apex Analytics: Shopify public app configuration.
+# Use with the Shopify CLI (`shopify app config link`, then `shopify app deploy`), or copy the same values into the
+# Dev Dashboard by hand (see docs/shopify-submission.md). client_id is filled in by `config link`.
+name = "Apex Analytics"
+client_id = ""
+application_url = "https://apex-data-beta.vercel.app/shopify"
+embedded = false
+
+[access_scopes]
+# Read-only. read_all_orders is added after Shopify approves it (see docs/shopify-submission.md).
+scopes = "read_orders,read_customers,read_products,read_inventory"
+# The app runs its own OAuth authorization-code install (app/api/shopify/install + callback).
+use_legacy_install_flow = true
+
+[auth]
+redirect_urls = ["https://apex-data-beta.vercel.app/api/shopify/callback"]
+
+[webhooks]
+api_version = "2025-10"
+
+  [[webhooks.subscriptions]]
+  uri = "https://apex-data-beta.vercel.app/api/shopify/webhooks"
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+
+  [[webhooks.subscriptions]]
+  uri = "https://apex-data-beta.vercel.app/api/shopify/webhooks"
+  topics = ["app/uninstalled"]

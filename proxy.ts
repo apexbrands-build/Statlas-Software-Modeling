@@ -21,7 +21,11 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
-  const isPublic = path === "/login" || path.startsWith("/auth/") || path === "/api/jobs/run" || path === "/api/jobs/tick"; // the two job routes check their own signature / secret
+  // Job routes check their own signature / secret. The Shopify public app needs its landing page, policy pages, install,
+  // callback and webhooks reachable without an Apex login (webhooks verify Shopify's HMAC; install with a client checks the user).
+  const isPublic =
+    path === "/login" || path.startsWith("/auth/") || path === "/api/jobs/run" || path === "/api/jobs/tick" ||
+    ["/shopify", "/privacy", "/support", "/api/shopify/install", "/api/shopify/callback", "/api/shopify/webhooks"].includes(path);
   if (!data.user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

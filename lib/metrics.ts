@@ -16,6 +16,8 @@ import { CORE_CHANNELS, PLATFORMS } from "./channels";
 
 export interface Totals {
   days: number;
+  grossSales: number;
+  discounts: number;
   netSales: number;
   shippingCollected: number;
   tax: number;
@@ -42,6 +44,8 @@ const emptyChannels = (): Record<ChannelKey, ChannelDay> =>
 export function emptyTotals(): Totals {
   return {
     days: 0,
+    grossSales: 0,
+    discounts: 0,
     netSales: 0,
     shippingCollected: 0,
     tax: 0,
@@ -65,6 +69,8 @@ export function aggregate(facts: DailyFact[]): Totals {
   const t = emptyTotals();
   for (const f of facts) {
     t.days += 1;
+    t.grossSales += f.grossSales;
+    t.discounts += f.discounts;
     t.netSales += f.netSales;
     t.shippingCollected += f.shippingCollected;
     t.tax += f.tax;
@@ -99,6 +105,11 @@ export interface PlanTotals {
   spend: number;
   cm: number;
   spendByChannel: Partial<Record<ChannelKey, number>>;
+  /** Optional P&L lines; null when the plan does not forecast them. */
+  grossSales: number | null;
+  discounts: number | null;
+  shipping: number | null;
+  refunds: number | null;
 }
 
 export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
@@ -112,6 +123,10 @@ export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
     spend: 0,
     cm: 0,
     spendByChannel: {},
+    grossSales: null,
+    discounts: null,
+    shipping: null,
+    refunds: null,
   };
   for (const r of rows) {
     p.days += 1;
@@ -122,6 +137,7 @@ export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
     p.newOrders += r.newOrders;
     p.spend += r.spend;
     p.cm += r.cm;
+    for (const k of ["grossSales", "discounts", "shipping", "refunds"] as const) if (r[k] !== undefined) p[k] = (p[k] ?? 0) + (r[k] as number);
     for (const k of CHANNEL_KEYS) {
       const v = r.spendByChannel[k];
       if (v !== undefined) p.spendByChannel[k] = (p.spendByChannel[k] ?? 0) + v;

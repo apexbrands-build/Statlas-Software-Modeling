@@ -208,6 +208,9 @@ function buildFact(p: Profile, date: string): DailyFact {
   const tax = orderRev * p.taxRate;
   const refunds = orderRev * p.refundRate * noise(k("ref"), 0.55);
   const netSales = orderRev - shipping - tax - refunds;
+  // Discounts are about a fifth of gross sales; gross - discounts - refunds = net sales.
+  const discounts = ((orderRev - shipping - tax) / 0.8) * 0.2 * noise(k("disc"), 0.08);
+  const grossSales = orderRev - shipping - tax + discounts;
   const cogs = netSales * p.cogsRate * noise(k("cogs"), 0.03);
 
   const totalSpend = e.spend * noise(k("spend"), 0.1);
@@ -228,6 +231,8 @@ function buildFact(p: Profile, date: string): DailyFact {
   return {
     clientId: id,
     date,
+    grossSales,
+    discounts,
     netSales,
     shippingCollected: shipping,
     tax,

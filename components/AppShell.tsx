@@ -11,7 +11,7 @@ import { authEnabled, dataMode } from "@/lib/supabase/env";
 const NAV = [
   { href: "/", label: "Home", enabled: true },
   { href: "/settings", label: "Store Settings", enabled: true },
-  { href: "#", label: "Reporting", enabled: false },
+  { href: "/reporting", label: "Reporting", enabled: true },
   { href: "#", label: "Planning", enabled: false },
   { href: "#", label: "Calendar", enabled: false },
 ];
@@ -33,7 +33,7 @@ function Shell({ children }: { children: ReactNode }) {
                 key={n.label}
                 href={n.href}
                 className={`rounded-lg px-3 py-2 font-medium ${
-                  path === n.href ? "bg-surface-raised text-text" : "text-text-muted hover:text-text"
+                  (n.href === "/" ? path === "/" : path.startsWith(n.href)) ? "bg-surface-raised text-text" : "text-text-muted hover:text-text"
                 }`}
               >
                 {n.label}
@@ -90,7 +90,12 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
+/** Pages merchants and Shopify reviewers open without an Apex account: no sidebar, no client loading. */
+const PUBLIC_PATHS = ["/shopify", "/privacy", "/support"];
+
 export function AppShell({ children }: { children: ReactNode }) {
+  const path = usePathname();
+  if (PUBLIC_PATHS.includes(path)) return <>{children}</>;
   return (
     <AppProvider>
       <Shell>{children}</Shell>

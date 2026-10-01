@@ -35,6 +35,8 @@ function fact(over: Partial<DailyFact> = {}, ch: Partial<Record<ChannelKey, Part
   return {
     clientId: "t",
     date: "2026-09-01",
+    grossSales: 1380,
+    discounts: 300,
     netSales: 1000,
     shippingCollected: 60,
     tax: 100,

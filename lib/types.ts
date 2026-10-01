@@ -78,6 +78,10 @@ export interface ChannelDay {
 export interface DailyFact {
   clientId: string;
   date: string; // YYYY-MM-DD
+  /** Gross sales (list price x quantity, before discounts, refunds, shipping and tax). */
+  grossSales: number;
+  /** Order discounts. */
+  discounts: number;
   /** Net sales = gross sales - discounts - refunds (Shopify). Shipping and tax are not included. */
   netSales: number;
   shippingCollected: number;
@@ -190,6 +194,11 @@ export interface PlanTargetDay {
   spend: number;
   cm: number;
   spendByChannel: Partial<Record<ChannelKey, number>>;
+  /** P&L-level lines, filled by the forecasting layer (optional). */
+  grossSales?: number;
+  discounts?: number;
+  shipping?: number;
+  refunds?: number;
 }
 
 export type Source = "Shopify" | "Platform-reported" | "Klaviyo" | "Derived" | "Settings";
