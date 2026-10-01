@@ -3,6 +3,7 @@
 Internal app for Apex Brands (e-commerce growth agency, 30+ clients) that replicates the **features and methodology** of Statlas (statlas.io), with Apex branding. Never copy Statlas's UI, code, copy or logo.
 
 **Read these before working:**
+- `docs/reports-plan.md`: reports scope, status and build order (also `docs/changelog.md` for dated notes)
 - `docs/statlas-findings.md`: what Statlas does (observed, read-only), incl. planning at `/goals`
 - `docs/build-plan.md`: phases, metric formulas, data model, integrations, stack, decisions
 - `docs/forecasting-context.md`: the strategist's intent and returning-revenue method
@@ -16,13 +17,15 @@ Built and working:
 - **Store Settings** mirrors the reference tool: header card, integrations table, Add Connection, Cost Settings, pop-up Edit with accordions (many options saved but "not applied yet"). Brand icons from simple-icons.
 - **Connectors (read-only):** Shopify (OAuth via custom-distribution app "Apex Data", one app per store, orders/refunds/costs, DB rollups `rebuild_daily_facts` + `recompute_first_orders`), Meta (System User token, spend + purchases, existing-customer split via `user_segment_key` breakdown, no name rules), Google Ads (agency OAuth refresh token in `agency_secrets`, MCC login-customer-id, no developer token needed, brand rule = name contains "brand" except NB/non-brand tags).
 - **Background jobs:** `sync_jobs` queue, chunked history loads that keep running server-side (each chunk its own task, auto-split on timeout), daily cron `/api/jobs/tick` (needs `CRON_SECRET`).
-- Tests: `npm test` (31). Local dev: `.env.local` (gitignored) has the Supabase URL and publishable key.
+- Tests: `npm test` (50). Local dev: `.env.local` (gitignored) has the Supabase URL and publishable key.
 
-Vercel env vars (names only): NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or _ANON_KEY), NEXT_PUBLIC_APP_URL, NEXT_PUBLIC_DATA_MODE=supabase, SUPABASE_SERVICE_ROLE_KEY, TOKEN_ENCRYPTION_KEY, SHOPIFY_CLIENT_ID/SECRET, SHOPIFY_ALL_ORDERS=true, META_SYSTEM_USER_TOKEN, GOOGLE_CLIENT_ID/SECRET, GOOGLE_ADS_LOGIN_CUSTOMER_ID, CRON_SECRET. Setup steps are in `docs/connector-setup.md`.
+Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in the repo).
 
-**Shopify public app (in progress, 2026-10-01):** replaces one-app-per-store. Built: public pages `/shopify` (app URL), `/privacy`, `/support`; HMAC-verified webhooks `/api/shopify/webhooks` (compliance + app/uninstalled); installs recorded in `shopify_installs` (migration 0002, applied) and linked to a client from Store Settings; `shopify.app.toml`; listing assets in `docs/shopify-listing/`. Everything to do/paste for review: `docs/shopify-submission.md`. New app is named "Apex Analytics" (old custom app "Apex Data" stays until cutover; swap SHOPIFY_CLIENT_ID/SECRET in Vercel).
+**Shopify public app (in progress):** replaces one-app-per-store; the new app is "Apex Analytics" (old custom app "Apex Data" stays until cutover). Details and review checklist: `docs/shopify-submission.md`, `docs/changelog.md`.
 
-**Gross sales and discounts (2026-10-01, migration 0003, applied):** `daily_facts` now stores `gross_sales` and `discounts` (net_sales = gross - discounts - refunds, verified on live data); `plan_targets` has optional `gross_sales`, `discounts`, `shipping`, `refunds` for the forecasting layer (shipping %, refund %, discount % forecasts feed a plan-level P&L). **Reports:** `/reporting` library + Marketing Efficiency (`/reporting/mer`) + P&L (`/reporting/pnl`) built; plan in `lib/reports/registry.ts`; findings in `docs/statlas-findings.md` (Reports).
+**Gross sales and discounts (2026-10-01, migration 0003, applied):** `daily_facts` stores `gross_sales` and `discounts` (net_sales = gross - discounts - refunds); `plan_targets` has optional `gross_sales`, `discounts`, `shipping`, `refunds` so the forecasting layer can plan shipping/refund/discount % and a plan-level P&L.
+
+**Reports (user-approved scope and order):** library `/reporting`, Marketing Efficiency, P&L and Paid Media Overview are built; the rest waits for the plan layer. Never build Best Creatives, DTC Index, Trend Explorer, Global Creatives. Status, order and how they work: `docs/reports-plan.md`; what Statlas does in each: `docs/statlas-findings.md` ("Reports"). Reports show Goal columns automatically once a plan exists (via `useDashboardData` / `aggregatePlan`).
 
 Open items: (1) Point6 has almost no product costs in Shopify, so COGS is ~0: use the COGS % / flat rate in Edit or upload costs by SKU; (2) compare September Shopify numbers (gross, discounts, returns, net, shipping, taxes, total, orders) against the database; (3) verify Meta existing-customer spend and Google brand spend against the platforms; (4) check the first Shopify history load finishes; (5) set `CRON_SECRET`; (6) later: forecasting layer, reports, Klaviyo/GA4, more platforms, onboarding more clients (one Shopify app per store unless a public app is approved).
 
@@ -45,6 +48,7 @@ Ideas wanted later (not built): marketing-event calendar inferred from Klaviyo/S
 - Plan comparison covers only elapsed days that have data (correct; Statlas showed the full month only because the demo store's API had stopped pulling).
 - Stack: Next.js on Vercel, Supabase (Postgres, auth, RLS by pod). GitHub first, then Vercel. Theme in a single tokens file.
 - Branding: black background, white lettering. Logos in `/Users/joaoklemcastelobranco/Apex Brands/Visual Identity/` (`basic/color.svg` icon "Λ", `basic 3/black-white.svg` wordmark). Font unknown: use a wide geometric sans as a placeholder.
-- Plan targets are stored as daily rows per plan version (CM, total revenue, returning revenue, new revenue, aMER, spend, per-platform spend).
+- Plan targets are stored as daily rows per plan version (CM, total revenue, returning revenue, new revenue, aMER, spend, per-platform spend; optionally gross sales, discounts, shipping, refunds).
+- Git: the user pushes with GitHub Desktop; Claude commits only when asked, with clear messages, one commit per finished piece. The user no longer edits in VS Code (avoids mixed commits).
 
 @AGENTS.md

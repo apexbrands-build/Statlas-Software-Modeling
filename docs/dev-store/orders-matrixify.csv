@@ -1,0 +1,533 @@
+Name,Command,Processed At,Currency,Email,Financial Status,Fulfillment Status,Send Receipt,Line: Type,Line: Title,Line: SKU,Line: Quantity,Line: Price,Line: Discount,Line: Requires Shipping,Line: Taxable,Line: Fulfillment Status,Transaction: Kind,Transaction: Status,Transaction: Amount,Transaction: Gateway,Tags
+#T0001,NEW,2025-04-01 12:18:00 +0000,USD,customer27@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0001,,,,,,,,Line Item,The Out of Stock Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0001,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0001,,,,,,,,,,,,,,,,,sale,success,1910.95,manual,
+#T0002,NEW,2025-04-03 18:59:00 +0000,USD,customer25@example.com,paid,fulfilled,FALSE,Line Item,The Videographer Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0002,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0002,,,,,,,,,,,,,,,,,sale,success,885.95,manual,
+#T0003,NEW,2025-04-17 11:05:00 +0000,USD,customer27@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0003,,,,,,,,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0003,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0003,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0003,,,,,,,,,,,,,,,,,sale,success,2324.95,manual,
+#T0004,NEW,2025-04-19 16:00:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0004,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0004,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0004,,,,,,,,,,,,,,,,,sale,success,999.90,manual,
+#T0005,NEW,2025-04-28 10:16:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0005,,,,,,,,Line Item,The Compare at Price Snowboard,,1,785.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0005,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0005,,,,,,,,,,,,,,,,,sale,success,1535.90,manual,
+#T0006,NEW,2025-04-29 11:53:00 +0000,USD,customer13@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0006,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0006,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0006,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0006,,,,,,,,,,,,,,,,,sale,success,699.90,manual,
+#T0007,NEW,2025-05-04 19:12:00 +0000,USD,customer18@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,90.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0007,,,,,,,,Line Item,The Multi-location Snowboard,,1,729.95,109.49,TRUE,TRUE,fulfilled,,,,,
+#T0007,,,,,,,,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,90.00,TRUE,TRUE,fulfilled,,,,,
+#T0007,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0007,,,,,,,,,,,,,,,,,sale,success,1640.46,manual,
+#T0008,NEW,2025-05-09 10:47:00 +0000,USD,customer16@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0008,,,,,,,,Line Item,The Videographer Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0008,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0008,,,,,,,,,,,,,,,,,sale,success,895.90,manual,
+#T0009,NEW,2025-05-10 13:12:00 +0000,USD,customer30@example.com,paid,fulfilled,FALSE,Line Item,The Videographer Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0009,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0009,,,,,,,,,,,,,,,,,sale,success,885.95,manual,
+#T0010,NEW,2025-05-13 14:21:00 +0000,USD,customer26@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,2,949.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0010,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0010,,,,,,,,,,,,,,,,,sale,success,1899.90,manual,
+#T0011,NEW,2025-05-13 17:15:00 +0000,USD,customer16@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,142.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0011,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0011,,,,,,,,,,,,,,,,,sale,success,807.46,manual,
+#T0012,NEW,2025-05-14 14:58:00 +0000,USD,customer05@example.com,paid,fulfilled,FALSE,Line Item,The Multi-location Snowboard,,1,729.95,109.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0012,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0012,,,,,,,,,,,,,,,,,sale,success,620.46,manual,
+#T0013,NEW,2025-05-15 21:40:00 +0000,USD,customer18@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0013,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0013,,,,,,,,,,,,,,,,,sale,success,699.95,manual,
+#T0014,NEW,2025-05-16 19:42:00 +0000,USD,customer02@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0014,,,,,,,,Line Item,The Compare at Price Snowboard,,2,785.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0014,,,,,,,,Line Item,The Collection Snowboard: Hydrogen,,2,600.00,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0014,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0014,,,,,,,,,,,,,,,,,sale,success,3371.90,manual,
+#T0015,NEW,2025-05-16 21:34:00 +0000,USD,customer23@example.com,paid,fulfilled,FALSE,Line Item,The Multi-location Snowboard,,1,729.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0015,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0015,,,,,,,,,,,,,,,,,sale,success,729.95,manual,
+#T0016,NEW,2025-05-19 15:30:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0016,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0016,,,,,,,,,,,,,,,,,sale,success,749.95,manual,
+#T0017,NEW,2025-05-21 21:33:00 +0000,USD,customer25@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0017,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0017,,,,,,,,,,,,,,,,,sale,success,749.95,manual,
+#T0018,NEW,2025-05-23 19:00:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0018,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0018,,,,,,,,,,,,,,,,,sale,success,949.95,manual,
+#T0019,NEW,2025-05-29 21:01:00 +0000,USD,customer04@example.com,paid,fulfilled,FALSE,Line Item,The Compare at Price Snowboard,,1,785.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0019,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0019,,,,,,,,,,,,,,,,,sale,success,785.95,manual,
+#T0020,NEW,2025-06-02 14:46:00 +0000,USD,customer24@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,142.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0020,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0020,,,,,,,,,,,,,,,,,sale,success,807.46,manual,
+#T0021,NEW,2025-06-05 11:36:00 +0000,USD,customer15@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0021,,,,,,,,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0021,,,,,,,,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0021,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0021,,,,,,,,,,,,,,,,,sale,success,1979.90,manual,
+#T0022,NEW,2025-06-13 12:50:00 +0000,USD,customer09@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,2,949.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0022,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0022,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0022,,,,,,,,,,,,,,,,,sale,success,1949.85,manual,
+#T0023,NEW,2025-06-14 11:25:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,2,49.95,14.98,TRUE,TRUE,fulfilled,,,,,test-data
+#T0023,,,,,,,,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,90.00,TRUE,TRUE,fulfilled,,,,,
+#T0023,,,,,,,,Line Item,The Videographer Snowboard,,1,885.95,132.89,TRUE,TRUE,fulfilled,,,,,
+#T0023,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0023,,,,,,,,,,,,,,,,,sale,success,1347.98,manual,
+#T0024,NEW,2025-06-15 17:37:00 +0000,USD,customer19@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,90.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0024,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0024,,,,,,,,,,,,,,,,,sale,success,510.00,manual,
+#T0025,NEW,2025-06-25 09:36:00 +0000,USD,customer19@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0025,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0025,,,,,,,,,,,,,,,,,sale,success,749.95,manual,
+#T0026,NEW,2025-06-25 10:09:00 +0000,USD,customer20@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,2,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0026,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0026,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0026,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0026,,,,,,,,,,,,,,,,,sale,success,134.75,manual,
+#T0027,NEW,2025-06-25 08:01:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,The Multi-location Snowboard,,1,729.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0027,,,,,,,,Line Item,The Out of Stock Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0027,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0027,,,,,,,,,,,,,,,,,sale,success,1615.90,manual,
+#T0028,NEW,2025-06-29 09:06:00 +0000,USD,customer17@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,3.74,TRUE,TRUE,fulfilled,,,,,test-data
+#T0028,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,
+#T0028,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0028,,,,,,,,,,,,,,,,,sale,success,616.17,manual,
+#T0029,NEW,2025-06-29 17:59:00 +0000,USD,customer29@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0029,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0029,,,,,,,,,,,,,,,,,sale,success,18.41,manual,
+#T0030,NEW,2025-07-04 10:22:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0030,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0030,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0031,NEW,2025-07-14 10:44:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Ice,,2,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0031,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0031,,,,,,,,,,,,,,,,,sale,success,1399.90,manual,
+#T0032,NEW,2025-07-17 08:01:00 +0000,USD,customer09@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0032,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0032,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0033,NEW,2025-07-19 08:08:00 +0000,USD,customer26@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0033,,,,,,,,Line Item,The Videographer Snowboard,,1,885.95,132.89,TRUE,TRUE,fulfilled,,,,,
+#T0033,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0033,,,,,,,,,,,,,,,,,sale,success,761.52,manual,
+#T0034,NEW,2025-07-19 19:41:00 +0000,USD,customer10@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0034,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0034,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0035,NEW,2025-07-19 18:02:00 +0000,USD,customer22@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,2,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0035,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0035,,,,,,,,,,,,,,,,,sale,success,1259.90,manual,
+#T0036,NEW,2025-07-20 19:04:00 +0000,USD,customer13@example.com,paid,fulfilled,FALSE,Line Item,The Multi-location Snowboard,,1,729.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0036,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0036,,,,,,,,,,,,,,,,,sale,success,729.95,manual,
+#T0037,NEW,2025-07-27 19:02:00 +0000,USD,customer14@example.com,paid,fulfilled,FALSE,Line Item,The Multi-location Snowboard,,1,729.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0037,,,,,,,,Line Item,The Compare at Price Snowboard,,1,785.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0037,,,,,,,,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0037,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0037,,,,,,,,,,,,,,,,,sale,success,2265.85,manual,
+#T0038,NEW,2025-08-01 09:54:00 +0000,USD,customer23@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0038,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,
+#T0038,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0038,,,,,,,,,,,,,,,,,sale,success,26.87,manual,
+#T0039,NEW,2025-08-07 17:48:00 +0000,USD,customer06@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,2,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0039,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0039,,,,,,,,,,,,,,,,,sale,success,29.85,manual,
+#T0040,NEW,2025-08-10 13:12:00 +0000,USD,customer14@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,7.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0040,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0040,,,,,,,,,,,,,,,,,sale,success,52.41,manual,
+#T0041,NEW,2025-08-28 21:52:00 +0000,USD,customer26@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0041,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0041,,,,,,,,,,,,,,,,,sale,success,749.95,manual,
+#T0042,NEW,2025-08-30 16:57:00 +0000,USD,customer17@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0042,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0042,,,,,,,,,,,,,,,,,sale,success,600.00,manual,
+#T0043,NEW,2025-09-10 18:04:00 +0000,USD,customer22@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,2,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0043,,,,,,,,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0043,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0043,,,,,,,,,,,,,,,,,sale,success,1049.85,manual,
+#T0044,NEW,2025-09-16 21:48:00 +0000,USD,customer12@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0044,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0044,,,,,,,,,,,,,,,,,sale,success,594.96,manual,
+#T0045,NEW,2025-09-17 19:24:00 +0000,USD,customer28@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0045,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0045,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0045,,,,,,,,,,,,,,,,,sale,success,724.90,manual,
+#T0046,NEW,2025-09-25 09:15:00 +0000,USD,customer01@example.com,paid,fulfilled,FALSE,Line Item,The Compare at Price Snowboard,,2,785.95,235.78,TRUE,TRUE,fulfilled,,,,,test-data
+#T0046,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,
+#T0046,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0046,,,,,,,,,,,,,,,,,sale,success,1931.08,manual,
+#T0047,NEW,2025-09-27 11:13:00 +0000,USD,customer06@example.com,paid,fulfilled,FALSE,Line Item,The Out of Stock Snowboard,,1,885.95,132.89,TRUE,TRUE,fulfilled,,,,,test-data
+#T0047,,,,,,,,Line Item,The Collection Snowboard: Liquid,,1,749.95,112.49,TRUE,TRUE,fulfilled,,,,,
+#T0047,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0047,,,,,,,,,,,,,,,,,sale,success,1390.52,manual,
+#T0048,NEW,2025-10-01 09:02:00 +0000,USD,customer03@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0048,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0048,,,,,,,,,,,,,,,,,sale,success,34.90,manual,
+#T0049,NEW,2025-10-08 08:54:00 +0000,USD,customer11@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0049,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0049,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0049,,,,,,,,,,,,,,,,,sale,success,44.85,manual,
+#T0050,NEW,2025-10-10 20:48:00 +0000,USD,customer21@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Ice,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0050,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0050,,,,,,,,,,,,,,,,,sale,success,699.95,manual,
+#T0051,NEW,2025-10-20 18:05:00 +0000,USD,customer30@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0051,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,
+#T0051,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0051,,,,,,,,,,,,,,,,,sale,success,1189.92,manual,
+#T0052,NEW,2025-10-24 21:48:00 +0000,USD,customer24@example.com,paid,fulfilled,FALSE,Line Item,The Compare at Price Snowboard,,1,785.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0052,,,,,,,,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0052,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0052,,,,,,,,,,,,,,,,,sale,success,1535.90,manual,
+#T0053,NEW,2025-10-27 18:40:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0053,,,,,,,,Line Item,The Collection Snowboard: Liquid,,1,749.95,112.49,TRUE,TRUE,fulfilled,,,,,
+#T0053,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0053,,,,,,,,,,,,,,,,,sale,success,645.92,manual,
+#T0054,NEW,2025-10-28 12:30:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0054,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0054,,,,,,,,,,,,,,,,,sale,success,34.90,manual,
+#T0055,NEW,2025-11-02 09:08:00 +0000,USD,customer17@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,112.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0055,,,,,,,,Line Item,Special Selling Plans Ski Wax,,2,49.95,14.98,TRUE,TRUE,fulfilled,,,,,
+#T0055,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,7.49,TRUE,TRUE,fulfilled,,,,,
+#T0055,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0055,,,,,,,,,,,,,,,,,sale,success,764.84,manual,
+#T0056,NEW,2025-11-04 09:50:00 +0000,USD,customer12@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0056,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0056,,,,,,,,,,,,,,,,,sale,success,949.95,manual,
+#T0057,NEW,2025-11-05 20:41:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,The Multi-location Snowboard,,1,729.95,109.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0057,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0057,,,,,,,,,,,,,,,,,sale,success,620.46,manual,
+#T0058,NEW,2025-11-05 11:18:00 +0000,USD,customer22@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0058,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0058,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0059,NEW,2025-11-08 13:21:00 +0000,USD,customer27@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0059,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0059,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0060,NEW,2025-11-12 14:16:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0060,,,,,,,,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0060,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0060,,,,,,,,,,,,,,,,,sale,success,1229.95,manual,
+#T0061,NEW,2025-11-12 08:22:00 +0000,USD,customer12@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0061,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,
+#T0061,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,
+#T0061,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0061,,,,,,,,,,,,,,,,,sale,success,1198.38,manual,
+#T0062,NEW,2025-11-13 12:59:00 +0000,USD,customer14@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0062,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0062,,,,,,,,,,,,,,,,,sale,success,59.90,manual,
+#T0063,NEW,2025-11-16 12:03:00 +0000,USD,customer26@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,90.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0063,,,,,,,,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,153.75,TRUE,TRUE,fulfilled,,,,,
+#T0063,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0063,,,,,,,,,,,,,,,,,sale,success,1381.25,manual,
+#T0064,NEW,2025-11-17 19:48:00 +0000,USD,customer14@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0064,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0064,,,,,,,,,,,,,,,,,sale,success,699.95,manual,
+#T0065,NEW,2025-11-17 13:58:00 +0000,USD,customer30@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0065,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0065,,,,,,,,,,,,,,,,,sale,success,59.90,manual,
+#T0066,NEW,2025-11-18 13:49:00 +0000,USD,customer24@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0066,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,
+#T0066,,,,,,,,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,90.00,TRUE,TRUE,fulfilled,,,,,
+#T0066,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0066,,,,,,,,,,,,,,,,,sale,success,526.92,manual,
+#T0067,NEW,2025-11-19 17:32:00 +0000,USD,customer29@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0067,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0067,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0067,,,,,,,,,,,,,,,,,sale,success,1034.95,manual,
+#T0068,NEW,2025-11-19 15:54:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0068,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0068,,,,,,,,,,,,,,,,,sale,success,18.41,manual,
+#T0069,NEW,2025-11-23 12:39:00 +0000,USD,customer19@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0069,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0069,,,,,,,,,,,,,,,,,sale,success,34.90,manual,
+#T0070,NEW,2025-11-24 19:01:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0070,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0070,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0071,NEW,2025-11-24 20:26:00 +0000,USD,customer05@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0071,,,,,,,,Line Item,The Multi-location Snowboard,,1,729.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0071,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0071,,,,,,,,,,,,,,,,,sale,success,1754.95,manual,
+#T0072,NEW,2025-11-25 08:27:00 +0000,USD,customer21@example.com,paid,fulfilled,FALSE,Line Item,The Out of Stock Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0072,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0072,,,,,,,,,,,,,,,,,sale,success,885.95,manual,
+#T0073,NEW,2025-11-26 16:49:00 +0000,USD,customer02@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0073,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0073,,,,,,,,,,,,,,,,,sale,success,699.95,manual,
+#T0074,NEW,2025-11-30 09:22:00 +0000,USD,customer03@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0074,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0074,,,,,,,,,,,,,,,,,sale,success,629.95,manual,
+#T0075,NEW,2025-11-30 15:45:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0075,,,,,,,,Line Item,The Videographer Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0075,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0075,,,,,,,,,,,,,,,,,sale,success,935.90,manual,
+#T0076,NEW,2025-12-01 08:34:00 +0000,USD,customer28@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,112.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0076,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,3.74,TRUE,TRUE,fulfilled,,,,,
+#T0076,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0076,,,,,,,,,,,,,,,,,sale,success,658.67,manual,
+#T0077,NEW,2025-12-03 17:13:00 +0000,USD,customer21@example.com,paid,fulfilled,FALSE,Line Item,The Out of Stock Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0077,,,,,,,,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0077,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0077,,,,,,,,,,,,,,,,,sale,success,1910.95,manual,
+#T0078,NEW,2025-12-04 19:55:00 +0000,USD,customer10@example.com,paid,fulfilled,FALSE,Line Item,The Compare at Price Snowboard,,1,785.95,117.89,TRUE,TRUE,fulfilled,,,,,test-data
+#T0078,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0078,,,,,,,,,,,,,,,,,sale,success,668.06,manual,
+#T0079,NEW,2025-12-06 21:05:00 +0000,USD,customer01@example.com,paid,fulfilled,FALSE,Line Item,The Videographer Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0079,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0079,,,,,,,,,,,,,,,,,sale,success,885.95,manual,
+#T0080,NEW,2025-12-12 17:52:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0080,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0080,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0081,NEW,2025-12-13 12:10:00 +0000,USD,customer10@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0081,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0081,,,,,,,,,,,,,,,,,sale,success,59.90,manual,
+#T0082,NEW,2025-12-14 14:00:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0082,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0082,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0082,,,,,,,,,,,,,,,,,sale,success,654.90,manual,
+#T0083,NEW,2025-12-16 16:12:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0083,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0083,,,,,,,,,,,,,,,,,sale,success,18.41,manual,
+#T0084,NEW,2025-12-18 12:48:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,142.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0084,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0084,,,,,,,,,,,,,,,,,sale,success,807.46,manual,
+#T0085,NEW,2025-12-21 20:03:00 +0000,USD,customer10@example.com,paid,fulfilled,FALSE,Line Item,The Compare at Price Snowboard,,1,785.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0085,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0085,,,,,,,,,,,,,,,,,sale,success,785.95,manual,
+#T0086,NEW,2025-12-24 08:22:00 +0000,USD,customer30@example.com,paid,fulfilled,FALSE,Line Item,The Out of Stock Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0086,,,,,,,,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0086,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0086,,,,,,,,,,,,,,,,,sale,success,1485.95,manual,
+#T0087,NEW,2025-12-25 15:06:00 +0000,USD,customer02@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,7.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0087,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,
+#T0087,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0087,,,,,,,,,,,,,,,,,sale,success,637.42,manual,
+#T0088,NEW,2025-12-26 15:44:00 +0000,USD,customer06@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,2,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0088,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0088,,,,,,,,,,,,,,,,,sale,success,109.85,manual,
+#T0089,NEW,2026-01-02 20:52:00 +0000,USD,customer22@example.com,paid,fulfilled,FALSE,Line Item,The Multi-location Snowboard,,2,729.95,218.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0089,,,,,,,,Line Item,The Collection Snowboard: Liquid,,1,749.95,112.49,TRUE,TRUE,fulfilled,,,,,
+#T0089,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0089,,,,,,,,,,,,,,,,,sale,success,1878.37,manual,
+#T0090,NEW,2026-01-06 10:31:00 +0000,USD,customer14@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,2,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0090,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0090,,,,,,,,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0090,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0090,,,,,,,,,,,,,,,,,sale,success,1049.80,manual,
+#T0091,NEW,2026-01-10 17:22:00 +0000,USD,customer16@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0091,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0091,,,,,,,,,,,,,,,,,sale,success,1025.00,manual,
+#T0092,NEW,2026-01-15 21:32:00 +0000,USD,customer16@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0092,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0092,,,,,,,,,,,,,,,,,sale,success,600.00,manual,
+#T0093,NEW,2026-01-20 12:36:00 +0000,USD,customer02@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,142.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0093,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0093,,,,,,,,,,,,,,,,,sale,success,807.46,manual,
+#T0094,NEW,2026-01-21 10:18:00 +0000,USD,customer20@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,2,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0094,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0094,,,,,,,,,,,,,,,,,sale,success,29.85,manual,
+#T0095,NEW,2026-01-29 21:13:00 +0000,USD,customer23@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0095,,,,,,,,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0095,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0095,,,,,,,,,,,,,,,,,sale,success,1329.90,manual,
+#T0096,NEW,2026-02-01 19:14:00 +0000,USD,customer03@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0096,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0096,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0097,NEW,2026-02-01 15:10:00 +0000,USD,customer13@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,94.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0097,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,3.74,TRUE,TRUE,fulfilled,,,,,
+#T0097,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0097,,,,,,,,,,,,,,,,,sale,success,556.67,manual,
+#T0098,NEW,2026-02-02 09:40:00 +0000,USD,customer10@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0098,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0098,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0098,,,,,,,,,,,,,,,,,sale,success,959.90,manual,
+#T0099,NEW,2026-02-04 20:05:00 +0000,USD,customer03@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0099,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0099,,,,,,,,,,,,,,,,,sale,success,600.00,manual,
+#T0100,NEW,2026-02-04 15:50:00 +0000,USD,customer16@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,2,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0100,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0100,,,,,,,,,,,,,,,,,sale,success,29.85,manual,
+#T0101,NEW,2026-02-06 19:35:00 +0000,USD,customer09@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,7.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0101,,,,,,,,Line Item,The Videographer Snowboard,,2,885.95,265.79,TRUE,TRUE,fulfilled,,,,,
+#T0101,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0101,,,,,,,,,,,,,,,,,sale,success,1548.57,manual,
+#T0102,NEW,2026-02-08 20:06:00 +0000,USD,customer15@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0102,,,,,,,,Line Item,The Multi-location Snowboard,,1,729.95,109.49,TRUE,TRUE,fulfilled,,,,,
+#T0102,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0102,,,,,,,,,,,,,,,,,sale,success,1215.42,manual,
+#T0103,NEW,2026-02-10 18:20:00 +0000,USD,customer10@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0103,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0103,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0104,NEW,2026-02-19 13:06:00 +0000,USD,customer06@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0104,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0104,,,,,,,,,,,,,,,,,sale,success,59.90,manual,
+#T0105,NEW,2026-02-21 14:59:00 +0000,USD,customer13@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0105,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0105,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0106,NEW,2026-02-25 14:57:00 +0000,USD,customer15@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0106,,,,,,,,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0106,,,,,,,,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0106,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0106,,,,,,,,,,,,,,,,,sale,success,1604.85,manual,
+#T0107,NEW,2026-02-28 19:05:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,142.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0107,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,3.74,TRUE,TRUE,fulfilled,,,,,
+#T0107,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0107,,,,,,,,,,,,,,,,,sale,success,828.67,manual,
+#T0108,NEW,2026-03-03 14:56:00 +0000,USD,customer25@example.com,paid,fulfilled,FALSE,Line Item,The Out of Stock Snowboard,,1,885.95,132.89,TRUE,TRUE,fulfilled,,,,,test-data
+#T0108,,,,,,,,Line Item,The Compare at Price Snowboard,,1,785.95,117.89,TRUE,TRUE,fulfilled,,,,,
+#T0108,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0108,,,,,,,,,,,,,,,,,sale,success,1421.12,manual,
+#T0109,NEW,2026-03-07 18:01:00 +0000,USD,customer05@example.com,paid,fulfilled,FALSE,Line Item,The Videographer Snowboard,,1,885.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0109,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0109,,,,,,,,,,,,,,,,,sale,success,885.95,manual,
+#T0110,NEW,2026-03-10 13:13:00 +0000,USD,customer27@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,1.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0110,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0110,,,,,,,,,,,,,,,,,sale,success,18.41,manual,
+#T0111,NEW,2026-03-17 12:16:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0111,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0111,,,,,,,,,,,,,,,,,sale,success,749.95,manual,
+#T0112,NEW,2026-03-20 14:57:00 +0000,USD,customer22@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0112,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0112,,,,,,,,,,,,,,,,,sale,success,594.96,manual,
+#T0113,NEW,2026-03-20 16:32:00 +0000,USD,customer14@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Ice,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0113,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,3.74,TRUE,TRUE,fulfilled,,,,,
+#T0113,,,,,,,,Line Item,The Multi-location Snowboard,,1,729.95,109.49,TRUE,TRUE,fulfilled,,,,,
+#T0113,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0113,,,,,,,,,,,,,,,,,sale,success,1236.63,manual,
+#T0114,NEW,2026-03-24 10:24:00 +0000,USD,customer26@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,7.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0114,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0114,,,,,,,,,,,,,,,,,sale,success,52.41,manual,
+#T0115,NEW,2026-03-27 18:14:00 +0000,USD,customer29@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0115,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0115,,,,,,,,,,,,,,,,,sale,success,34.90,manual,
+#T0116,NEW,2026-04-02 15:08:00 +0000,USD,customer25@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0116,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0116,,,,,,,,,,,,,,,,,sale,success,34.90,manual,
+#T0117,NEW,2026-04-04 16:38:00 +0000,USD,customer03@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,94.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0117,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0117,,,,,,,,,,,,,,,,,sale,success,535.46,manual,
+#T0118,NEW,2026-04-06 20:44:00 +0000,USD,customer06@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0118,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0118,,,,,,,,,,,,,,,,,sale,success,629.95,manual,
+#T0119,NEW,2026-04-08 20:38:00 +0000,USD,customer26@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,2,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0119,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0119,,,,,,,,,,,,,,,,,sale,success,59.85,manual,
+#T0120,NEW,2026-04-24 18:02:00 +0000,USD,customer02@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Ice,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0120,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0120,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0120,,,,,,,,,,,,,,,,,sale,success,1399.90,manual,
+#T0121,NEW,2026-05-10 13:37:00 +0000,USD,customer28@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0121,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0121,,,,,,,,,,,,,,,,,sale,success,600.00,manual,
+#T0122,NEW,2026-05-15 13:33:00 +0000,USD,customer07@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0122,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0122,,,,,,,,,,,,,,,,,sale,success,629.95,manual,
+#T0123,NEW,2026-05-17 10:55:00 +0000,USD,customer24@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0123,,,,,,,,Line Item,The Multi-location Snowboard,,1,729.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0123,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0123,,,,,,,,,,,,,,,,,sale,success,779.90,manual,
+#T0124,NEW,2026-05-24 21:28:00 +0000,USD,customer13@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0124,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0124,,,,,,,,,,,,,,,,,sale,success,1025.00,manual,
+#T0125,NEW,2026-06-01 18:35:00 +0000,USD,customer19@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0125,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0125,,,,,,,,,,,,,,,,,sale,success,600.00,manual,
+#T0126,NEW,2026-06-03 19:20:00 +0000,USD,customer01@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0126,,,,,,,,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0126,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0126,,,,,,,,,,,,,,,,,sale,success,1449.90,manual,
+#T0127,NEW,2026-06-14 10:29:00 +0000,USD,customer16@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0127,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0127,,,,,,,,,,,,,,,,,sale,success,34.90,manual,
+#T0128,NEW,2026-06-15 15:44:00 +0000,USD,customer17@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,3.74,TRUE,TRUE,fulfilled,,,,,test-data
+#T0128,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0128,,,,,,,,,,,,,,,,,sale,success,31.16,manual,
+#T0129,NEW,2026-06-17 20:16:00 +0000,USD,customer25@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0129,,,,,,,,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0129,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0129,,,,,,,,,,,,,,,,,sale,success,654.90,manual,
+#T0130,NEW,2026-06-20 17:14:00 +0000,USD,customer03@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0130,,,,,,,,Line Item,Special Selling Plans Ski Wax,,2,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0130,,,,,,,,Line Item,The Collection Snowboard: Liquid,,2,749.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0130,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0130,,,,,,,,,,,,,,,,,sale,success,2299.75,manual,
+#T0131,NEW,2026-06-27 10:21:00 +0000,USD,customer26@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0131,,,,,,,,Line Item,The Compare at Price Snowboard,,1,785.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0131,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0131,,,,,,,,,,,,,,,,,sale,success,835.90,manual,
+#T0132,NEW,2026-07-03 15:41:00 +0000,USD,customer29@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0132,,,,,,,,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0132,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0132,,,,,,,,,,,,,,,,,sale,success,679.90,manual,
+#T0133,NEW,2026-07-08 19:15:00 +0000,USD,customer11@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0133,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0133,,,,,,,,,,,,,,,,,sale,success,59.90,manual,
+#T0134,NEW,2026-07-11 16:12:00 +0000,USD,customer11@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0134,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0134,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0134,,,,,,,,,,,,,,,,,sale,success,84.85,manual,
+#T0135,NEW,2026-07-16 12:19:00 +0000,USD,customer28@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0135,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0135,,,,,,,,,,,,,,,,,sale,success,1025.00,manual,
+#T0136,NEW,2026-07-17 20:45:00 +0000,USD,customer18@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Hydrogen,,1,600.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0136,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,2,9.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0136,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0136,,,,,,,,,,,,,,,,,sale,success,619.90,manual,
+#T0137,NEW,2026-07-18 21:53:00 +0000,USD,customer25@example.com,paid,fulfilled,FALSE,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0137,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0137,,,,,,,,,,,,,,,,,sale,success,19.90,manual,
+#T0138,NEW,2026-07-18 17:09:00 +0000,USD,customer17@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Ice,,2,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0138,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0138,,,,,,,,,,,,,,,,,sale,success,1399.90,manual,
+#T0139,NEW,2026-07-18 19:09:00 +0000,USD,customer11@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0139,,,,,,,,Line Item,Sample Selling Plans Ski Wax,,1,9.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0139,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0139,,,,,,,,,,,,,,,,,sale,success,709.90,manual,
+#T0140,NEW,2026-07-23 11:46:00 +0000,USD,customer02@example.com,paid,fulfilled,FALSE,Line Item,Special Selling Plans Ski Wax,,1,49.95,7.49,TRUE,TRUE,fulfilled,,,,,test-data
+#T0140,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0140,,,,,,,,,,,,,,,,,sale,success,52.41,manual,
+#T0141,NEW,2026-07-23 13:38:00 +0000,USD,customer12@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0141,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0141,,,,,,,,,,,,,,,,,sale,success,1025.00,manual,
+#T0142,NEW,2026-08-01 16:22:00 +0000,USD,customer05@example.com,paid,fulfilled,FALSE,Line Item,The Compare at Price Snowboard,,1,785.95,117.89,TRUE,TRUE,fulfilled,,,,,test-data
+#T0142,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0142,,,,,,,,,,,,,,,,,sale,success,668.06,manual,
+#T0143,NEW,2026-08-27 10:15:00 +0000,USD,customer08@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0143,,,,,,,,Line Item,Special Selling Plans Ski Wax,,1,49.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0143,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0143,,,,,,,,,,,,,,,,,sale,success,799.90,manual,
+#T0144,NEW,2026-08-29 13:12:00 +0000,USD,customer01@example.com,paid,fulfilled,FALSE,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,2,949.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0144,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0144,,,,,,,,,,,,,,,,,sale,success,1899.90,manual,
+#T0145,NEW,2026-09-01 12:46:00 +0000,USD,customer20@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0145,,,,,,,,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,94.49,TRUE,TRUE,fulfilled,,,,,
+#T0145,,,,,,,,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,153.75,TRUE,TRUE,fulfilled,,,,,
+#T0145,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0145,,,,,,,,,,,,,,,,,sale,success,2001.67,manual,
+#T0146,NEW,2026-09-04 09:10:00 +0000,USD,customer25@example.com,paid,fulfilled,FALSE,Line Item,The Compare at Price Snowboard,,1,785.95,117.89,TRUE,TRUE,fulfilled,,,,,test-data
+#T0146,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0146,,,,,,,,,,,,,,,,,sale,success,668.06,manual,
+#T0147,NEW,2026-09-15 18:06:00 +0000,USD,customer17@example.com,paid,fulfilled,FALSE,Line Item,The Collection Snowboard: Liquid,,1,749.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0147,,,,,,,,Line Item,The Inventory Not Tracked Snowboard,sku-untracked-1,1,949.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0147,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0147,,,,,,,,,,,,,,,,,sale,success,1699.90,manual,
+#T0148,NEW,2026-09-17 11:24:00 +0000,USD,customer02@example.com,paid,fulfilled,FALSE,Line Item,The Complete Snowboard - Powder,,1,699.95,104.99,TRUE,TRUE,fulfilled,,,,,test-data
+#T0148,,,,,,,,Line Item,The Collection Snowboard: Oxygen,,1,1025.00,153.75,TRUE,TRUE,fulfilled,,,,,
+#T0148,,,,,,,,Line Item,The Collection Snowboard: Liquid,,2,749.95,224.99,TRUE,TRUE,fulfilled,,,,,
+#T0148,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0148,,,,,,,,,,,,,,,,,sale,success,2741.12,manual,
+#T0149,NEW,2026-09-24 10:09:00 +0000,USD,customer06@example.com,paid,fulfilled,FALSE,Line Item,Selling Plans Ski Wax,,1,24.95,3.74,TRUE,TRUE,fulfilled,,,,,test-data
+#T0149,,,,,,,,Shipping Line,Standard,,,9.95,,,,,,,,,
+#T0149,,,,,,,,,,,,,,,,,sale,success,31.16,manual,
+#T0150,NEW,2026-09-24 20:19:00 +0000,USD,customer24@example.com,paid,fulfilled,FALSE,Line Item,The Multi-managed Snowboard,sku-managed-1,1,629.95,0.00,TRUE,TRUE,fulfilled,,,,,test-data
+#T0150,,,,,,,,Line Item,Selling Plans Ski Wax,,1,24.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0150,,,,,,,,Line Item,The Complete Snowboard - Ice,,1,699.95,0.00,TRUE,TRUE,fulfilled,,,,,
+#T0150,,,,,,,,Shipping Line,Standard,,,0.00,,,,,,,,,
+#T0150,,,,,,,,,,,,,,,,,sale,success,1354.85,manual,
