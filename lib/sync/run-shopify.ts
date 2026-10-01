@@ -32,6 +32,8 @@ export interface ShopifySyncOptions {
   products?: boolean;
   /** Also fetch orders merely UPDATED in the window, so refunds on older orders land on the day they happened. */
   includeUpdated?: boolean;
+  /** Epoch ms after which the order fetch gives up (so a background task can retry smaller). */
+  deadline?: number;
 }
 
 /**
@@ -73,7 +75,7 @@ export async function syncShopify(integrationId: string, opts: ShopifySyncOption
     const a = addDays(range.from, -1);
     const b = addDays(range.to, 1);
     const search = includeUpdated ? `created_at:>=${a} OR updated_at:>=${a}` : `created_at:>=${a} AND created_at:<=${b}`;
-    const { orders: fetched, approximateNewReturning } = await fetchOrders(shop, token, search);
+    const { orders: fetched, approximateNewReturning } = await fetchOrders(shop, token, search, opts.deadline);
 
     let lineSales = 0;
     let unmappedSales = 0;

@@ -334,3 +334,28 @@ alter table orders add column if not exists customer_lifetime_orders int;
 -- rebuild_daily_facts(client, from, to): daily rollup of DTC orders (by order date) and returns (by refund date).
 -- recompute_first_orders(client): new vs returning from stored orders + Shopify lifetime order counts.
 -- Both are executable by service_role only. (See the live migration for the full function bodies.)
+
+/* ---------- applied later as migration "sync_jobs" ---------- */
+create table if not exists sync_jobs (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients(id) on delete cascade,
+  integration_id uuid not null references integrations(id) on delete cascade,
+  provider text not null,
+  kind text not null default 'history' check (kind in ('history','recent')),
+  status text not null default 'queued' check (status in ('queued','running','done','error','cancelled')),
+  from_date date not null,
+  to_date date not null,
+  cursor_end date not null,
+  chunk_days int not null default 14,
+  first_chunk boolean not null default true,
+  total_days int not null,
+  done_days int not null default 0,
+  attempts int not null default 0,
+  message text,
+  heartbeat_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists sync_jobs_integration on sync_jobs (integration_id, created_at desc);
+alter table sync_jobs enable row level security;
+create policy sync_jobs_read on sync_jobs for select to authenticated using (public.has_client_access(client_id));

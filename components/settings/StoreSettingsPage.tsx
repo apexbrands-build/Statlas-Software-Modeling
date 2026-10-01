@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { BrandIcon } from "@/components/BrandIcon";
 import { EditStoreDialog } from "./EditStoreDialog";
@@ -8,7 +8,6 @@ import { inputCls, Modal } from "./ui";
 import { useApp } from "@/lib/app-context";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { dataMode } from "@/lib/supabase/env";
-import { addDays, todayLocal } from "@/lib/dates";
 import type { ClientSettings } from "@/lib/types";
 
 interface Integration {
@@ -31,6 +30,7 @@ export function StoreSettingsPage() {
   const { client, settings, saveSettings } = useApp();
   const params = useSearchParams();
   const [rows, setRows] = useState<Integration[]>([]);
+  const [jobs, setJobs] = useState<Record<string, Job>>({});
   const [dialog, setDialog] = useState<Dialog>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -45,8 +45,23 @@ export function StoreSettingsPage() {
       .select("id,provider,account_id,account_name,status,coverage_start,coverage_end,last_synced_at,last_error")
       .eq("client_id", client.id)
       .order("created_at");
-    setRows((data ?? []) as Integration[]);
+    const list = (data ?? []) as Integration[];
+    setRows(list);
+    const latest: Record<string, Job> = {};
+    for (const r of list) {
+      const j = await latestJob(r.id);
+      if (j && ACTIVE.includes(j.status)) latest[r.id] = j;
+    }
+    setJobs(latest);
   }, [client, live]);
+
+  // While a background job is running, refresh the table every 5 seconds.
+  const anyActive = Object.keys(jobs).length > 0;
+  useEffect(() => {
+    if (!anyActive) return;
+    const t = setInterval(() => void load(), 5000);
+    return () => clearInterval(t);
+  }, [anyActive, load]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -155,6 +170,7 @@ export function StoreSettingsPage() {
                       <td className="px-5 py-3 text-text-muted">{client.currency}</td>
                       <td className="min-w-64 px-5 py-3">
                         <div className="text-xs text-text-muted">{r.coverage_start ? `${r.coverage_start} to ${r.coverage_end}` : "Not synced yet"}</div>
+                        {jobs[r.id] && <div className="mt-1 text-xs text-accent">Loading in the background… {Math.round((jobs[r.id].done_days / Math.max(1, jobs[r.id].total_days)) * 100)}%</div>}
                         <div className="mt-1 flex items-center gap-2">
                           <div className="h-1.5 flex-1 rounded-full bg-surface-raised">
                             <div className="h-1.5 rounded-full bg-accent" style={{ width: ok ? "100%" : "0%" }} />
@@ -509,28 +525,32 @@ function GoogleConnect({ clientId, isAdmin, onChanged, onClose, setMsg }: { clie
   );
 }
 
-const ENDPOINT: Record<string, string> = { shopify: "shopify", meta: "meta", google_ads: "google" };
-const CHUNK_DAYS: Record<string, number> = { shopify: 14, meta: 60, google_ads: 60 };
-
-function chunksOf(from: string, to: string, size: number) {
-  const out: { from: string; to: string }[] = [];
-  let end = to;
-  while (end >= from) {
-    const start = addDays(end, -(size - 1)) < from ? from : addDays(end, -(size - 1));
-    out.push({ from: start, to: end });
-    end = addDays(start, -1);
-  }
-  return out; // newest first, so recent days appear on the dashboard first
+interface Job {
+  id: string;
+  integration_id: string;
+  status: "queued" | "running" | "done" | "error" | "cancelled";
+  kind: string;
+  total_days: number;
+  done_days: number;
+  message: string | null;
+  heartbeat_at: string;
 }
 
-/** Loads a longer history in chunks with a progress bar (so no single request runs long). */
+const ACTIVE = ["queued", "running"];
+const isStalled = (j: Job) => ACTIVE.includes(j.status) && Date.now() - new Date(j.heartbeat_at).getTime() > 3 * 60_000;
+
+async function latestJob(integrationId: string): Promise<Job | null> {
+  const { data } = await getBrowserClient().from("sync_jobs").select("id,integration_id,status,kind,total_days,done_days,message,heartbeat_at").eq("integration_id", integrationId).order("created_at", { ascending: false }).limit(1);
+  return ((data ?? [])[0] as Job | undefined) ?? null;
+}
+
+/** Starts a background history load. It keeps running on the server if you close this window or leave the page. */
 function HistoryLoader({ row }: { row: Integration }) {
   const [months, setMonths] = useState(12);
-  const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
+  const [job, setJob] = useState<Job | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   const [allOrders, setAllOrders] = useState<boolean | null>(row.provider === "shopify" ? null : true);
-  const cancel = useRef(false);
 
   useEffect(() => {
     if (row.provider !== "shopify") return;
@@ -540,61 +560,50 @@ function HistoryLoader({ row }: { row: Integration }) {
       .catch(() => setAllOrders(false));
   }, [row.id, row.provider]);
 
-  const limited = row.provider === "shopify" && allOrders === false;
+  // Watch the latest job (polls every 3 seconds while this window is open).
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      const j = await latestJob(row.id);
+      if (alive) setJob(j);
+    };
+    void tick();
+    const t = setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [row.id]);
 
-  async function post(body: Record<string, unknown>) {
-    const res = await fetch(`/api/sync/${ENDPOINT[row.provider]}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: row.id, ...body }) });
-    // A timeout comes back as plain text, not JSON: read it safely.
+  const limited = row.provider === "shopify" && allOrders === false;
+  const active = job && ACTIVE.includes(job.status);
+
+  async function call(path: string, body: Record<string, unknown>) {
+    const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const text = await res.text();
     let json: { error?: string } = {};
     try {
       json = JSON.parse(text);
     } catch {
-      throw new Error(`Server stopped before finishing (${res.status}): ${text.slice(0, 60)}`);
+      throw new Error(`Server error (${res.status})`);
     }
     if (!res.ok) throw new Error(json.error ?? "Request failed");
     return json;
   }
 
-  /** Runs one date range; if it fails (usually a timeout on a busy period), splits it in half and retries. */
-  async function runChunk(from: string, to: string, first: boolean, label: (s: string) => void): Promise<void> {
-    if (cancel.current) throw new Error("Stopped. What was loaded so far is saved.");
-    label(`${from} → ${to}`);
+  async function start() {
+    setStarting(true);
+    setMsg(null);
     try {
-      await post({ from, to, first });
+      await call("/api/jobs/start", { integrationId: row.id, months });
+      setJob(await latestJob(row.id));
     } catch (e) {
-      if (from >= to) throw e; // a single day still fails: report it
-      const days = Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86_400_000);
-      const mid = addDays(from, Math.floor(days / 2));
-      await runChunk(from, mid, first, label);
-      await runChunk(addDays(mid, 1), to, false, label);
+      setMsg(e instanceof Error ? e.message : "Could not start");
     }
+    setStarting(false);
   }
 
-  async function start() {
-    cancel.current = false;
-    setRunning(true);
-    setMsg(null);
-    const yesterday = addDays(todayLocal(), -1);
-    const begin = addDays(yesterday, -(months * 30));
-    // Resume: days already loaded (coverage runs from its start date to yesterday) are skipped.
-    const end = row.coverage_start && row.coverage_start > begin && row.coverage_start <= yesterday ? addDays(row.coverage_start, -1) : yesterday;
-    const list = end >= begin ? chunksOf(begin, end, CHUNK_DAYS[row.provider] ?? 60) : [];
-    try {
-      for (let i = 0; i < list.length; i++) {
-        await runChunk(list[i].from, list[i].to, i === 0, (label) => setProgress({ done: i, total: list.length, label }));
-      }
-      if (row.provider === "shopify") {
-        setProgress({ done: list.length, total: list.length, label: "Classifying new vs returning customers…" });
-        await post({ action: "finalize", from: begin, to: yesterday });
-      }
-      setProgress({ done: list.length, total: list.length, label: "Done" });
-      setMsg(`Loaded ${months} months (${begin} → ${yesterday}). Open Home and compare with last year.`);
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Load failed");
-    }
-    setRunning(false);
-  }
+  const pct = job ? Math.round((job.done_days / Math.max(1, job.total_days)) * 100) : 0;
 
   return (
     <div className="space-y-2 rounded-xl border border-border p-4">
@@ -605,38 +614,46 @@ function HistoryLoader({ row }: { row: Integration }) {
         </p>
       ) : (
         <>
-          <p className="text-xs text-text-muted">Loads daily data in chunks (safe to stop and resume). Needed for year-over-year comparisons.</p>
+          <p className="text-xs text-text-muted">Runs in the background on the server: you can close this window or leave the page. Needed for year-over-year comparisons.</p>
           <div className="flex flex-wrap items-center gap-2">
-            <select aria-label="History length" value={months} onChange={(e) => setMonths(Number(e.target.value))} disabled={running} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+            <select aria-label="History length" value={months} onChange={(e) => setMonths(Number(e.target.value))} disabled={Boolean(active)} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
               {[3, 6, 12, 24, 36].map((m) => (
                 <option key={m} value={m}>
                   Last {m} months
                 </option>
               ))}
             </select>
-            {!running ? (
-              <button onClick={start} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black">
-                Load history
+            {!active ? (
+              <button onClick={start} disabled={starting} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-60">
+                {starting ? "Starting…" : "Load history"}
               </button>
             ) : (
-              <button onClick={() => (cancel.current = true)} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text">
-                Stop
-              </button>
+              <>
+                <button onClick={() => call("/api/jobs/cancel", { jobId: job!.id })} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text">
+                  Stop
+                </button>
+                {isStalled(job!) && (
+                  <button onClick={() => call("/api/jobs/run", { jobId: job!.id }).catch((e) => setMsg(e.message))} className="rounded-lg border border-yellow-500/50 px-4 py-2 text-sm text-yellow-300">
+                    Resume
+                  </button>
+                )}
+              </>
             )}
           </div>
         </>
       )}
-      {progress && (
+      {job && (
         <div className="space-y-1">
           <div className="h-1.5 rounded-full bg-surface-raised">
-            <div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${Math.round((progress.done / Math.max(1, progress.total)) * 100)}%` }} />
+            <div className={`h-1.5 rounded-full transition-all ${job.status === "error" ? "bg-bad" : "bg-accent"}`} style={{ width: `${pct}%` }} />
           </div>
           <div className="text-xs text-text-muted">
-            {progress.done}/{progress.total} · {progress.label}
+            {job.status === "done" ? "Done" : job.status === "error" ? "Stopped with an error" : job.status === "cancelled" ? "Stopped" : isStalled(job) ? "Paused (press Resume)" : "Running in the background"} · {pct}% ({job.done_days}/{job.total_days} days)
+            {job.message ? ` · ${job.message}` : ""}
           </div>
         </div>
       )}
-      {msg && <p className="text-xs text-text-muted">{msg}</p>}
+      {msg && <p className="text-xs text-bad">{msg}</p>}
     </div>
   );
 }

@@ -111,12 +111,13 @@ const SOURCE_TO_CHANNEL: Record<string, string> = {
 };
 
 /** Orders matching a Shopify search query. Without the read_all_orders scope Shopify only exposes the last 60 days. */
-export async function fetchOrders(shop: string, token: string, searchQuery: string): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean }> {
+export async function fetchOrders(shop: string, token: string, searchQuery: string, deadline?: number): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean }> {
   const out: RawOrder[] = [];
   let withCount = true;
   let approximate = false;
   let cursor: string | null = null;
   for (;;) {
+    if (deadline && Date.now() > deadline) throw new Error("TIMEOUT: too many orders for one task");
     const queryFor = (c: boolean) => `query($cursor: String, $q: String!) { orders(first: 50, after: $cursor, query: $q, sortKey: CREATED_AT) {
       pageInfo { hasNextPage endCursor } nodes { ${orderFields(c)} } } }`;
     let data: OrdersPage;

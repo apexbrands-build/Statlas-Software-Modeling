@@ -73,3 +73,10 @@ Notes: Google applies each conversion action's own attribution window (not a for
 3. Shopify sync (orders, customers, product costs) → `orders`, `products`, `daily_facts`.
 4. Meta and Google spend sync → `ad_spend_daily`, `daily_channel_facts`.
 5. Switch the dashboard from the seed repository to the Supabase repository.
+
+
+## Background syncs (history loads and the daily refresh)
+
+- **Load history** creates a job on the server (table `sync_jobs`). Each chunk runs as its own short server task and starts the next, so you can close the window or leave the page. A chunk that is too heavy is split in half automatically. Progress shows on the connection's row in Store Settings. **Stop** cancels; **Resume** restarts a job that was cut off.
+- **Daily refresh:** `vercel.json` schedules `/api/jobs/tick` every day at 06:00 UTC. It restarts stalled jobs and re-syncs the last 14 days of every connection. To turn it on add the Vercel variable **`CRON_SECRET`** (any long random string, Sensitive); Vercel then sends it to the cron route automatically. Without it the route refuses to run.
+- On the Hobby plan Vercel allows one cron run per day. A paid plan allows more frequent runs (change the schedule in `vercel.json`).
