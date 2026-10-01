@@ -1,0 +1,233 @@
+"use client";
+
+import { useState } from "react";
+import { dayOfWeek } from "@/lib/dates";
+import { formatValue } from "@/lib/format";
+import { rebalance } from "@/lib/planning/alloc";
+import { PLAN_PLATFORMS, type DayOverride } from "@/lib/planning/types";
+import { aggregatePlan } from "@/lib/metrics";
+import type { PlanCtx } from "./ctx";
+import { FillMenu } from "./FillMenu";
+import { btn, inputClass, MONTHS, NumField, WEEKDAYS } from "./ui";
+
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
+
+/** Step 2: one month in detail: platform split, brand / non-acquisition share, weekday pattern and the daily table. */
+export function SpendStep({ ctx }: { ctx: PlanCtx }) {
+  const { months, client, rows, seasonality, setSeasonality, editInputs, fill, history, historySeasonality } = ctx;
+  const firstWithInputs = months.find((m) => m.inputs) ?? months[0];
+  const [month, setMonth] = useState(firstWithInputs.month);
+  const [msg, setMsg] = useState<string | null>(null);
+  const m = months.find((x) => x.month === month) ?? months[0];
+  const money = (v: number | null, f: "currency0" | "currency2" | "ratio2" | "percent1" = "currency0") => formatValue(v, f, client.currency);
+  const inputs = m.inputs;
+  const dayRows = rows[m.month] ?? [];
+  const totals = aggregatePlan(dayRows);
+  const keys = PLAN_PLATFORMS.map((p) => p.key);
+  const pctSum = inputs ? keys.reduce((a, k) => a + (inputs.platformPct[k] ?? 0), 0) : 0;
+
+  const setOverride = (date: string, patch: Partial<DayOverride> | null) =>
+    editInputs(m.month, (i) => {
+      const overrides = { ...(i.overrides ?? {}) };
+      if (patch === null) delete overrides[date];
+      else overrides[date] = { ...overrides[date], ...patch };
+      return { ...i, overrides };
+    });
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <select value={month} onChange={(e) => setMonth(e.target.value)} className={inputClass} aria-label="Month">
+          {months.map((x, i) => (
+            <option key={x.month} value={x.month}>
+              {MONTHS[i]} {ctx.plan.year}
+              {x.locked ? " (locked)" : ""}
+            </option>
+          ))}
+        </select>
+        {m.locked && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">🔒 Locked: unlock it in the Monthly plan to edit</span>}
+        {inputs && (
+          <>
+            <label className="flex items-center gap-1 text-sm text-text-muted">
+              Spend
+              <NumField value={inputs.spend} disabled={m.locked} onCommit={(v) => editInputs(m.month, (i) => ({ ...i, spend: Math.max(0, v) }))} />
+            </label>
+            <label className="flex items-center gap-1 text-sm text-text-muted">
+              aMER
+              <NumField value={inputs.amer} decimals={2} disabled={m.locked} className="w-16" onCommit={(v) => editInputs(m.month, (i) => ({ ...i, amer: Math.max(0, v) }))} />
+            </label>
+            <dl className="ml-auto flex gap-4 text-sm">
+              {(
+                [
+                  ["New revenue", totals.newRevenue],
+                  ["Returning", totals.returningRevenue],
+                  ["Revenue", totals.orderRevenue],
+                  ["CM", totals.cm],
+                ] as const
+              ).map(([l, v]) => (
+                <div key={l} className="border-l-2 border-accent pl-2">
+                  <dt className="text-[11px] text-text-muted">{l}</dt>
+                  <dd className="tabular font-medium">{money(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        )}
+      </div>
+      {msg && <p className="text-xs text-text-muted">{msg}</p>}
+
+      {!inputs ? (
+        <div className="space-y-2 rounded-xl border border-border bg-surface p-6 text-sm text-text-muted">
+          <p>This month has no inputs yet. Start it from real numbers:</p>
+          <div className="w-48">
+            <FillMenu month={m.month} disabled={m.locked || history.loading} fill={fill} onResult={setMsg} label="Start from…" />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="space-y-2 rounded-xl border border-border bg-surface p-4">
+              <h3 className="text-sm font-semibold">Platform allocation</h3>
+              <p className="text-xs text-text-muted">Share of the month&apos;s spend per platform. Lock a platform to keep its share when you move the others.</p>
+              {PLAN_PLATFORMS.map((p) => {
+                const v = inputs.platformPct[p.key] ?? 0;
+                const locked = inputs.lockedPlatforms?.includes(p.key) ?? false;
+                return (
+                  <div key={p.key} className="flex items-center gap-2 text-sm">
+                    <span className="w-28 shrink-0">{p.label}</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={v}
+                      disabled={m.locked || locked}
+                      aria-label={`${p.label} share`}
+                      className="min-w-0 flex-1 accent-[var(--apex-accent)]"
+                      onChange={(e) => editInputs(m.month, (i) => ({ ...i, platformPct: rebalance(i.platformPct, keys, i.lockedPlatforms ?? [], p.key, Number(e.target.value)) }))}
+                    />
+                    <NumField value={v} decimals={2} className="w-16" suffix="%" disabled={m.locked || locked} onCommit={(x) => editInputs(m.month, (i) => ({ ...i, platformPct: rebalance(i.platformPct, keys, i.lockedPlatforms ?? [], p.key, x) }))} />
+                    <button
+                      title={locked ? "Unlock this platform" : "Keep this share when other platforms change"}
+                      aria-label={`${locked ? "Unlock" : "Lock"} ${p.label}`}
+                      className="text-text-faint hover:text-text"
+                      disabled={m.locked}
+                      onClick={() => editInputs(m.month, (i) => ({ ...i, lockedPlatforms: locked ? (i.lockedPlatforms ?? []).filter((k) => k !== p.key) : [...(i.lockedPlatforms ?? []), p.key] }))}
+                    >
+                      {locked ? "🔒" : "🔓"}
+                    </button>
+                  </div>
+                );
+              })}
+              {Math.abs(pctSum - 100) > 0.05 && <p className="text-xs text-bad">{pctSum === 0 ? "No platform split set: total spend is planned but not split by platform." : `Platform shares add to ${pctSum.toFixed(2)}%: they are scaled to 100% when targets are generated.`}</p>}
+
+              <h3 className="pt-3 text-sm font-semibold">Brand and non-acquisition share</h3>
+              <p className="text-xs text-text-muted">Part of a platform&apos;s spend that is Google Brand or non-acquisition (existing customers). Matters for aMER when your client settings exclude them.</p>
+              {PLAN_PLATFORMS.filter((p) => (inputs.platformPct[p.key] ?? 0) > 0).map((p) => (
+                <div key={p.key} className="flex items-center gap-2 text-sm">
+                  <span className="w-44 shrink-0">
+                    {p.label} <span className="text-xs text-text-faint">{p.altLabel}</span>
+                  </span>
+                  <input type="range" min={0} max={100} step={0.5} value={inputs.altPct[p.key] ?? 0} disabled={m.locked} aria-label={`${p.label} ${p.altLabel}`} className="min-w-0 flex-1 accent-[var(--apex-accent)]" onChange={(e) => editInputs(m.month, (i) => ({ ...i, altPct: { ...i.altPct, [p.key]: Number(e.target.value) } }))} />
+                  <NumField value={inputs.altPct[p.key] ?? 0} decimals={2} className="w-16" suffix="%" disabled={m.locked} onCommit={(x) => editInputs(m.month, (i) => ({ ...i, altPct: { ...i.altPct, [p.key]: Math.min(100, Math.max(0, x)) } }))} />
+                </div>
+              ))}
+            </section>
+
+            <section className="space-y-2 rounded-xl border border-border bg-surface p-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold">Weekday pattern</h3>
+                <span className="text-[11px] text-text-faint">same for every month of this plan</span>
+              </div>
+              <p className="text-xs text-text-muted">
+                How much stronger or weaker each weekday is than an average day. Spend and returning revenue follow it. {historySeasonality ? "Calculated from this client's Shopify orders (last 12 months, Black Friday week and one-off spikes ignored)." : history.loading ? "Loading history…" : "Not enough Shopify history to calculate it, so it starts flat."}
+              </p>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="w-28 shrink-0">Strength</span>
+                <input type="range" min={0} max={100} step={5} value={seasonality.effectPct} className="min-w-0 flex-1 accent-[var(--apex-accent)]" aria-label="Weekday pattern strength" onChange={(e) => setSeasonality({ ...seasonality, effectPct: Number(e.target.value) })} />
+                <span className="w-14 text-right tabular">{seasonality.effectPct}%</span>
+              </div>
+              {WEEK_ORDER.map((d) => (
+                <div key={d} className="flex items-center gap-2 text-sm">
+                  <span className="w-28 shrink-0">{WEEKDAYS[d]}</span>
+                  <input type="range" min={-60} max={100} step={0.5} value={seasonality.dow[d] ?? 0} className="min-w-0 flex-1 accent-[var(--apex-accent)]" aria-label={`${WEEKDAYS[d]} offset`} onChange={(e) => setSeasonality({ ...seasonality, dow: seasonality.dow.map((x, j) => (j === d ? Number(e.target.value) : x)) })} />
+                  <NumField value={seasonality.dow[d] ?? 0} decimals={2} className="w-16" suffix="%" onCommit={(x) => setSeasonality({ ...seasonality, dow: seasonality.dow.map((y, j) => (j === d ? x : y)) })} />
+                </div>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <button className={btn} disabled={!historySeasonality} onClick={() => historySeasonality && setSeasonality(historySeasonality)}>
+                  Recalculate from Shopify data
+                </button>
+                <button className={btn} onClick={() => setSeasonality({ ...seasonality, dow: [0, 0, 0, 0, 0, 0, 0] })}>
+                  Flat (no pattern)
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold">Daily plan for {MONTHS[Number(m.month.slice(5, 7)) - 1]}</h3>
+            <p className="text-xs text-text-muted">Type over any daily value to fix that day (🔒). The rest of the month absorbs the difference so the month total stays the same. aMER stays constant on the other days.</p>
+            <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+              <table className="w-full min-w-[820px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs text-text-muted">
+                    <th className="px-3 py-2 text-left">Day</th>
+                    <th className="px-2 py-2 text-right">Spend</th>
+                    <th className="px-2 py-2 text-right">aMER</th>
+                    <th className="px-2 py-2 text-right">New revenue</th>
+                    <th className="px-2 py-2 text-right">Returning</th>
+                    <th className="px-2 py-2 text-right">Order revenue</th>
+                    <th className="px-2 py-2 text-right">CM</th>
+                    <th className="w-8" />
+                  </tr>
+                  <tr className="border-b border-border bg-surface-raised text-xs font-semibold">
+                    <td className="px-3 py-1">Month total</td>
+                    <td className="px-2 py-1 text-right tabular">{money(totals.spend)}</td>
+                    <td className="px-2 py-1 text-right tabular">{totals.spend ? money(totals.newRevenue / totals.spend, "ratio2") : "–"}</td>
+                    <td className="px-2 py-1 text-right tabular">{money(totals.newRevenue)}</td>
+                    <td className="px-2 py-1 text-right tabular">{money(totals.returningRevenue)}</td>
+                    <td className="px-2 py-1 text-right tabular">{money(totals.orderRevenue)}</td>
+                    <td className="px-2 py-1 text-right tabular">{money(totals.cm)}</td>
+                    <td />
+                  </tr>
+                </thead>
+                <tbody>
+                  {dayRows.map((r) => {
+                    const ov = inputs.overrides?.[r.date];
+                    return (
+                      <tr key={r.date} className="border-b border-border/40">
+                        <td className="px-3 py-1 text-text-muted">
+                          {Number(r.date.slice(8))} <span className="text-xs text-text-faint">{WEEKDAYS[dayOfWeek(r.date)].toLowerCase()}</span>
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          <NumField value={r.spend} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { spend: Math.max(0, v) })} />
+                        </td>
+                        <td className="px-2 py-1 text-right tabular text-text-muted">{r.spend ? (r.newRevenue / r.spend).toFixed(2) : "–"}</td>
+                        <td className="px-2 py-1 text-right">
+                          <NumField value={r.newRevenue} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { newRevenue: Math.max(0, v) })} />
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          <NumField value={r.returningRevenue} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { returningRevenue: Math.max(0, v) })} />
+                        </td>
+                        <td className="px-2 py-1 text-right tabular">{money(r.orderRevenue)}</td>
+                        <td className={`px-2 py-1 text-right tabular ${r.cm < 0 ? "text-bad" : ""}`}>{money(r.cm)}</td>
+                        <td className="px-1 text-center">
+                          {ov && (
+                            <button title="Fixed day: click to release it" aria-label={`Release ${r.date}`} disabled={m.locked} onClick={() => setOverride(r.date, null)}>
+                              🔒
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}

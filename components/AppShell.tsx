@@ -12,7 +12,7 @@ const NAV = [
   { href: "/", label: "Home", enabled: true },
   { href: "/settings", label: "Store Settings", enabled: true },
   { href: "/reporting", label: "Reporting", enabled: true },
-  { href: "#", label: "Planning", enabled: false },
+  { href: "/planning", label: "Planning", enabled: true },
   { href: "#", label: "Calendar", enabled: false },
 ];
 

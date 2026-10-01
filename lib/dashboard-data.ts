@@ -66,7 +66,8 @@ export function useDashboardData(
       const elapsed: Range = { from: range.from, to: effTo < range.from ? range.from : effTo };
       const prevRange = comparisonRange("prev", elapsed);
       const plans = await repo.listPlans(client.id);
-      const plan = plans.find((p) => p.isDefault) ?? plans[0];
+      const year = Number(range.to.slice(0, 4));
+      const plan = plans.find((p) => p.isDefault && p.year === year) ?? plans.find((p) => p.isDefault) ?? plans[0];
       const trendFrom = range.from;
       const [facts, lyFacts, prevFacts, customFacts, planRows] = await Promise.all([
         repo.getFacts(client.id, trendFrom, effTo),

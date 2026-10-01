@@ -3,6 +3,7 @@ import { defaultSettings, DEFAULT_MULTIPLIERS } from "../defaults";
 import { getBrowserClient } from "../supabase/client";
 import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 import { CHANNEL_KEYS } from "../types";
+import type { PlanChange, PlanMonth, PlanMonthInputs } from "../planning/types";
 import type { Repository } from "./types";
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -163,9 +164,130 @@ export class SupabaseRepository implements Repository {
     return (data?.[0]?.date as string) ?? addDays(todayLocal(), -1);
   }
 
+  private async userLabel(): Promise<string> {
+    const { data } = await this.db.auth.getUser();
+    return data.user?.email ?? "unknown";
+  }
+
+  private toPlan(p: Row): PlanVersion {
+    return {
+      id: p.id as string,
+      clientId: p.client_id as string,
+      name: p.name as string,
+      isDefault: Boolean(p.is_default),
+      year: n(p.year),
+      description: (p.description as string) ?? "",
+      seasonality: (p.seasonality as PlanVersion["seasonality"]) ?? null,
+      updatedAt: (p.updated_at as string) ?? null,
+      updatedBy: (p.updated_by as string) ?? null,
+    };
+  }
+
   async listPlans(clientId: string): Promise<PlanVersion[]> {
-    const { data } = await this.db.from("plan_versions").select("id,client_id,name,is_default").eq("client_id", clientId);
-    return ((data ?? []) as Row[]).map((p) => ({ id: p.id as string, clientId, name: p.name as string, isDefault: Boolean(p.is_default) }));
+    const { data } = await this.db.from("plan_versions").select("*").eq("client_id", clientId).order("year", { ascending: false }).order("created_at");
+    return ((data ?? []) as Row[]).map((p) => this.toPlan(p));
+  }
+
+  private async log(plan: PlanVersion, summary: string) {
+    await this.db.from("plan_changes").insert({ plan_id: plan.id, client_id: plan.clientId, by: await this.userLabel(), summary });
+  }
+
+  async createPlan(clientId: string, input: { name: string; year: number; description?: string }): Promise<PlanVersion> {
+    const existing = await this.listPlans(clientId);
+    const { data, error } = await this.db
+      .from("plan_versions")
+      .insert({
+        client_id: clientId,
+        name: input.name,
+        year: input.year,
+        description: input.description ?? "",
+        is_default: !existing.some((p) => p.year === input.year && p.isDefault),
+        updated_by: await this.userLabel(),
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const plan = this.toPlan(data as Row);
+    await this.log(plan, "Created plan");
+    return plan;
+  }
+
+  async updatePlan(plan: PlanVersion, changeNote?: string): Promise<void> {
+    const { error } = await this.db
+      .from("plan_versions")
+      .update({ name: plan.name, description: plan.description, seasonality: plan.seasonality, updated_at: new Date().toISOString(), updated_by: await this.userLabel() })
+      .eq("id", plan.id);
+    if (error) throw new Error(error.message);
+    if (changeNote) await this.log(plan, changeNote);
+  }
+
+  async deletePlan(plan: PlanVersion): Promise<void> {
+    const { error } = await this.db.from("plan_versions").delete().eq("id", plan.id);
+    if (error) throw new Error(error.message);
+  }
+
+  async setDefaultPlan(plan: PlanVersion): Promise<void> {
+    const off = await this.db.from("plan_versions").update({ is_default: false }).eq("client_id", plan.clientId).eq("year", plan.year);
+    if (off.error) throw new Error(off.error.message);
+    const on = await this.db.from("plan_versions").update({ is_default: true }).eq("id", plan.id);
+    if (on.error) throw new Error(on.error.message);
+    await this.log(plan, "Set as default plan");
+  }
+
+  async getPlanMonths(planId: string): Promise<PlanMonth[]> {
+    const { data, error } = await this.db.from("plan_months").select("*").eq("plan_id", planId).order("month");
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as Row[]).map((r) => ({
+      month: r.month as string,
+      inputs: (r.inputs as PlanMonthInputs | null) ?? null,
+      status: (r.status as PlanMonth["status"]) ?? "in_progress",
+      locked: Boolean(r.locked),
+    }));
+  }
+
+  async savePlanMonths(plan: PlanVersion, items: { month: PlanMonth; rows: PlanTargetDay[] }[], changeNote: string): Promise<void> {
+    for (const { month, rows } of items) {
+      const up = await this.db
+        .from("plan_months")
+        .upsert({ plan_id: plan.id, client_id: plan.clientId, month: month.month, inputs: month.inputs, status: month.status, locked: month.locked, updated_at: new Date().toISOString() });
+      if (up.error) throw new Error(up.error.message);
+      const first = month.month.slice(0, 8) + "01";
+      const last = new Date(Date.UTC(Number(first.slice(0, 4)), Number(first.slice(5, 7)), 0)).toISOString().slice(0, 10);
+      const del = await this.db.from("plan_targets").delete().eq("plan_id", plan.id).gte("date", first).lte("date", last);
+      if (del.error) throw new Error(del.error.message);
+      if (rows.length) {
+        const ins = await this.db.from("plan_targets").insert(
+          rows.map((r) => ({
+            plan_id: plan.id,
+            client_id: plan.clientId,
+            date: r.date,
+            order_revenue: r.orderRevenue,
+            new_revenue: r.newRevenue,
+            returning_revenue: r.returningRevenue,
+            orders: r.orders,
+            new_orders: r.newOrders,
+            spend: r.spend,
+            cm: r.cm,
+            spend_by_channel: r.spendByChannel,
+            gross_sales: r.grossSales ?? null,
+            discounts: r.discounts ?? null,
+            shipping: r.shipping ?? null,
+            refunds: r.refunds ?? null,
+            tax: r.tax ?? null,
+            cogs: r.cogs ?? null,
+            cost_of_delivery: r.costOfDelivery ?? null,
+          })),
+        );
+        if (ins.error) throw new Error(ins.error.message);
+      }
+    }
+    await this.db.from("plan_versions").update({ updated_at: new Date().toISOString(), updated_by: await this.userLabel() }).eq("id", plan.id);
+    await this.log(plan, changeNote);
+  }
+
+  async getPlanChanges(planId: string): Promise<PlanChange[]> {
+    const { data } = await this.db.from("plan_changes").select("at,by,summary").eq("plan_id", planId).order("at", { ascending: false }).limit(30);
+    return ((data ?? []) as Row[]).map((r) => ({ at: r.at as string, by: (r.by as string) ?? "", summary: r.summary as string }));
   }
 
   async getPlanTargets(clientId: string, planId: string, from: string, to: string): Promise<PlanTargetDay[]> {
@@ -188,6 +310,9 @@ export class SupabaseRepository implements Repository {
       ...(r.discounts != null ? { discounts: n(r.discounts) } : {}),
       ...(r.shipping != null ? { shipping: n(r.shipping) } : {}),
       ...(r.refunds != null ? { refunds: n(r.refunds) } : {}),
+      ...(r.tax != null ? { tax: n(r.tax) } : {}),
+      ...(r.cogs != null ? { cogs: n(r.cogs) } : {}),
+      ...(r.cost_of_delivery != null ? { costOfDelivery: n(r.cost_of_delivery) } : {}),
     }));
   }
 }

@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { CHANNEL_KEYS } from "../types";
 import { defaultExtra } from "../defaults";
+import type { PlanChange, PlanMonth } from "../planning/types";
 import type { Repository } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -410,13 +411,80 @@ export class SeedRepository implements Repository {
     return addDays(todayLocal(), -1);
   }
 
+  /* Plans live in memory only (seed mode is for trying the screens; a reload starts empty). */
+  private plans: PlanVersion[] = [];
+  private months = new Map<string, PlanMonth[]>();
+  private targets = new Map<string, PlanTargetDay[]>();
+  private changes = new Map<string, PlanChange[]>();
+
+  private log(planId: string, summary: string) {
+    this.changes.set(planId, [{ at: new Date().toISOString(), by: "demo user", summary }, ...(this.changes.get(planId) ?? [])]);
+  }
+
   async listPlans(clientId: string): Promise<PlanVersion[]> {
-    if (!ENABLE_SEED_PLANS) return [];
-    return [{ id: `${clientId}-2026-official`, clientId, name: "2026 Official Plan", isDefault: true }];
+    const own = this.plans.filter((p) => p.clientId === clientId);
+    if (own.length || !ENABLE_SEED_PLANS) return own;
+    return [{ id: `${clientId}-2026-official`, clientId, name: "2026 Official Plan", isDefault: true, year: 2026, description: "", seasonality: null, updatedAt: null, updatedBy: null }];
   }
 
   async getPlanTargets(clientId: string, planId: string, from: string, to: string): Promise<PlanTargetDay[]> {
+    // Plans created in the UI only have the rows saved for them; the built-in demo plan is generated.
+    if (this.plans.some((p) => p.id === planId)) return (this.targets.get(planId) ?? []).filter((r) => r.date >= from && r.date <= to);
     const p = profileOf(clientId);
     return eachDay(from, to).map((d) => buildPlanDay(p, planId, d));
+  }
+
+  async createPlan(clientId: string, input: { name: string; year: number; description?: string }): Promise<PlanVersion> {
+    const plan: PlanVersion = {
+      id: `plan-${Date.now()}-${this.plans.length}`,
+      clientId,
+      name: input.name,
+      year: input.year,
+      description: input.description ?? "",
+      isDefault: !this.plans.some((p) => p.clientId === clientId && p.year === input.year && p.isDefault),
+      seasonality: null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: "demo user",
+    };
+    this.plans.push(plan);
+    this.log(plan.id, "Created plan");
+    return plan;
+  }
+
+  async updatePlan(plan: PlanVersion, changeNote?: string): Promise<void> {
+    this.plans = this.plans.map((p) => (p.id === plan.id ? { ...plan, updatedAt: new Date().toISOString(), updatedBy: "demo user" } : p));
+    if (changeNote) this.log(plan.id, changeNote);
+  }
+
+  async deletePlan(plan: PlanVersion): Promise<void> {
+    this.plans = this.plans.filter((p) => p.id !== plan.id);
+    this.months.delete(plan.id);
+    this.targets.delete(plan.id);
+  }
+
+  async setDefaultPlan(plan: PlanVersion): Promise<void> {
+    this.plans = this.plans.map((p) => (p.clientId === plan.clientId && p.year === plan.year ? { ...p, isDefault: p.id === plan.id } : p));
+    this.log(plan.id, "Set as default plan");
+  }
+
+  async getPlanMonths(planId: string): Promise<PlanMonth[]> {
+    return this.months.get(planId) ?? [];
+  }
+
+  async savePlanMonths(plan: PlanVersion, items: { month: PlanMonth; rows: PlanTargetDay[] }[], changeNote: string): Promise<void> {
+    const months = new Map((this.months.get(plan.id) ?? []).map((m) => [m.month, m]));
+    let rows = this.targets.get(plan.id) ?? [];
+    for (const { month, rows: r } of items) {
+      months.set(month.month, month);
+      rows = rows.filter((x) => x.date.slice(0, 7) !== month.month.slice(0, 7)).concat(r);
+    }
+    this.months.set(plan.id, [...months.values()].sort((a, b) => (a.month < b.month ? -1 : 1)));
+    this.targets.set(plan.id, rows.sort((a, b) => (a.date < b.date ? -1 : 1)));
+    this.plans = this.plans.map((p) => (p.id === plan.id ? { ...p, updatedAt: new Date().toISOString(), updatedBy: "demo user" } : p));
+    this.log(plan.id, changeNote);
+  }
+
+  async getPlanChanges(planId: string): Promise<PlanChange[]> {
+    return this.changes.get(planId) ?? [];
   }
 }

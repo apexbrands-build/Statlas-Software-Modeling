@@ -179,6 +179,18 @@ export interface PlanVersion {
   clientId: string;
   name: string;
   isDefault: boolean;
+  year: number;
+  description: string;
+  /** Day-of-week pattern shared by every month of the plan; null until first saved. */
+  seasonality: PlanSeasonality | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+/** Day-of-week pattern: offsets in % vs the average day (index 0 = Sunday), and how much of it to apply. */
+export interface PlanSeasonality {
+  dow: number[];
+  effectPct: number;
 }
 
 /** One daily plan target row (mirrors `plan_targets`). */
@@ -199,6 +211,9 @@ export interface PlanTargetDay {
   discounts?: number;
   shipping?: number;
   refunds?: number;
+  tax?: number;
+  cogs?: number;
+  costOfDelivery?: number;
 }
 
 /** One campaign on one day (mirrors `ad_spend_daily`). */
