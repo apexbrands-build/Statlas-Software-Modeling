@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Empty, Loading, ReportFrame, selectClass } from "./ReportFrame";
 import { useApp } from "@/lib/app-context";
 import { endOfMonth, min, todayLocal } from "@/lib/dates";
@@ -28,14 +28,16 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 export function PnlReport() {
   const { client, settings } = useApp();
-  const [year, setYear] = useState<number | null>(null);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const [pickedYear, setYear] = useState<number | null>(null);
+  const year = pickedYear ?? (mounted ? Number(todayLocal().slice(0, 4)) : null);
   const [mode, setMode] = useState<NumberMode>("whole");
   const [revenueBy, setRevenueBy] = useState<RevenueBy>("simplified");
   const [loaded, setLoaded] = useState<{ key: string; facts: DailyFact[]; lastData: string } | null>(null);
-
-  useEffect(() => {
-    setYear((y) => y ?? Number(todayLocal().slice(0, 4)));
-  }, []);
 
   useEffect(() => {
     if (!client || year === null) return;

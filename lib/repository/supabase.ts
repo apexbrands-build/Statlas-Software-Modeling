@@ -1,7 +1,7 @@
 import { addDays, todayLocal } from "../dates";
 import { defaultSettings, DEFAULT_MULTIPLIERS } from "../defaults";
 import { getBrowserClient } from "../supabase/client";
-import type { ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
+import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 import { CHANNEL_KEYS } from "../types";
 import type { Repository } from "./types";
 
@@ -132,6 +132,30 @@ export class SupabaseRepository implements Repository {
         channels,
       };
     });
+  }
+
+  async getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]> {
+    const rows = await fetchAll<Row>((a, b) =>
+      this.db
+        .from("ad_spend_daily")
+        .select("date,platform,campaign_id,campaign_name,category,audience_type,spend,platform_revenue,platform_purchases")
+        .eq("client_id", clientId)
+        .gte("date", from)
+        .lte("date", to)
+        .order("date")
+        .range(a, b),
+    );
+    return rows.map((r) => ({
+      date: r.date as string,
+      platform: r.platform as string,
+      campaignId: r.campaign_id as string,
+      campaignName: (r.campaign_name as string) ?? (r.campaign_id as string),
+      category: r.category as CampaignDay["category"],
+      audience: r.audience_type as CampaignDay["audience"],
+      spend: n(r.spend),
+      platformRevenue: n(r.platform_revenue),
+      platformPurchases: n(r.platform_purchases),
+    }));
   }
 
   async getLastDataDate(clientId: string): Promise<string> {

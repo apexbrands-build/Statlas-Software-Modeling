@@ -201,4 +201,18 @@ export interface PlanTargetDay {
   refunds?: number;
 }
 
+/** One campaign on one day (mirrors `ad_spend_daily`). */
+export interface CampaignDay {
+  date: string;
+  /** meta | google_ads | pinterest | ... (as stored by the connectors) */
+  platform: string;
+  campaignId: string;
+  campaignName: string;
+  category: "acquisition" | "brand" | "retention" | "test";
+  audience: "new" | "returning" | "unknown";
+  spend: number;
+  platformRevenue: number;
+  platformPurchases: number;
+}
+
 export type Source = "Shopify" | "Platform-reported" | "Klaviyo" | "Derived" | "Settings";

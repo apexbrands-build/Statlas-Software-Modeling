@@ -1,6 +1,7 @@
 "use client";
 
 import { MetricGoalReport } from "./MetricGoalReport";
+import { PaidMediaReport } from "./PaidMediaReport";
 import { PnlReport } from "./PnlReport";
 import { WaitingForData } from "./WaitingForData";
 import { Empty } from "./ReportFrame";
@@ -16,6 +17,8 @@ export function ReportRouter({ slug }: { slug: string }) {
   switch (slug) {
     case "mer":
       return <MetricGoalReport slug="mer" specs={MER_SPECS} />;
+    case "ads":
+      return <PaidMediaReport />;
     case "pnl":
       return <PnlReport />;
     default:

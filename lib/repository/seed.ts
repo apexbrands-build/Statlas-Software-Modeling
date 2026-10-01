@@ -1,5 +1,6 @@
 import { addDays, dayOfWeek, diffDays, eachDay, todayLocal } from "../dates";
 import type {
+  CampaignDay,
   ChannelKey,
   Client,
   ClientSettings,
@@ -331,6 +332,20 @@ function defaultSettings(clientId: string): ClientSettings {
  */
 const ENABLE_SEED_PLANS = false;
 
+/** Fictional campaigns: each channel's daily spend is split across these by fixed weights. */
+const SEED_CAMPAIGNS: { id: string; name: string; platform: string; channel: ChannelKey; category: CampaignDay["category"]; audience: CampaignDay["audience"]; weight: number }[] = [
+  { id: "m1", name: "ACQ | Prospecting | Broad", platform: "meta", channel: "meta_acquisition", category: "acquisition", audience: "new", weight: 0.42 },
+  { id: "m2", name: "ACQ | Lookalike 1% | Best sellers", platform: "meta", channel: "meta_acquisition", category: "acquisition", audience: "new", weight: 0.3 },
+  { id: "m3", name: "ACQ | Video | Hero collection", platform: "meta", channel: "meta_acquisition", category: "acquisition", audience: "new", weight: 0.22 },
+  { id: "m4", name: "TEST | us11 | New creative", platform: "meta", channel: "meta_acquisition", category: "test", audience: "new", weight: 0.06 },
+  { id: "m5", name: "RET | Existing customers", platform: "meta", channel: "meta_returning", category: "retention", audience: "returning", weight: 1 },
+  { id: "g1", name: "Search | NB | Rings", platform: "google_ads", channel: "google_nonbrand", category: "acquisition", audience: "unknown", weight: 0.4 },
+  { id: "g2", name: "PMax | NB | All products", platform: "google_ads", channel: "google_nonbrand", category: "acquisition", audience: "unknown", weight: 0.45 },
+  { id: "g3", name: "Shopping | Non-Brand", platform: "google_ads", channel: "google_nonbrand", category: "acquisition", audience: "unknown", weight: 0.15 },
+  { id: "g4", name: "Search | Brand", platform: "google_ads", channel: "google_brand", category: "brand", audience: "unknown", weight: 1 },
+  { id: "p1", name: "Pinterest | Catalog", platform: "pinterest", channel: "pinterest", category: "acquisition", audience: "unknown", weight: 1 },
+];
+
 export class SeedRepository implements Repository {
   async listClients(): Promise<Client[]> {
     return PROFILES.map((p) => p.client);
@@ -365,6 +380,29 @@ export class SeedRepository implements Repository {
     const end = to < last ? to : last;
     if (from > end) return [];
     return eachDay(from, end).map((d) => factFor(clientId, d));
+  }
+
+  async getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]> {
+    const out: CampaignDay[] = [];
+    for (const f of await this.getFacts(clientId, from, to)) {
+      for (const def of SEED_CAMPAIGNS) {
+        const ch = f.channels[def.channel];
+        if (!ch || ch.spend <= 0) continue;
+        const w = def.weight * noise(`${clientId}|${f.date}|c-${def.id}`, 0.25);
+        out.push({
+          date: f.date,
+          platform: def.platform,
+          campaignId: def.id,
+          campaignName: def.name,
+          category: def.category,
+          audience: def.audience,
+          spend: ch.spend * w,
+          platformRevenue: ch.platformRevenue * w * noise(`${clientId}|${f.date}|r-${def.id}`, 0.3),
+          platformPurchases: ch.platformPurchases * w,
+        });
+      }
+    }
+    return out;
   }
 
   async getLastDataDate(_clientId?: string): Promise<string> {

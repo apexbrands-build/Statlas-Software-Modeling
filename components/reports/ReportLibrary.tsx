@@ -14,11 +14,14 @@ export function ReportLibrary() {
   const [favs, setFavs] = useState<string[]>([]);
 
   useEffect(() => {
-    try {
-      setFavs(JSON.parse(window.localStorage.getItem(FAV_KEY) ?? "[]"));
-    } catch {
-      /* storage unavailable */
-    }
+    // Read after mount (storage is not available while rendering on the server).
+    Promise.resolve().then(() => {
+      try {
+        setFavs(JSON.parse(window.localStorage.getItem(FAV_KEY) ?? "[]"));
+      } catch {
+        /* storage unavailable */
+      }
+    });
   }, []);
   const toggleFav = (slug: string) => {
     const next = favs.includes(slug) ? favs.filter((s) => s !== slug) : [...favs, slug];

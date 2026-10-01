@@ -1,4 +1,4 @@
-import type { Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
+import type { CampaignDay, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 
 /**
  * Data access boundary. The dashboard only talks to this interface.
@@ -10,6 +10,8 @@ export interface Repository {
   saveSettings(settings: ClientSettings): Promise<void>;
   resetSettings(clientId: string): Promise<ClientSettings>;
   getFacts(clientId: string, from: string, to: string): Promise<DailyFact[]>;
+  /** Campaign-level ad rows (Paid Media reports). */
+  getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]>;
   /** Last day with actual data (inclusive). */
   getLastDataDate(clientId: string): Promise<string>;
   listPlans(clientId: string): Promise<PlanVersion[]>;
