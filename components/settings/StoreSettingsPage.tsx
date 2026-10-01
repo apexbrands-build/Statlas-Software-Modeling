@@ -510,7 +510,7 @@ function GoogleConnect({ clientId, isAdmin, onChanged, onClose, setMsg }: { clie
 }
 
 const ENDPOINT: Record<string, string> = { shopify: "shopify", meta: "meta", google_ads: "google" };
-const CHUNK_DAYS: Record<string, number> = { shopify: 30, meta: 90, google_ads: 90 };
+const CHUNK_DAYS: Record<string, number> = { shopify: 14, meta: 60, google_ads: 60 };
 
 function chunksOf(from: string, to: string, size: number) {
   const out: { from: string; to: string }[] = [];
@@ -544,30 +544,52 @@ function HistoryLoader({ row }: { row: Integration }) {
 
   async function post(body: Record<string, unknown>) {
     const res = await fetch(`/api/sync/${ENDPOINT[row.provider]}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: row.id, ...body }) });
-    const json = await res.json();
+    // A timeout comes back as plain text, not JSON: read it safely.
+    const text = await res.text();
+    let json: { error?: string } = {};
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`Server stopped before finishing (${res.status}): ${text.slice(0, 60)}`);
+    }
     if (!res.ok) throw new Error(json.error ?? "Request failed");
     return json;
+  }
+
+  /** Runs one date range; if it fails (usually a timeout on a busy period), splits it in half and retries. */
+  async function runChunk(from: string, to: string, first: boolean, label: (s: string) => void): Promise<void> {
+    if (cancel.current) throw new Error("Stopped. What was loaded so far is saved.");
+    label(`${from} → ${to}`);
+    try {
+      await post({ from, to, first });
+    } catch (e) {
+      if (from >= to) throw e; // a single day still fails: report it
+      const days = Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86_400_000);
+      const mid = addDays(from, Math.floor(days / 2));
+      await runChunk(from, mid, first, label);
+      await runChunk(addDays(mid, 1), to, false, label);
+    }
   }
 
   async function start() {
     cancel.current = false;
     setRunning(true);
     setMsg(null);
-    const end = addDays(todayLocal(), -1);
-    const begin = addDays(end, -(months * 30));
-    const list = chunksOf(begin, end, CHUNK_DAYS[row.provider] ?? 90);
+    const yesterday = addDays(todayLocal(), -1);
+    const begin = addDays(yesterday, -(months * 30));
+    // Resume: days already loaded (coverage runs from its start date to yesterday) are skipped.
+    const end = row.coverage_start && row.coverage_start > begin && row.coverage_start <= yesterday ? addDays(row.coverage_start, -1) : yesterday;
+    const list = end >= begin ? chunksOf(begin, end, CHUNK_DAYS[row.provider] ?? 60) : [];
     try {
       for (let i = 0; i < list.length; i++) {
-        if (cancel.current) throw new Error("Stopped. What was loaded so far is saved.");
-        setProgress({ done: i, total: list.length, label: `${list[i].from} → ${list[i].to}` });
-        await post({ from: list[i].from, to: list[i].to, first: i === 0 });
+        await runChunk(list[i].from, list[i].to, i === 0, (label) => setProgress({ done: i, total: list.length, label }));
       }
       if (row.provider === "shopify") {
         setProgress({ done: list.length, total: list.length, label: "Classifying new vs returning customers…" });
-        await post({ action: "finalize", from: begin, to: end });
+        await post({ action: "finalize", from: begin, to: yesterday });
       }
       setProgress({ done: list.length, total: list.length, label: "Done" });
-      setMsg(`Loaded ${months} months (${begin} → ${end}). Open Home and compare with last year.`);
+      setMsg(`Loaded ${months} months (${begin} → ${yesterday}). Open Home and compare with last year.`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Load failed");
     }
