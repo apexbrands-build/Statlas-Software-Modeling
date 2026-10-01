@@ -227,6 +227,12 @@ export function StoreSettingsPage() {
       {typeof dialog === "object" && dialog && "connection" in dialog && (
         <ConnectionDialog
           row={dialog.connection}
+          clientId={client.id}
+          onDisconnected={async () => {
+            setDialog(null);
+            setMsg("Connection removed. Loaded data is kept.");
+            await load();
+          }}
           onClose={() => setDialog(null)}
           onSync={async () => {
             await syncAll(dialog.connection.provider === "meta" ? "meta" : dialog.connection.provider === "google_ads" ? "google_ads" : "shopify");
@@ -300,7 +306,8 @@ function AddConnectionDialog({ clientId, initialShop, isAdmin, onClose, onChange
   );
 }
 
-function ConnectionDialog({ row, onClose, onSync }: { row: Integration; onClose: () => void; onSync: () => Promise<void> }) {
+function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected }: { row: Integration; clientId: string; onClose: () => void; onSync: () => Promise<void>; onDisconnected: () => Promise<void> }) {
+  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const syncable = row.provider === "shopify" || row.provider === "meta" || row.provider === "google_ads";
@@ -341,7 +348,36 @@ function ConnectionDialog({ row, onClose, onSync }: { row: Integration; onClose:
         </button>
       )}
       {syncable && <HistoryLoader row={row} />}
-      <p className="text-xs text-text-faint">Connections are read-only. To disconnect, remove the app in the store or ad account.</p>
+      <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+        {row.provider === "shopify" && (
+          <a href={`/api/shopify/install?client=${clientId}&shop=${encodeURIComponent(row.account_id)}`} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text">
+            Reconnect
+          </a>
+        )}
+        {!confirming ? (
+          <button onClick={() => setConfirming(true)} className="rounded-lg border border-bad/50 px-4 py-2 text-sm text-bad hover:bg-bad/10">
+            Disconnect
+          </button>
+        ) : (
+          <span className="flex items-center gap-2 text-xs text-text-muted">
+            Remove this connection? Data already loaded stays.
+            <button
+              onClick={async () => {
+                const res = await fetch("/api/integrations/disconnect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: row.id }) });
+                if (res.ok) await onDisconnected();
+                else setErr((await res.json()).error ?? "Could not remove");
+              }}
+              className="rounded-lg bg-bad px-3 py-1.5 text-sm font-semibold text-black"
+            >
+              Yes, remove
+            </button>
+            <button onClick={() => setConfirming(false)} className="rounded-lg border border-border px-3 py-1.5 text-sm">
+              Cancel
+            </button>
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-text-faint">Connections are read-only. Disconnect removes it from this dashboard; to revoke access completely, also remove the app in the store or ad account.</p>
     </Modal>
   );
 }
@@ -543,7 +579,7 @@ function HistoryLoader({ row }: { row: Integration }) {
       <div className="text-sm font-semibold">Load history</div>
       {limited ? (
         <p className="text-xs text-yellow-300">
-          Shopify only allows the last 60 days for this app until the <code>read_all_orders</code> permission is approved and the store re-authorizes it. Meta and Google can load years today. See docs/connector-setup.md.
+          Shopify only allows the last 60 days until this store approves the <code>read_all_orders</code> permission. Release the new app version in Shopify, then open the app's install link (Dev Dashboard → Apex Data → Distribution) as a store admin and approve the updated permissions. Then reopen this window. Meta and Google can load years today.
         </p>
       ) : (
         <>
