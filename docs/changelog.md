@@ -3,7 +3,8 @@
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
 ## 2026-10-02: Statlas docs archive
-- Read docs.statlas.io (all pages except Compass) and saved paraphrased notes in `docs/statlas-docs/`, with `gap-analysis.md` listing differences and decisions for the user. Docs only, no code changes.
+- Read docs.statlas.io (all pages except Compass) and saved paraphrased notes in `docs/statlas-docs/`, with `gap-analysis.md` listing differences and decisions for the user. 
+- Follow-up: Meta click/view attribution windows now applied from Store Settings (default 7-day click, view disabled); `/onboarding` checklist page; refund timing verified. Open: free-order migration and Product by First Product (see `docs/statlas-docs/gap-analysis.md`).
 
 ## 2026-10-01: Planning layer (phases A and B)
 - `/planning` plans list and editor (monthly grid, spend and days, returning revenue, daily input, Plan P&L), plan settings with month lock/status and change log. Weekday pattern calculated from Shopify. Details: `docs/planning-layer.md`.

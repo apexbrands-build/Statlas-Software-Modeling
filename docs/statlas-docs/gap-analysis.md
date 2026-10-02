@@ -25,3 +25,10 @@ Nothing here is built yet; items marked **Decide** need the user's go-ahead (CLA
 
 ## Structure change made
 - New folder `docs/statlas-docs/` (this archive) and a pointer from `CLAUDE.md` and `docs/changelog.md`. No code changes.
+
+## Status after the follow-up (2026-10-02)
+- **Refund timing (4): verified, no change.** `order_refunds` is dated by the refund itself and `rebuild_daily_facts` rolls refunds up by that date, same as Statlas.
+- **Free orders (5): NOT done, needs the user.** Live functions `recompute_first_orders` and `rebuild_daily_facts` count zero-dollar orders and can make one the "first order". Only 3 of 30,039 orders for the live client are free, so impact is tiny. Fix = a migration (`0005`) that excludes `order_revenue <= 0` from the rollup and from first-order selection (still counting them in Shopify's lifetime-order check). Claude's attempt to write and apply it was blocked by the permission system, so it is left for the user to approve.
+- **Facebook attribution (7): built.** Settings > Facebook Settings now has working Click Window (1/7/28 day) and View Window (Disabled/1/7 day), saved per client (`extra.fbAttrClick`, `fbAttrView`, defaults 7 Day / Disabled so nothing changes today). The Meta sync reads them (`lib/sync/meta-windows.ts`). Re-run the Meta history load to restate older days. Click type and onsite exclusion are still "not applied".
+- **Onboarding checklist (15): built.** `/onboarding` (sidebar: Tools & Settings), content in `lib/onboarding-checklist.ts`; ticks saved per client in the browser only.
+- **Product by First Product (9): NOT built.** The `orders` table has no line items, so the report needs a new `order_lines` table, a Shopify sync change and a history reload. That is a schema change and was not started.

@@ -109,21 +109,21 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, onSav
         <p className="text-xs text-text-muted">Weekly reporting will start on {x.weekStartDay}s.</p>
       </Accordion>
 
-      <Accordion title="Facebook Settings" subtitle="Select revenue window" notApplied>
+      <Accordion title="Facebook Settings" subtitle="Select revenue window">
         <Check checked={x.fbUseIncrementalDefault} onChange={(v) => ex("fbUseIncrementalDefault", v)} label="Use Incremental by default" />
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Click Window">
-            <Select label="Click Window" value={x.fbClickWindow} options={["1 Day", "7 Day", "28 Day"]} onChange={(v) => ex("fbClickWindow", v)} />
+            <Select label="Click Window" value={x.fbAttrClick} options={["1 Day", "7 Day", "28 Day"]} onChange={(v) => ex("fbAttrClick", v)} />
           </Field>
           <Field label="View Window">
-            <Select label="View Window" value={x.fbViewWindow} options={["Disabled", "1 Day", "7 Day"]} onChange={(v) => ex("fbViewWindow", v)} />
+            <Select label="View Window" value={x.fbAttrView} options={["Disabled", "1 Day", "7 Day"]} onChange={(v) => ex("fbAttrView", v)} />
           </Field>
         </div>
         <Field label="Click Type">
           <Select label="Click Type" value={x.fbClickType} options={["Unique Outbound Clicks", "All Clicks", "Link Clicks"]} onChange={(v) => ex("fbClickType", v)} />
         </Field>
         <Check checked={x.fbExcludeOnsite} onChange={(v) => ex("fbExcludeOnsite", v)} label="Exclude FB Onsite Conversions" hint="Onsite conversions should be excluded if you don't have an Onsite/SHOP channel" />
-        <p className="text-xs text-text-faint">Dashboards take up to a day to rerun when definition changes are made. The app currently uses 7-day click only.</p>
+        <p className="text-xs text-text-faint">Click and view windows apply to Meta purchases from the next Meta sync (re-run the history load to restate older days). Agency standard is 7 Day click, view Disabled. Click type and onsite exclusion are not applied yet.</p>
       </Accordion>
 
       <Accordion title="Google Settings" subtitle="Revenue Timing" notApplied>

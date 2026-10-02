@@ -6,7 +6,7 @@ const VERSION = process.env.META_API_VERSION ?? "v23.0";
 interface Action {
   action_type: string;
   value: string;
-  "7d_click"?: string;
+  [window: string]: string | undefined;
 }
 interface InsightRow {
   campaign_id: string;
@@ -47,11 +47,14 @@ export async function fetchAdAccount(id: string) {
 // Prefer the aggregated purchase event so orders are not double counted.
 const PURCHASE_TYPES = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase"];
 
-function pickPurchase(list: Action[] | undefined): number {
+function pickPurchase(list: Action[] | undefined, windows: string[]): number {
   if (!list) return 0;
   for (const t of PURCHASE_TYPES) {
     const a = list.find((x) => x.action_type === t);
-    if (a) return Number(a["7d_click"] ?? a.value ?? 0);
+    if (!a) continue;
+    // Sum the requested windows; fall back to the plain value when Meta does not break it down.
+    const parts = windows.map((w) => a[w]).filter((x) => x !== undefined);
+    return parts.length ? parts.reduce<number>((s, x) => s + Number(x), 0) : Number(a.value);
   }
   return 0;
 }
@@ -68,18 +71,18 @@ export interface CampaignDay {
 }
 
 /**
- * Campaign-level daily insights, 7-day click attribution.
+ * Campaign-level daily insights; windows come from the store settings (default 7-day click).
  * breakdown "user_segment_key" splits Advantage+ Shopping campaigns into new / existing / engaged customers,
  * using the existing-customer definition saved in the ad account's audience settings.
  */
-export async function fetchCampaignDays(adAccountId: string, since: string, until: string, breakdown?: string): Promise<CampaignDay[]> {
+export async function fetchCampaignDays(adAccountId: string, since: string, until: string, breakdown?: string, windows: string[] = ["7d_click"]): Promise<CampaignDay[]> {
   const out: CampaignDay[] = [];
   let page = await graph<{ data: InsightRow[]; paging?: { next?: string } }>(`${adAccountId}/insights`, {
     level: "campaign",
     time_increment: "1",
     time_range: JSON.stringify({ since, until }),
     fields: "campaign_id,campaign_name,spend,actions,action_values",
-    action_attribution_windows: JSON.stringify(["7d_click"]),
+    action_attribution_windows: JSON.stringify(windows),
     limit: "500",
     ...(breakdown ? { breakdowns: breakdown } : {}),
   });
@@ -91,8 +94,8 @@ export async function fetchCampaignDays(adAccountId: string, since: string, unti
         campaignId: r.campaign_id,
         campaignName: r.campaign_name,
         spend: Number(r.spend ?? 0),
-        purchases: pickPurchase(r.actions),
-        revenue: pickPurchase(r.action_values),
+        purchases: pickPurchase(r.actions, windows),
+        revenue: pickPurchase(r.action_values, windows),
       });
     }
     if (!page.paging?.next) break;

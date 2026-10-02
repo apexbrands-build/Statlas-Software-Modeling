@@ -114,6 +114,9 @@ export interface ExtraSettings {
   weekStartDay: string;
   showIncrementalByDefault: boolean; // applied later
   fbClickWindow: string;
+  /** Applied to the Meta sync: click window ("1 Day" | "7 Day" | "28 Day") and view window ("Disabled" | "1 Day" | "7 Day"). Separate from the old fbClickWindow/fbViewWindow keys, which held an unused placeholder default. */
+  fbAttrClick: string;
+  fbAttrView: string;
   fbViewWindow: string;
   fbClickType: string;
   fbExcludeOnsite: boolean;

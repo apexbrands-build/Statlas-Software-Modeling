@@ -305,3 +305,12 @@ describe("trend chart granularity", () => {
     expect(chartGranularity({ from: "2026-01-01", to: "2026-09-30" })).toBe("month");
   });
 });
+
+import { metaWindows } from "./sync/meta-windows";
+describe("metaWindows", () => {
+  it("maps store settings to Meta windows", () => {
+    expect(metaWindows("7 Day", "Disabled")).toEqual(["7d_click"]);
+    expect(metaWindows("1 Day", "1 Day")).toEqual(["1d_click", "1d_view"]);
+    expect(metaWindows(undefined, undefined)).toEqual(["7d_click"]);
+  });
+});

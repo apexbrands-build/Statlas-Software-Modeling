@@ -15,6 +15,8 @@ export function defaultExtra(): ExtraSettings {
     weekStartDay: "Monday",
     showIncrementalByDefault: true,
     fbClickWindow: "1 Day",
+    fbAttrClick: "7 Day",
+    fbAttrView: "Disabled",
     fbViewWindow: "Disabled",
     fbClickType: "Unique Outbound Clicks",
     fbExcludeOnsite: false,

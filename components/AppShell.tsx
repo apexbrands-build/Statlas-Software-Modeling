@@ -48,6 +48,7 @@ const NAV_GROUPS: { title: string; items: { href: string; label: string; icon: I
     items: [
       { href: "#", label: "MMM", icon: "trend", enabled: false },
       { href: "/settings", label: "Store Settings", icon: "gear", enabled: true },
+      { href: "/onboarding", label: "Onboarding", icon: "folder", enabled: true },
     ],
   },
 ];

@@ -1,6 +1,7 @@
 import "server-only";
 import { getAdminClient } from "@/lib/supabase/server";
 import { fetchCampaignDays, isExistingSegment } from "./meta";
+import { metaWindows } from "./meta-windows";
 import { splitCampaignDays } from "./meta-split";
 import { resolveRange } from "./range";
 
@@ -14,15 +15,18 @@ export async function syncMeta(integrationId: string, body: { from?: string; to?
   const { data: run } = await admin.from("sync_runs").insert({ client_id: integration.client_id, integration_id: integrationId, provider: "meta" }).select("id").single();
   try {
     const { from: since, to: until } = resolveRange(body, 30);
+    const { data: st } = await admin.from("client_settings").select("extra").eq("client_id", integration.client_id).maybeSingle();
+    const extra = (st?.extra ?? {}) as { fbAttrClick?: string; fbAttrView?: string };
+    const windows = metaWindows(extra.fbAttrClick, extra.fbAttrView);
     // 1) Total spend per campaign and day (source of truth for spend).
-    const campaignDays = await fetchCampaignDays(integration.account_id, since, until);
+    const campaignDays = await fetchCampaignDays(integration.account_id, since, until, undefined, windows);
 
     // 2) Existing-customer spend: Advantage+ Shopping breakdown by audience segment.
     let note: string | undefined;
     let diagnostics = "";
     const existing = new Map<string, { spend: number; purchases: number; revenue: number }>();
     try {
-      const segmented = await fetchCampaignDays(integration.account_id, since, until, "user_segment_key");
+      const segmented = await fetchCampaignDays(integration.account_id, since, until, "user_segment_key", windows);
       // Diagnostics: which segments did Meta return, and how much spend is in each?
       const bySegment = new Map<string, number>();
       for (const r of segmented) bySegment.set(r.segment ?? "(none)", (bySegment.get(r.segment ?? "(none)") ?? 0) + r.spend);
