@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { dayOfWeek } from "@/lib/dates";
+import { addDays, addYears, dayOfWeek, endOfMonth } from "@/lib/dates";
+import { eventDays, TYPE_LABEL } from "@/lib/planning/events";
 import { formatValue } from "@/lib/format";
 import { rebalance } from "@/lib/planning/alloc";
 import { PLAN_PLATFORMS, type DayOverride } from "@/lib/planning/types";
-import { aggregatePlan } from "@/lib/metrics";
+import { aggregate, aggregatePlan, totalSpend } from "@/lib/metrics";
+import { Legend, LineChart } from "./models/charts";
 import type { PlanCtx } from "./ctx";
 import { FillMenu } from "./FillMenu";
 import { btn, inputClass, MONTHS, NumField, WEEKDAYS } from "./ui";
@@ -14,7 +16,7 @@ const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
 
 /** Step 2: one month in detail: platform split, brand / non-acquisition share, weekday pattern and the daily table. */
 export function SpendStep({ ctx }: { ctx: PlanCtx }) {
-  const { months, client, rows, seasonality, setSeasonality, editInputs, fill, history, historySeasonality } = ctx;
+  const { months, client, rows, seasonality, setSeasonality, editInputs, fill, history, historySeasonality, events, eventMults } = ctx;
   const firstWithInputs = months.find((m) => m.inputs) ?? months[0];
   const [month, setMonth] = useState(firstWithInputs.month);
   const [msg, setMsg] = useState<string | null>(null);
@@ -24,6 +26,14 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
   const dayRows = rows[m.month] ?? [];
   const totals = aggregatePlan(dayRows);
   const keys = PLAN_PLATFORMS.map((p) => p.key);
+
+  // Last year, day by day (364 days earlier keeps the weekday) and for the month.
+  const factByDate = new Map(history.facts.map((f) => [f.date, f]));
+  const lyDay = (date: string) => factByDate.get(addDays(date, -364));
+  const lyMonth = aggregate(history.facts.filter((f) => f.date >= addYears(m.month, -1) && f.date <= endOfMonth(addYears(m.month, -1))));
+  const lyHas = lyMonth.days > 0;
+  const eventsOn = (date: string) => events.filter((e) => eventDays(e).includes(date));
+  const varPct = (cur: number, ly: number) => (ly > 0 ? `${cur >= ly ? "+" : ""}${(((cur - ly) / ly) * 100).toFixed(0)}% vs LY` : null);
   const pctSum = inputs ? keys.reduce((a, k) => a + (inputs.platformPct[k] ?? 0), 0) : 0;
 
   const setOverride = (date: string, patch: Partial<DayOverride> | null) =>
@@ -45,7 +55,7 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
             </option>
           ))}
         </select>
-        {m.locked && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">🔒 Locked: unlock it in the Monthly plan to edit</span>}
+        {m.locked && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">🔒 Locked: unlock it in the Overview tab to edit</span>}
         {inputs && (
           <>
             <label className="flex items-center gap-1 text-sm text-text-muted">
@@ -56,18 +66,20 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
               aMER
               <NumField value={inputs.amer} decimals={2} disabled={m.locked} className="w-16" onCommit={(v) => editInputs(m.month, (i) => ({ ...i, amer: Math.max(0, v) }))} />
             </label>
-            <dl className="ml-auto flex gap-4 text-sm">
+            <dl className="ml-auto flex flex-wrap gap-4 text-sm">
               {(
                 [
-                  ["New revenue", totals.newRevenue],
-                  ["Returning", totals.returningRevenue],
-                  ["Revenue", totals.orderRevenue],
-                  ["CM", totals.cm],
+                  ["Spend", totals.spend, totalSpend(lyMonth)],
+                  ["New revenue", totals.newRevenue, lyMonth.newOrderRevenue],
+                  ["Returning", totals.returningRevenue, lyMonth.returningOrderRevenue],
+                  ["Revenue", totals.orderRevenue, lyMonth.newOrderRevenue + lyMonth.returningOrderRevenue],
+                  ["CM", totals.cm, null],
                 ] as const
-              ).map(([l, v]) => (
+              ).map(([l, v, ly]) => (
                 <div key={l} className="border-l-2 border-accent pl-2">
                   <dt className="text-[11px] text-text-muted">{l}</dt>
                   <dd className="tabular font-medium">{money(v)}</dd>
+                  {lyHas && ly != null && <dd className="text-[10px] text-text-faint">{varPct(v, ly)}</dd>}
                 </div>
               ))}
             </dl>
@@ -165,14 +177,40 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
             </section>
           </div>
 
+          {lyHas && (
+            <section className="grid gap-4 lg:grid-cols-2">
+              {(
+                [
+                  ["Daily spend: plan vs last year", (r: (typeof dayRows)[number]) => r.spend, (f: ReturnType<typeof lyDay>) => (f ? totalSpend(aggregate([f])) : null)],
+                  ["Daily order revenue: plan vs last year", (r: (typeof dayRows)[number]) => r.orderRevenue, (f: ReturnType<typeof lyDay>) => (f ? f.newOrderRevenue + f.returningOrderRevenue : null)],
+                ] as const
+              ).map(([title, cur, ly]) => (
+                <div key={title} className="space-y-1 rounded-xl border border-border bg-surface p-4">
+                  <h3 className="text-sm font-semibold">{title}</h3>
+                  <LineChart
+                    labels={dayRows.map((r, i) => (i % 5 === 0 ? String(Number(r.date.slice(8))) : ""))}
+                    yFmt={(v) => formatValue(v, "currency0", client.currency)}
+                    height={200}
+                    series={[
+                      { label: "Plan", color: "#38bdf8", values: dayRows.map((r) => cur(r)) },
+                      { label: "Last year", color: "#facc15", values: dayRows.map((r) => ly(lyDay(r.date))) },
+                    ]}
+                  />
+                  <Legend items={[{ label: "Plan", color: "#38bdf8" }, { label: "Last year (same weekday)", color: "#facc15" }]} />
+                </div>
+              ))}
+            </section>
+          )}
+
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Daily plan for {MONTHS[Number(m.month.slice(5, 7)) - 1]}</h3>
-            <p className="text-xs text-text-muted">Type over any daily value to fix that day (🔒). The rest of the month absorbs the difference so the month total stays the same. aMER stays constant on the other days.</p>
+            <p className="text-xs text-text-muted">Type over any daily value to fix that day (🔒). The rest of the month absorbs the difference so the month total stays the same. Days with marketing events (Calendar tab) run hotter and the other days are compressed; the lifts come from the Event Effect Model.</p>
             <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-              <table className="w-full min-w-[820px] border-collapse text-sm">
+              <table className="w-full min-w-[980px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border text-xs text-text-muted">
                     <th className="px-3 py-2 text-left">Day</th>
+                    <th className="px-2 py-2 text-left">Events</th>
                     <th className="px-2 py-2 text-right">Spend</th>
                     <th className="px-2 py-2 text-right">aMER</th>
                     <th className="px-2 py-2 text-right">New revenue</th>
@@ -183,6 +221,7 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
                   </tr>
                   <tr className="border-b border-border bg-surface-raised text-xs font-semibold">
                     <td className="px-3 py-1">Month total</td>
+                    <td />
                     <td className="px-2 py-1 text-right tabular">{money(totals.spend)}</td>
                     <td className="px-2 py-1 text-right tabular">{totals.spend ? money(totals.newRevenue / totals.spend, "ratio2") : "–"}</td>
                     <td className="px-2 py-1 text-right tabular">{money(totals.newRevenue)}</td>
@@ -199,6 +238,14 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
                       <tr key={r.date} className="border-b border-border/40">
                         <td className="px-3 py-1 text-text-muted">
                           {Number(r.date.slice(8))} <span className="text-xs text-text-faint">{WEEKDAYS[dayOfWeek(r.date)].toLowerCase()}</span>
+                        </td>
+                        <td className="px-2 py-1 text-left text-xs">
+                          {eventsOn(r.date).map((e) => (
+                            <span key={e.id} className="mr-1 inline-block rounded-full bg-accent/15 px-2 py-0.5" title={TYPE_LABEL[e.type]}>
+                              {e.name || TYPE_LABEL[e.type]}
+                            </span>
+                          ))}
+                          {eventMults[r.date] && <span className="text-[10px] text-text-faint">spend ×{eventMults[r.date].spend.toFixed(2)}</span>}
                         </td>
                         <td className="px-2 py-1 text-right">
                           <NumField value={r.spend} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { spend: Math.max(0, v) })} />

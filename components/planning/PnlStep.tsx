@@ -7,7 +7,7 @@ import { buildPnl, REVENUE_BY_LABELS, type RevenueBy } from "@/lib/reports/pnl";
 import type { PlanCtx } from "./ctx";
 import { inputClass } from "./ui";
 
-/** Step 5: the plan as a P&L (from the draft, before saving). Fixed costs only show up here, below CM. */
+/** The plan as a P&L (from the draft, before saving). Fixed costs only show up here, below CM. */
 export function PnlStep({ ctx }: { ctx: PlanCtx }) {
   const { months, rows, settings, client, plan } = ctx;
   const [mode, setMode] = useState<NumberMode>("whole");
@@ -21,7 +21,7 @@ export function PnlStep({ ctx }: { ctx: PlanCtx }) {
     return { sections, opRev, status: cols.status, any: cols.columns[12] !== null };
   }, [months, rows, settings, plan.year, by]);
 
-  if (!view.any) return <div className="rounded-xl border border-border bg-surface p-6 text-sm text-text-muted">Start at least one month in the Monthly plan to see the plan P&amp;L.</div>;
+  if (!view.any) return <div className="rounded-xl border border-border bg-surface p-6 text-sm text-text-muted">Start at least one month in the Overview tab (or with Create forecast in the Models) to see the plan P&amp;L.</div>;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3 text-sm">

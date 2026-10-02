@@ -20,7 +20,8 @@ Daily generation per month:
 ## Filling a month
 "From last year" (same month, optional growth % on spend and returning), "From last 3 months", "From actuals", "Blank". Copies spend split, aMER, rates, AOVs and fixed costs from real data (`inputsFromFacts`). "Actualize elapsed months" fills every elapsed month from actuals. Locked months are never changed.
 
-## Editor steps
+## Editor steps (restructured 2026-10-02 to the Statlas order)
+Tabs: **Overview** (monthly grid, fills, locks) - **Models** (Info with icons, New Customer, Returning, Event) - **Calendar** - **Spend** - **Details** - **Input** - **P&L**. The text below describes the original four steps; Spend now also has last-year comparison, charts and event chips, Details is a dropdown of lines (below), Input shows events and all P&L lines with CSV download.
 1 Monthly plan (year grid) - 2 Spend & days (month detail, platform sliders with locks, weekday pattern, daily table with fixed days) - 3 Returning revenue (per month vs last year; this is the override column until the cohort model exists) - 4 Daily input (final rows, CSV) - 5 Plan P&L (draft). Nothing changes until **Save plan**. Plan settings (gear on the card): name, description, make default, lock and status (in progress / final) per month, change log, delete.
 
 ## Plan P&L and Forecast
@@ -42,3 +43,16 @@ Editor tab **Models** (first tab): Info cards, New Customer Model, Returning Cus
 - E: per-campaign daily targets and iROAS for the Facebook/Google trackers.
 - Later: event-effect model, marketing calendar from Klaviyo/SMS, MMM, email/SMS/organic lines.
 - Known gaps: saving writes month inputs and daily rows in separate calls (not one transaction); live-Supabase save is untested because it needs a login (RLS policies are in place); plan decimals show without thousands separators in the input boxes.
+
+## Calendar and Event Effect Model (built 2026-10-02)
+Code: `lib/planning/events.ts` (types, Statlas event-type list, measurement, category stats, lifts, CSV parser, spike suggestions), `components/planning/CalendarStep.tsx`, `components/planning/models/EventModel.tsx`, `generateMonth(events)` in `generate.ts`. Migration `0008_marketing_calendar` (**written, NOT applied**): adds promo/product/audience/segment_size/notes to `marketing_events` and insert/update/delete policies. Event model settings are stored per plan in `plan_models` kind `event` (needs 0007).
+- **Calendar tab:** month list by day, events as chips (colour by group), last year's events (364 days earlier, same weekday) greyed, add/edit/delete inline, **Import CSV** (template, header matching, DD/MM/YYYY or ISO), **Suggest events from data** (unlabelled revenue spikes >=1.4x ordinary level over 2 years, merged into runs). Initiative type is logged only.
+- **Measuring:** each past event day vs the median of ordinary same-period days (+-28 days, event days and BFCM excluded, weekday-adjusted): spend lift, new revenue lift, returning lift, aMER lift. Category table per type: events, days, median, 90% range (5th-95th percentile), aMER impact, "few events" flag (<3).
+- **Future events:** strength Conservative / Typical / Strong = lower quartile / median / upper quartile of the type's own days, pulled toward all-events when few days (`(n*own + 5*all)/(n+5)`); a type with no history gets half the all-events effect. Per-event override of the lifts, "compare" panel with the last 5 same-type events (tick, use average), turn event off. Overlap: the strongest offer/launch/holiday/BFCM wins; email/SMS/PR only count alone.
+- **Applying:** event days get spend weight x spend lift and returning weight x returning lift; new revenue uses aMER x aMER lift re-centred on the spend-weighted month average, so **month totals stay what the models and strategist set**; other days are compressed. Master switch "Apply events to the plan days". Saving events marks every planned month for Save plan.
+
+## Details lines (built 2026-10-02)
+Dropdown: Returning revenue (model + override table), Discounts, Shipping, Taxes, Returns, COGS, Variable costs, New and Returning AOV, SG&A. Each rate line: Plan (editable), Inferred, Last year, vs LY, Actual, "use". Tools: **Actualize all YTD**; **Extrapolate based on** same month last year (default), last 3 months or a date range, with a % change, applied to unlocked months. Not planned yet: email, SMS, organic revenue; SG&A cost centers; separate new/returning returns; ROAS.
+
+## Still open
+Backtest for the New/Returning models; scenarios (baseline vs aspirational plan versions), see `docs/scenarios-and-diagnostic.md`; marketing events from Klaviyo/SMS; apply migrations 0005-0008 in Supabase (SQL editor).
