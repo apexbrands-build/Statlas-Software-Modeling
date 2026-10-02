@@ -29,8 +29,15 @@ export interface NewCustomerMonth {
   minCm365: number;
 }
 
+export type BeyondHistory = "off" | "mild" | "standard" | "strict";
+export const BEYOND_LABELS: Record<BeyondHistory, string> = { off: "Off (follow the fitted line)", mild: "Mild", standard: "Standard", strict: "Strict" };
+/** Exponent of the fade: marginal return beyond the observed spend x0 is the marginal at x0 times (x0/x)^gamma. */
+export const BEYOND_GAMMA: Record<BeyondHistory, number | null> = { off: null, mild: 0.5, standard: 1, strict: 2 };
+
 export interface NewCustomerSettings {
   fitKind: CurveKind | "auto";
+  /** How fast returns fade beyond the spend the client has ever run (guardrail). Missing = "standard". */
+  beyondHistory?: BeyondHistory;
   /** Actualize: days from this date count `recentWeight` times as much. Null = full history, equal weight. */
   actualizeFrom: string | null;
   recentWeight: number;

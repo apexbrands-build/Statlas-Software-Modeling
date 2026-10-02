@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "../dates";
-import { buildSpendTable, curveAmer, evaluateSpend, fitNewCustomerModel, niceStep, optimalSpend, type Curve, type DayPoint, type ModelSettings } from "./new-customer";
+import { buildSpendTable, curveAmer, curveMarginal, evaluateSpend, fitNewCustomerModel, niceStep, optimalSpend, type Curve, type DayPoint, type ModelSettings } from "./new-customer";
 
 const settings: ModelSettings = {
   newCostPct: 26,
@@ -133,5 +133,33 @@ describe("Max markers stay inside the spend range the history supports", () => {
     const capped = buildSpendTable(curve, s, 30, 300000, 10000, 1, 40000);
     expect(optimalSpend(capped, "cm")).toBe(40000);
     expect(optimalSpend(capped, "revenue")).toBe(40000);
+  });
+});
+
+describe("guardrail beyond the observed spend", () => {
+  const base: Curve = { kind: "revenue", a: 3000, b: 2.2, r2: 1 };
+  const guarded = (gamma: number): Curve => ({ ...base, guard: { s0: 1000, gamma } });
+
+  it("changes nothing inside the observed range and is continuous at its edge", () => {
+    expect(curveAmer(guarded(1), 800)).toBeCloseTo(curveAmer(base, 800), 9);
+    expect(curveAmer(guarded(1), 1000)).toBeCloseTo(curveAmer(base, 1000), 9);
+    expect(curveAmer(guarded(1), 1000.001)).toBeCloseTo(curveAmer(base, 1000), 2);
+  });
+
+  it("fades returns the further spend goes past history (50x spend is far below the unguarded line)", () => {
+    const x = 50_000;
+    expect(curveAmer(base, x)).toBeCloseTo(2.26, 1); // the bug: still profitable at 50x
+    expect(curveAmer(guarded(1), x)).toBeLessThan(0.6);
+    expect(curveAmer(guarded(2), x)).toBeLessThan(curveAmer(guarded(1), x));
+    expect(curveAmer(guarded(0.5), x)).toBeGreaterThan(curveAmer(guarded(1), x));
+    expect(curveMarginal(guarded(1), x)).toBeCloseTo(2.2 / 50, 6);
+  });
+
+  it("gives Max CM an interior optimum a little beyond history instead of the table's edge", () => {
+    const s: ModelSettings = { ...settings, newCostPct: 37 };
+    const t = buildSpendTable(guarded(1), s, 1, 20_000, 100);
+    const best = optimalSpend(t, "cm")!;
+    expect(best).toBeGreaterThan(1000);
+    expect(best).toBeLessThan(2000); // marginal return 2.2·(1000/x) × 0.63 = 1 at x ≈ 1,390
   });
 });

@@ -29,6 +29,12 @@ export interface Curve {
   a: number;
   /** revenue: slope (marginal revenue per $) / linear: slope / power: exponent. */
   b: number;
+  /**
+   * Guardrail beyond the spend the history has seen (daily spend `s0`, the 95th-percentile day). The fitted line is only trusted up to
+   * s0; past it the marginal revenue per extra $ is the marginal at s0 times (s0/x)^gamma, so returns fade the further spend goes
+   * beyond anything the client has run (gamma 1 = revenue grows like a logarithm). Null/absent = follow the fitted line forever.
+   */
+  guard?: { s0: number; gamma: number } | null;
   /** R² measured on revenue for the revenue line, on aMER for the other shapes (not on the log). */
   r2: number;
 }
@@ -127,22 +133,39 @@ export function ols(xs: number[], ys: number[], ws?: number[]): { a: number; b: 
   return { a: my - b * mx, b };
 }
 
-export function curveAmer(c: Curve, dailySpend: number): number {
+function baseAmer(c: Curve, dailySpend: number): number {
   if (dailySpend <= 0) return 0;
   if (c.kind === "revenue") return Math.max(0, c.b + c.a / dailySpend);
   if (c.kind === "linear") return Math.max(0, c.a + c.b * dailySpend);
   return c.a * dailySpend ** c.b;
 }
 
-/** Marginal new revenue per extra unit of spend at this daily spend (d(spend·aMER)/d(spend)). */
-export function curveMarginal(c: Curve, dailySpend: number): number {
+/** Marginal new revenue per extra unit of spend at this daily spend (d(spend·aMER)/d(spend)) on the fitted shape alone. */
+function baseMarginal(c: Curve, dailySpend: number): number {
   if (dailySpend <= 0) return 0;
   if (c.kind === "revenue") return Math.max(0, c.b);
   if (c.kind === "linear") return Math.max(0, c.a + 2 * c.b * dailySpend);
   return c.a * (1 + c.b) * dailySpend ** c.b;
 }
 
-/** R² on aMER, or on revenue (spend × aMER) when `onRevenue` (Jack's measure; also used to compare shapes fairly). */
+export function curveAmer(c: Curve, dailySpend: number): number {
+  if (dailySpend <= 0) return 0;
+  const g = c.guard;
+  if (!g || dailySpend <= g.s0) return baseAmer(c, dailySpend);
+  const r0 = g.s0 * baseAmer(c, g.s0);
+  const m0 = baseMarginal(c, g.s0);
+  const extra = Math.abs(g.gamma - 1) < 1e-9 ? g.s0 * Math.log(dailySpend / g.s0) : (g.s0 ** g.gamma * (dailySpend ** (1 - g.gamma) - g.s0 ** (1 - g.gamma))) / (1 - g.gamma);
+  return (r0 + m0 * extra) / dailySpend;
+}
+
+/** Marginal new revenue per extra unit of spend at this daily spend. */
+export function curveMarginal(c: Curve, dailySpend: number): number {
+  if (dailySpend <= 0) return 0;
+  const g = c.guard;
+  if (!g || dailySpend <= g.s0) return baseMarginal(c, dailySpend);
+  return baseMarginal(c, g.s0) * (g.s0 / dailySpend) ** g.gamma;
+}
+
 function r2Of(c: Curve, pts: { spend: number; adjAmer: number }[], onRevenue = false): number {
   const f = (p: { spend: number }, v: number) => (onRevenue ? v * p.spend : v);
   const my = mean(pts.map((p) => f(p, p.adjAmer)));
@@ -184,6 +207,8 @@ function fitKind(kind: CurveKind, pts: { spend: number; adjAmer: number; w: numb
  */
 export interface FitOptions {
   kind?: CurveKind | "auto";
+  /** Exponent of the guardrail beyond the observed spend (see Curve.guard): 1 = standard, 0.5 = mild, 2 = strict, null = off. Default 1. */
+  guard?: number | null;
   /** "bucket" = Jack's spend-bucket ±1σ filter (default); "iqr" = global 1.5×IQR fences on aMER and spend. */
   outliers?: "bucket" | "iqr";
   recent?: { from: string; weight: number } | null;
@@ -245,7 +270,11 @@ export function fitNewCustomerModel(points: DayPoint[], dowOffsets: number[], op
 
   const ratios = used.map((p) => p.adjAmer / Math.max(curveAmer(chosen, p.spend), 1e-9)).sort((x, y) => x - y);
   const recommendedOverPct = Math.max(0, (quantile(ratios, 0.9) - 1) * 100);
-  return { curve: chosen, alternatives, used, dropped, maxObservedSpend: Math.max(...used.map((p) => p.spend)), recommendedOverPct: Math.round(recommendedOverPct * 10) / 10 };
+  const sortedSpend = used.map((p) => p.spend).sort((x, y) => x - y);
+  const s0 = quantile(sortedSpend, 0.95);
+  const gamma = opts.guard === undefined ? 1 : opts.guard;
+  const guarded: Curve = gamma === null || s0 <= 0 ? chosen : { ...chosen, guard: { s0, gamma } };
+  return { curve: guarded, alternatives, used, dropped, maxObservedSpend: Math.max(...used.map((p) => p.spend)), recommendedOverPct: Math.round(recommendedOverPct * 10) / 10 };
 }
 
 /* ------------------------------------------------------------------ */

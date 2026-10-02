@@ -22,7 +22,7 @@ function jackPoints(): DayPoint[] {
 const settings: ModelSettings = { newCostPct: 20, returningCostPct: 20, aov: 1, ltv60Multiplier: 1.3, ltv365Multiplier: 2, overModelPct: 0, minCm: 0, minCm60: 0, minCm365: 0 };
 
 describe("aMER_ModelV2 (C code) vs our New Customer model", () => {
-  const fit = fitNewCustomerModel(jackPoints(), [0, 0, 0, 0, 0, 0, 0])!;
+  const fit = fitNewCustomerModel(jackPoints(), [0, 0, 0, 0, 0, 0, 0], { guard: null })!;
 
   it("fits revenue vs spend as a line by default", () => {
     expect(fit.curve.kind).toBe("revenue");

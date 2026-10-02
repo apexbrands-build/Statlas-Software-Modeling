@@ -16,14 +16,19 @@ export interface ScatterPoint {
   y: number;
   tone: "history" | "lastYear" | "current" | "marker" | "selected";
   label?: string;
+  /** Overrides the tone colour (the Max markers each have their own). */
+  color?: string;
+  /** Hover text. Points with an `onPick` can be clicked to select them. */
+  tip?: string;
+  onPick?: () => void;
 }
 
 const TONE: Record<ScatterPoint["tone"], string> = { history: "var(--color-text-faint, #888)", lastYear: "#f97316", current: "#38bdf8", marker: "#22c55e", selected: "#ef4444" };
 
 /** aMER against spend: historical days as dots, the fitted curve as a line, the chosen spend as a red dot. */
-export function ScatterCurve({ points, curve, xFmt, yFmt, height = 280 }: { points: ScatterPoint[]; curve: { x: number; y: number }[]; xFmt: (v: number) => string; yFmt?: (v: number) => string; height?: number }) {
+export function ScatterCurve({ points, curve, xFmt, yFmt, refX, height = 280 }: { points: ScatterPoint[]; curve: { x: number; y: number }[]; xFmt: (v: number) => string; yFmt?: (v: number) => string; /** Vertical dashed line: where the history ends. */ refX?: { x: number; label: string }; height?: number }) {
   const w = 760;
-  const xs = [...points.map((p) => p.x), ...curve.map((p) => p.x)];
+  const xs = [...points.map((p) => p.x), ...curve.map((p) => p.x), ...(refX ? [refX.x] : [])];
   // The y axis follows the days, not the wildest day: the top 2% of historical points may run off the chart.
   const hist = points.filter((p) => p.tone !== "marker" && p.tone !== "selected").map((p) => p.y).sort((a, b) => a - b);
   const p98 = hist.length ? hist[Math.min(hist.length - 1, Math.floor(hist.length * 0.98))] : 0;
@@ -48,26 +53,35 @@ export function ScatterCurve({ points, curve, xFmt, yFmt, height = 280 }: { poin
         </g>
       ))}
       {points
-        .filter((p) => p.tone !== "selected" && p.tone !== "marker")
+        .filter((p) => p.tone === "history")
         .map((p, i) => (
-          <circle key={i} cx={X(p.x)} cy={Y(p.y)} r={p.tone === "history" ? 2.2 : 3} fill={TONE[p.tone]} opacity={p.tone === "history" ? 0.55 : 0.9} />
+          <circle key={i} cx={X(p.x)} cy={Y(p.y)} r={2.2} fill={TONE.history} opacity={0.5} />
         ))}
+      {refX && (
+        <g>
+          <line x1={X(refX.x)} x2={X(refX.x)} y1={PAD.t} y2={height - PAD.b} stroke="currentColor" opacity={0.35} strokeDasharray="4 4" />
+          <text x={X(refX.x) + 4} y={PAD.t + 9} fontSize={9} fill="currentColor" opacity={0.6}>
+            {refX.label}
+          </text>
+        </g>
+      )}
       <path d={path} fill="none" stroke="#facc15" strokeWidth={2.5} strokeDasharray="1 4" strokeLinecap="round" />
       {points
-        .filter((p) => p.tone === "marker")
-        .map((p, i) => (
-          <g key={i}>
-            <circle cx={X(p.x)} cy={Y(p.y)} r={4.5} fill={TONE.marker} stroke="white" strokeWidth={1} />
-            <text x={X(p.x)} y={Y(p.y) - 8} textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.8}>
-              {p.label}
-            </text>
-          </g>
-        ))}
-      {points
-        .filter((p) => p.tone === "selected")
-        .map((p, i) => (
-          <circle key={i} cx={X(p.x)} cy={Y(p.y)} r={6} fill={TONE.selected} stroke="white" strokeWidth={1.5} />
-        ))}
+        .filter((p) => p.tone !== "history")
+        .map((p, i) => {
+          const c = p.color ?? TONE[p.tone];
+          return (
+            <g key={`k${i}`} onClick={p.onPick} style={{ cursor: p.onPick ? "pointer" : undefined }}>
+              {p.tip && <title>{p.tip}</title>}
+              <circle cx={X(p.x)} cy={Y(p.y)} r={p.tone === "selected" ? 7 : 6} fill={c} stroke="white" strokeWidth={1.5} />
+              {p.label && (
+                <text x={X(p.x)} y={Y(p.y) - 10} textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.85}>
+                  {p.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
     </svg>
   );
 }

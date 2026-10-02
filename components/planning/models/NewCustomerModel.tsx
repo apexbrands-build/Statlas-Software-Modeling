@@ -6,6 +6,9 @@ import { formatValue } from "@/lib/format";
 import { aggregate, amerSpend } from "@/lib/metrics";
 import {
   acqShare,
+  BEYOND_GAMMA,
+  BEYOND_LABELS,
+  type BeyondHistory,
   cohortMultipliers,
   recentCostPct,
   recentNewAov,
@@ -87,15 +90,14 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const [draftWeight, setDraftWeight] = useState(S.recentWeight);
   const [rule, setRule] = useState<ForecastRule>("cm");
   const [growth, setGrowth] = useState(10);
-  const [view, setView] = useState<"amer" | "revenue">("revenue");
 
   /* ---- the fit ---- */
   const points = useMemo<DayPoint[]>(() => facts.map((f) => ({ date: f.date, spend: amerSpend(aggregate([f]), settings), newRevenue: f.newOrderRevenue })), [facts, settings]);
-  const fitWith = (recent: { from: string; weight: number } | null) => fitNewCustomerModel(points, seasonality.dow, { kind: S.fitKind, recent });
+  const fitWith = (recent: { from: string; weight: number } | null) => fitNewCustomerModel(points, seasonality.dow, { kind: S.fitKind, recent, guard: BEYOND_GAMMA[S.beyondHistory ?? "standard"] });
   const recent = S.actualizeFrom ? { from: S.actualizeFrom, weight: S.recentWeight } : null;
-  const fit = useMemo(() => fitWith(recent), [points, seasonality, S.fitKind, S.actualizeFrom, S.recentWeight]); // eslint-disable-line react-hooks/exhaustive-deps
-  const baseFit = useMemo(() => (S.actualizeFrom ? fitWith(null) : fit), [points, seasonality, S.fitKind, S.actualizeFrom, fit]); // eslint-disable-line react-hooks/exhaustive-deps
-  const draftFit = useMemo(() => (showActualize ? fitWith({ from: draftFrom, weight: draftWeight }) : null), [showActualize, draftFrom, draftWeight, points, seasonality, S.fitKind]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fit = useMemo(() => fitWith(recent), [points, seasonality, S.fitKind, S.beyondHistory, S.actualizeFrom, S.recentWeight]); // eslint-disable-line react-hooks/exhaustive-deps
+  const baseFit = useMemo(() => (S.actualizeFrom ? fitWith(null) : fit), [points, seasonality, S.fitKind, S.beyondHistory, S.actualizeFrom, fit]); // eslint-disable-line react-hooks/exhaustive-deps
+  const draftFit = useMemo(() => (showActualize ? fitWith({ from: draftFrom, weight: draftWeight }) : null), [showActualize, draftFrom, draftWeight, points, seasonality, S.fitKind, S.beyondHistory]); // eslint-disable-line react-hooks/exhaustive-deps
   const altR2 = (k: "revenue" | "linear" | "power") => fit?.alternatives[k]?.r2 ?? null;
   const seasonal = useMemo(() => (fit ? monthlyAmerIndex(fit.used, fit.curve) : null), [fit]);
   const seasonIdx = (key: string) => seasonal?.index[Number(key.slice(5, 7)) - 1] ?? 1;
@@ -161,13 +163,14 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     let point = null as ReturnType<typeof evaluateSpend> | null;
     let cap = 0;
     if (fit) {
-      // The table only covers spend the history has seen: the 95th-percentile day, sustained for the whole month (Jack's table
-      // stops at the highest observed spend too). Beyond it the straight line is a guess, so no Max point is ever placed there.
+      // History ends at the 95th-percentile day sustained for the whole month (Jack's table stops at the highest observed spend).
+      // The table runs to 3x that so you can see where returns stop paying back; the guardrail makes returns fade past `cap`,
+      // and rows past it are shown as "beyond history". A typed spend is always included.
       const daily = fit.used.map((p) => p.spend).sort((a, b) => a - b);
       cap = (daily[Math.min(daily.length - 1, Math.floor(daily.length * 0.95))] ?? 0) * days;
-      const top = Math.max(cap, m.optimizeFor === "other" && !closed ? m.spend : 0, 1000);
+      const top = Math.max(cap * 3, m.optimizeFor === "other" && !closed ? m.spend * 1.1 : 0, 1000);
       const step = niceStep(top / 30);
-      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step, idx, cap);
+      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step, idx);
       if (m.optimizeFor !== "other" && !closed) {
         const t = optimalSpend(table, m.optimizeFor);
         if (t != null) spend = t;
@@ -215,30 +218,51 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const shortMonth = MONTHS[Number(cur.key.slice(5, 7)) - 1];
 
   // Chart: every historical day is scaled to a month at that day's pace (daily spend × days), so the distance between the days
-  // we have seen and the spend the model recommends is visible. "revenue" plots new revenue, "amer" plots efficiency.
-  const yOf = (spendM: number, amer: number) => (view === "revenue" ? spendM * amer : amer);
+  // we have seen and the spend the model recommends is visible. Coloured points are single, clickable points, not days.
+  const pickSpend = (spend: number) => setMonth(cur.key, { optimizeFor: "other", spend: Math.round(spend) });
+  const MARK_COLORS: Record<string, string> = { cm: "#22c55e", cm60: "#14b8a6", cm365: "#a855f7", revenue: "#f59e0b" };
+  const MARK_SHORT: Record<string, string> = { cm: "Max CM", cm60: "60-day CM", cm365: "1-year CM", revenue: "Revenue B/E" };
+  const monthPoint = (from: string, scaleToMonth: boolean) => {
+    const to = endOfMonth(from);
+    const t = aggregate(facts.filter((f) => f.date >= from && f.date <= (to < lastData ? to : lastData)));
+    const sp = amerSpend(t, settings);
+    if (t.days < (scaleToMonth ? 7 : 1) || sp <= 0 || t.newOrderRevenue <= 0) return null;
+    return { spend: scaleToMonth ? (sp / t.days) * cur.days : sp, amer: t.newOrderRevenue / sp };
+  };
   const scatter = ((): ScatterPoint[] => {
     if (!fit) return [];
-    const lyMonth = addYears(cur.key, -1).slice(0, 7);
-    const thisMonth = cur.key.slice(0, 7);
-    const out: ScatterPoint[] = fit.used.map((p) => ({ x: p.spend * cur.days, y: yOf(p.spend * cur.days, p.adjAmer), tone: p.date.slice(0, 7) === lyMonth ? "lastYear" : p.date.slice(0, 7) === thisMonth ? "current" : "history" }));
-    if (cur.table && !cur.closed)
+    const out: ScatterPoint[] = fit.used.map((p) => ({ x: p.spend * cur.days, y: p.adjAmer, tone: "history" as const }));
+    const ly = monthPoint(addYears(cur.key, -1), false);
+    if (ly)
+      out.push({ x: ly.spend, y: ly.amer, tone: "lastYear", label: `${shortMonth} LY`, tip: `${shortMonth} last year: ${money(ly.spend)} spend, aMER ${ly.amer.toFixed(2)}. Click to plan this spend.`, onPick: () => pickSpend(ly.spend) });
+    if (!cur.closed) {
+      const now = monthPoint(cur.key, true);
+      if (now) out.push({ x: now.spend, y: now.amer, tone: "current", label: `${shortMonth} so far`, tip: `${shortMonth} this year so far, at a monthly pace: ${money(now.spend)}, aMER ${now.amer.toFixed(2)}. Click to plan this spend.`, onPick: () => pickSpend(now.spend) });
+    }
+    if (cur.table && !cur.closed) {
+      // markers that land on the same row share one point
+      const byRow = new Map<number, Exclude<OptimizeFor, "other">[]>();
       for (const mr of markerRows) {
         const i = cur.table.best[mr.key];
-        if (i != null) out.push({ x: cur.table.points[i].spend, y: yOf(cur.table.points[i].spend, cur.table.points[i].amer), tone: "marker", label: mr.label.replace("Max ", "").replace(" at break-even", " B/E") });
+        if (i != null) byRow.set(i, [...(byRow.get(i) ?? []), mr.key]);
       }
-    if (cur.point) out.push({ x: cur.spend, y: yOf(cur.spend, cur.point.amer), tone: "selected" });
+      byRow.forEach((keys, i) => {
+        const pt = cur.table!.points[i];
+        out.push({ x: pt.spend, y: pt.amer, tone: "marker", color: MARK_COLORS[keys[0]], label: keys.map((k) => MARK_SHORT[k]).join(" · "), tip: `${keys.map((k) => OPTIMIZE_LABELS[k]).join(", ")}: ${money(pt.spend)} spend, aMER ${pt.amer.toFixed(2)}. Click to plan this spend.`, onPick: () => setMonth(cur.key, { optimizeFor: keys[0] }) });
+      });
+    }
+    if (cur.point) out.push({ x: cur.spend, y: cur.point.amer, tone: "selected", tip: `Selected: ${money(cur.spend)} spend, aMER ${cur.point.amer.toFixed(2)}` });
     return out;
   })();
   const curve = (() => {
     if (!fit || !cur.table) return [];
     const maxX = Math.max(cur.cap, cur.spend, cur.table.points[cur.table.points.length - 1]?.spend ?? 0);
-    return Array.from({ length: 60 }, (_, i) => {
-      const x = (maxX * (i + 1)) / 60;
-      return { x, y: yOf(x, curveAmer(fit.curve, x / cur.days) * (1 + cur.m.overModelPct / 100) * cur.idx) };
+    return Array.from({ length: 80 }, (_, i) => {
+      const x = (maxX * (i + 1)) / 80;
+      return { x, y: curveAmer(fit.curve, x / cur.days) * (1 + cur.m.overModelPct / 100) * cur.idx };
     });
   })();
-  const maxAtEdge = !!cur.table && !cur.closed && cur.table.best.cm != null && cur.table.best.cm === cur.table.points.filter((p) => p.spend <= cur.cap + 1e-9).length - 1;
+  const beyond = cur.point != null && cur.cap > 0 && cur.spend > cur.cap;
 
   /* ---- save ---- */
   const saveAndApply = async (useRows: typeof rows = rows, settingsToSave = S, prefix = "") => {
@@ -383,6 +407,18 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 {seasonal && seasonal.years >= 2 ? `${shortMonth} runs ×${cur.idx.toFixed(2)} versus the average month (${seasonal.days[Number(cur.key.slice(5, 7)) - 1]} days over ${seasonal.years} years). Every month's table uses its own index.` : "needs two years of history, so every month uses ×1.00 for now."}
               </p>
               <p>R² says how much of the day-to-day change in aMER the spend explains. The rest is creative, offers and noise, so treat the line as a baseline to bet against, not a promise.</p>
+              <label className="flex items-center gap-2">
+                Returns beyond past spend
+                <select className={inputClass} value={S.beyondHistory ?? "standard"} onChange={(e) => setNewSettings((x) => ({ ...x, beyondHistory: e.target.value as BeyondHistory }))}>
+                  {(Object.keys(BEYOND_LABELS) as BeyondHistory[]).map((k) => (
+                    <option key={k} value={k}>
+                      {BEYOND_LABELS[k]}
+                      {k === "standard" ? " (recommended)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="text-[11px] text-text-faint">Past the highest spend the client has run, each extra dollar returns less and less: Standard means that at 10× that spend an extra dollar brings a tenth of what it does at the edge. Mild fades slower, Strict faster.</p>
               <label className="flex items-center gap-2">
                 Curve shape
                 <select className={inputClass} value={S.fitKind} onChange={(e) => setNewSettings((s) => ({ ...s, fitKind: e.target.value as typeof s.fitKind }))}>
@@ -592,30 +628,25 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             {lyAmer != null && <div className="text-[11px] text-text-faint">vs LY {lyAmer.toFixed(2)}</div>}
           </div>
         </div>
-        <div className="mb-2 flex items-center gap-2 text-xs">
-          <span className="text-text-muted">Chart</span>
-          {(["revenue", "amer"] as const).map((v) => (
-            <button key={v} className={v === view ? btnPrimary : btn} onClick={() => setView(v)}>
-              {v === "revenue" ? "Revenue vs spend" : "aMER vs spend"}
-            </button>
-          ))}
-          <span className="text-text-faint">each dot is one past day at a monthly pace ({cur.days} days); the dotted line is the model</span>
-        </div>
-        <ScatterCurve points={scatter} curve={curve} xFmt={(v) => formatValue(v, "currency0", client.currency)} yFmt={view === "revenue" ? (v) => formatValue(v, "currency0", client.currency) : undefined} />
+        <p className="mb-1 text-xs text-text-faint">Grey dots are past days scaled to a monthly pace ({cur.days} days). The dotted line is the model; right of the dashed line the client has never spent, so returns are an assumption. Click the coloured points to plan that spend.</p>
+        <ScatterCurve points={scatter} curve={curve} xFmt={(v) => formatValue(v, "currency0", client.currency)} refX={cur.cap > 0 ? { x: cur.cap, label: "highest spend seen" } : undefined} />
         {cur.closed && <p className="mt-1 rounded-lg bg-accent/10 p-2 text-xs">{shortMonth} is closed: the table above shows what actually happened ({money(cur.spend)} spend). The model only forecasts open months.</p>}
-        {maxAtEdge && (
+        {beyond && (
           <p className="mt-1 rounded-lg bg-bad/10 p-2 text-xs text-bad">
-            Max CM sits at the top of the spend this client has actually run ({money(cur.cap)} a month at the 95th-percentile day). In this range each extra dollar returns more than it costs, so the straight line never says when it stops paying back. Treat it as &quot;the history supports spending up to here&quot;, not as the optimum. The aMER line and flattening curve (Model parameters, curve shape) show diminishing returns if you want to compare.
+            {money(cur.spend)} is {(cur.spend / cur.cap).toFixed(1)}× the spend this client has run ({money(cur.cap)} a month at their busiest normal pace). Nothing in the history shows how returns behave there, so the model assumes they fade ({BEYOND_LABELS[S.beyondHistory ?? "standard"].toLowerCase()} guardrail). Treat it as a test to run, not a promise.
           </p>
         )}
         <Legend
           items={[
-            { label: "Historical days", color: "#888" },
-            { label: "Selected", color: "#ef4444" },
-            { label: "Modeled", color: "#facc15" },
+            { label: "Past days", color: "#888" },
             { label: `${shortMonth} last year`, color: "#f97316" },
-            { label: `${shortMonth} this year`, color: "#38bdf8" },
-            { label: "Max points", color: "#22c55e" },
+            { label: `${shortMonth} this year so far`, color: "#38bdf8" },
+            { label: "Max CM", color: MARK_COLORS.cm },
+            { label: "Max 60-day CM", color: MARK_COLORS.cm60 },
+            { label: "Max 1-year CM", color: MARK_COLORS.cm365 },
+            { label: "Max revenue at break-even", color: MARK_COLORS.revenue },
+            { label: "Selected spend", color: "#ef4444" },
+            { label: "Model", color: "#facc15" },
           ]}
         />
 
@@ -664,7 +695,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the spend the history has seen (the 95th-percentile day, sustained all month): the line is extrapolated there.</p>
+        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the spend the history has seen (the 95th-percentile day, sustained all month): returns are an assumption there.</p>
       </Panel>
 
       <Panel title="How to read this">
