@@ -21,6 +21,7 @@ export const REPORTS: ReportDef[] = [
   { slug: "ads", title: "Paid Media Overview", description: "All advertising reports in one place.", categories: ["Recommended", "Visitor"], status: "ready" },
   { slug: "facebook-tracker", title: "Facebook Trackers", description: "Day-by-day spend and iROAS pacing per campaign", categories: ["Recommended", "Visitor"], status: "ready" },
   { slug: "google-tracker", title: "Google Trackers", description: "Day-by-day spend and iROAS pacing per campaign", categories: ["Recommended", "Visitor"], status: "ready" },
+  { slug: "first-product", title: "Product by First Product", description: "What customers do after a first order containing each product: repeat orders, order value and refunds", categories: ["LTV"], status: "ready" },
   { slug: "total-net-customer", title: "Total Net Customer", description: "Groups the activity of each customer since store inception to display customer growth over time", categories: ["Recommended", "Revenue"], status: "ready" },
   { slug: "variable-costs", title: "Variable Costs Dashboard", description: "Variable costs reporting", categories: ["Recommended", "Costs"], status: "ready" },
   { slug: "calendar", title: "Calendar Report", description: "Key business metrics overlaid with events and goals", categories: ["Recommended"], status: "ready" },

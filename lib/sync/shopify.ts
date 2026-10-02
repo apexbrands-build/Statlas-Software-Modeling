@@ -23,7 +23,7 @@ interface OrderNode {
   totalRefundedSet: Money;
   taxesIncluded: boolean;
   refunds: { id: string; createdAt: string; totalRefundedSet: Money; refundLineItems: { nodes: { subtotalSet: Money }[] } }[];
-  lineItems: { nodes: { quantity: number; variant: { id: string } | null; discountedTotalSet: Money }[] };
+  lineItems: { nodes: { id: string; title: string; quantity: number; product: { id: string } | null; variant: { id: string } | null; discountedTotalSet: Money }[] };
 }
 interface OrdersPage {
   orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: OrderNode[] };
@@ -44,7 +44,7 @@ const orderFields = (withCustomerCount: boolean) => `
   totalRefundedSet { shopMoney { amount } }
   taxesIncluded
   refunds { id createdAt totalRefundedSet { shopMoney { amount } } refundLineItems(first: 100) { nodes { subtotalSet { shopMoney { amount } } } } }
-  lineItems(first: 100) { nodes { quantity variant { id } discountedTotalSet { shopMoney { amount } } } }`;
+  lineItems(first: 100) { nodes { id title quantity product { id } variant { id } discountedTotalSet { shopMoney { amount } } } }`;
 
 export interface VariantCost {
   variantId: string;
@@ -99,7 +99,7 @@ export interface RawOrder {
   tax: number;
   totalRefunded: number;
   refunds: { id: string; createdAt: string; total: number; itemsSubtotal: number }[];
-  lines: { variantId: string | null; quantity: number; sales: number }[];
+  lines: { lineId: string; title: string; productId: string | null; variantId: string | null; quantity: number; sales: number }[];
 }
 
 const SOURCE_TO_CHANNEL: Record<string, string> = {
@@ -158,7 +158,7 @@ export async function fetchOrders(shop: string, token: string, searchQuery: stri
           total: num(r.totalRefundedSet),
           itemsSubtotal: r.refundLineItems.nodes.reduce((sum, n) => sum + num(n.subtotalSet), 0),
         })),
-        lines: o.lineItems.nodes.map((l) => ({ variantId: l.variant ? numericId(l.variant.id) : null, quantity: l.quantity, sales: num(l.discountedTotalSet) })),
+        lines: o.lineItems.nodes.map((l) => ({ lineId: numericId(l.id), title: l.title, productId: l.product ? numericId(l.product.id) : null, variantId: l.variant ? numericId(l.variant.id) : null, quantity: l.quantity, sales: num(l.discountedTotalSet) })),
       });
     }
     if (!data.orders.pageInfo.hasNextPage) break;

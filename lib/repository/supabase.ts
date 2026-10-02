@@ -1,6 +1,7 @@
 import { addDays, todayLocal } from "../dates";
 import { defaultSettings, DEFAULT_MULTIPLIERS } from "../defaults";
 import { getBrowserClient } from "../supabase/client";
+import type { FirstProductRow } from "../reports/first-product";
 import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 import { CHANNEL_KEYS } from "../types";
 import type { PlanChange, PlanMonth, PlanMonthInputs } from "../planning/types";
@@ -133,6 +134,21 @@ export class SupabaseRepository implements Repository {
         channels,
       };
     });
+  }
+
+  async getFirstProducts(clientId: string, from: string, to: string): Promise<FirstProductRow[] | null> {
+    const { data, error } = await this.db.rpc("first_product_report", { p_client: clientId, p_from: from, p_to: to });
+    if (error) {
+      if (/first_product_report|order_lines|PGRST202|PGRST205|42883|42P01/.test(`${error.code} ${error.message}`)) return null;
+      throw new Error(error.message);
+    }
+    return ((data ?? []) as Row[]).map((r) => ({
+      product: r.product as string,
+      orders: [n(r.o1), n(r.o2), n(r.o3), n(r.o4)],
+      sales: [n(r.s1), n(r.s2), n(r.s3), n(r.s4)],
+      refundOrders: n(r.refund_orders),
+      refundAmount: n(r.refund_amount),
+    }));
   }
 
   async getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]> {

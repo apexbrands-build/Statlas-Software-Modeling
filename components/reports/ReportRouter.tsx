@@ -2,6 +2,7 @@
 
 import { MetricGoalReport } from "./MetricGoalReport";
 import { PaidMediaReport } from "./PaidMediaReport";
+import { FirstProductReport } from "./FirstProductReport";
 import { PnlReport } from "./PnlReport";
 import { WaitingForData } from "./WaitingForData";
 import { Empty } from "./ReportFrame";
@@ -19,6 +20,8 @@ export function ReportRouter({ slug }: { slug: string }) {
       return <MetricGoalReport slug="mer" specs={MER_SPECS} />;
     case "ads":
       return <PaidMediaReport />;
+    case "first-product":
+      return <FirstProductReport />;
     case "pnl":
       return <PnlReport />;
     default:

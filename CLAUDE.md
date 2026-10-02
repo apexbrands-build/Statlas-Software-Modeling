@@ -31,6 +31,8 @@ Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in 
 
 **Planning layer (2026-10-01):** `/planning` plan editor (phases A and B built: monthly plan, daily targets, Plan P&L, P/F in `/reporting/pnl`); migration 0004 applied. Next phases (cohort returning model, aMER model, tracker targets) wait for the user's go-ahead: `docs/planning-layer.md`.
 
+**Pending DB migrations (written, not applied):** `0005_exclude_free_orders`, `0006_order_lines`; apply, then re-run the Shopify history load. Details: `docs/statlas-docs/gap-analysis.md`.
+
 Open items: (1) Point6 has almost no product costs in Shopify, so COGS is ~0: use the COGS % / flat rate in Edit or upload costs by SKU; (2) compare September Shopify numbers (gross, discounts, returns, net, shipping, taxes, total, orders) against the database; (3) verify Meta existing-customer spend and Google brand spend against the platforms; (4) check the first Shopify history load finishes; (5) set `CRON_SECRET`; (6) later: forecasting layer, reports, Klaviyo/GA4, more platforms, onboarding more clients (one Shopify app per store unless a public app is approved).
 
 Ideas wanted later (not built): marketing-event calendar inferred from Klaviyo/SMS sends plus a register for future initiatives (feeds the event-effect model). The user's `Jack-7xyz/aMER_ModelV2` repo (C pipeline: linear fit of day-of-week-adjusted aMER vs spend, IQR/z-score outliers) is the reference for the new-revenue forecast.

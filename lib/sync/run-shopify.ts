@@ -125,6 +125,18 @@ export async function syncShopify(integrationId: string, opts: ShopifySyncOption
       if (error) throw new Error(error.message);
     }
 
+    // Line items (Product by First Product report). Skipped quietly until migration 0006 (order_lines) is applied.
+    const lineRows = fetched.flatMap((o) =>
+      o.lines.map((l) => ({ client_id: clientId, order_id: o.orderId, line_id: l.lineId, product_id: l.productId, title: l.title, variant_id: l.variantId, quantity: l.quantity, sales: round(l.sales) })),
+    );
+    for (let i = 0; i < lineRows.length; i += 500) {
+      const { error } = await admin.from("order_lines").upsert(lineRows.slice(i, i + 500));
+      if (error) {
+        if (/order_lines|PGRST205|42P01/.test(`${error.code} ${error.message}`)) break; // table not created yet
+        throw new Error(error.message);
+      }
+    }
+
     // Refund events, dated by the refund itself
     const refundRows = fetched.flatMap((o) =>
       o.refunds.map((r) => ({

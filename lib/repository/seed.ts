@@ -1,4 +1,5 @@
 import { addDays, dayOfWeek, diffDays, eachDay, todayLocal } from "../dates";
+import type { FirstProductRow } from "../reports/first-product";
 import type {
   CampaignDay,
   ChannelKey,
@@ -381,6 +382,13 @@ export class SeedRepository implements Repository {
     const end = to < last ? to : last;
     if (from > end) return [];
     return eachDay(from, end).map((d) => factFor(clientId, d));
+  }
+
+  async getFirstProducts(): Promise<FirstProductRow[] | null> {
+    return [
+      { product: "Starter Set", orders: [120, 48, 22, 18], sales: [9600, 3900, 1800, 1500], refundOrders: 6, refundAmount: 480 },
+      { product: "Refill Pack", orders: [80, 40, 25, 30], sales: [3200, 1700, 1100, 1300], refundOrders: 2, refundAmount: 90 },
+    ];
   }
 
   async getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]> {

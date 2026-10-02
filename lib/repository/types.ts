@@ -1,3 +1,4 @@
+import type { FirstProductRow } from "../reports/first-product";
 import type { PlanChange, PlanMonth } from "../planning/types";
 import type { CampaignDay, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 
@@ -13,6 +14,8 @@ export interface Repository {
   getFacts(clientId: string, from: string, to: string): Promise<DailyFact[]>;
   /** Campaign-level ad rows (Paid Media reports). */
   getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]>;
+  /** Product by First Product rows; null when order line items are not available yet (migration 0006 / history reload). */
+  getFirstProducts(clientId: string, from: string, to: string): Promise<FirstProductRow[] | null>;
   /** Last day with actual data (inclusive). */
   getLastDataDate(clientId: string): Promise<string>;
   listPlans(clientId: string): Promise<PlanVersion[]>;

@@ -32,3 +32,9 @@ Nothing here is built yet; items marked **Decide** need the user's go-ahead (CLA
 - **Facebook attribution (7): built.** Settings > Facebook Settings now has working Click Window (1/7/28 day) and View Window (Disabled/1/7 day), saved per client (`extra.fbAttrClick`, `fbAttrView`, defaults 7 Day / Disabled so nothing changes today). The Meta sync reads them (`lib/sync/meta-windows.ts`). Re-run the Meta history load to restate older days. Click type and onsite exclusion are still "not applied".
 - **Onboarding checklist (15): built.** `/onboarding` (sidebar: Tools & Settings), content in `lib/onboarding-checklist.ts`; ticks saved per client in the browser only.
 - **Product by First Product (9): NOT built.** The `orders` table has no line items, so the report needs a new `order_lines` table, a Shopify sync change and a history reload. That is a schema change and was not started.
+
+## Status after the second follow-up (2026-10-02)
+- **Product by First Product (9): built in code**, report `/reporting/first-product` (LTV category) with the four variations, total row (not for AOV), refunds and top 1,000 products. Checked on seed data. It shows a clear "not stored yet" message until the database part is applied.
+- **Needs the user (the permission system blocked Claude from changing the live database twice):** apply these two migration files in the Supabase SQL editor (or ask Claude again after allowing it):
+  1. `supabase/migrations/0005_exclude_free_orders.sql` (free orders). Afterwards run the Shopify history load (or `select recompute_first_orders('<client>')` then `rebuild_daily_facts`) so past days are restated.
+  2. `supabase/migrations/0006_order_lines.sql` (line items table + `first_product_report` function). Then re-run the Shopify history load to backfill line items. The Shopify sync already writes lines and quietly skips them until the table exists, so deploying before applying is safe.
