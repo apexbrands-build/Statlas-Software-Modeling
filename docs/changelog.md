@@ -2,6 +2,9 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-10-02: Statlas docs archive
+- Read docs.statlas.io (all pages except Compass) and saved paraphrased notes in `docs/statlas-docs/`, with `gap-analysis.md` listing differences and decisions for the user. Docs only, no code changes.
+
 ## 2026-10-01: Planning layer (phases A and B)
 - `/planning` plans list and editor (monthly grid, spend and days, returning revenue, daily input, Plan P&L), plan settings with month lock/status and change log. Weekday pattern calculated from Shopify. Details: `docs/planning-layer.md`.
 - Migration `0004_planning_layer` (applied to Supabase): plan year/description/seasonality, plan_months, plan_changes, extra plan_targets columns (tax, cogs, cost_of_delivery), write policies.

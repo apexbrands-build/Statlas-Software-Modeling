@@ -4,6 +4,7 @@ Internal app for Apex Brands (e-commerce growth agency, 30+ clients) that replic
 
 **Read these before working:**
 - `docs/reports-plan.md`: reports scope, status and build order (also `docs/changelog.md` for dated notes)
+- `docs/statlas-docs/`: archive of the official Statlas docs (metrics, settings, reports, data, tools) + `gap-analysis.md` with open decisions
 - `docs/statlas-findings.md`: what Statlas does (observed, read-only), incl. planning at `/goals`
 - `docs/build-plan.md`: phases, metric formulas, data model, integrations, stack, decisions
 - `docs/forecasting-context.md`: the strategist's intent and returning-revenue method
