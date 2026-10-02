@@ -87,6 +87,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const [draftWeight, setDraftWeight] = useState(S.recentWeight);
   const [rule, setRule] = useState<ForecastRule>("cm");
   const [growth, setGrowth] = useState(10);
+  const [view, setView] = useState<"amer" | "revenue">("revenue");
 
   /* ---- the fit ---- */
   const points = useMemo<DayPoint[]>(() => facts.map((f) => ({ date: f.date, spend: amerSpend(aggregate([f]), settings), newRevenue: f.newOrderRevenue })), [facts, settings]);
@@ -112,7 +113,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
       return t.days ? (amerSpend(t, settings) / t.days) * daysIn(key) : 0;
     })();
     return {
-      optimizeFor: "other",
+      optimizeFor: "cm",
       spend: inputs ? Math.round(inputs.spend * acqShare(inputs, settings)) : Math.round(recentSpend),
       aov: Math.round(aov * 100) / 100,
       aovSource: "last30",
@@ -154,22 +155,38 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     const days = daysIn(key);
     const idx = seasonIdx(key);
     const ms: ModelSettings = { newCostPct: e.nc, returningCostPct: e.rc, aov: e.aov, ltv60Multiplier: e.m60, ltv365Multiplier: e.m365, overModelPct: m.overModelPct, minCm: m.minCm, minCm60: m.minCm60, minCm365: m.minCm365 };
+    const closed = lastData !== "" && endOfMonth(key) <= lastData;
     let table = null as ReturnType<typeof buildSpendTable> | null;
     let spend = m.spend;
     let point = null as ReturnType<typeof evaluateSpend> | null;
+    let cap = 0;
     if (fit) {
+      // The table only covers spend the history has seen: the 95th-percentile day, sustained for the whole month (Jack's table
+      // stops at the highest observed spend too). Beyond it the straight line is a guess, so no Max point is ever placed there.
       const daily = fit.used.map((p) => p.spend).sort((a, b) => a - b);
-      const p95 = daily[Math.floor(daily.length * 0.95)] ?? 0;
-      const top = Math.max(p95 * days * 1.8, m.spend * 1.4, 10000);
-      const step = niceStep(top / 40);
-      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step, idx);
-      if (m.optimizeFor !== "other") {
+      cap = (daily[Math.min(daily.length - 1, Math.floor(daily.length * 0.95))] ?? 0) * days;
+      const top = Math.max(cap, m.optimizeFor === "other" && !closed ? m.spend : 0, 1000);
+      const step = niceStep(top / 30);
+      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step, idx, cap);
+      if (m.optimizeFor !== "other" && !closed) {
         const t = optimalSpend(table, m.optimizeFor);
         if (t != null) spend = t;
       }
       point = evaluateSpend(fit.curve, ms, spend, days, idx);
     }
-    return { key, m, e, days, ms, table, spend, point, idx };
+    if (closed) {
+      // Closed month: the numbers are what happened, not what the model says.
+      const t = aggregate(facts.filter((f) => f.date >= key && f.date <= endOfMonth(key)));
+      const sp = amerSpend(t, settings);
+      if (t.days > 0 && sp > 0) {
+        const rev = t.newOrderRevenue;
+        const base = point ?? evaluateSpend({ kind: "revenue", a: 0, b: 0, r2: 0 }, ms, sp, days);
+        const ltvCm = (mult: number) => rev * (1 - e.nc / 100) + Math.max(0, rev * mult - rev) * (1 - e.rc / 100) - sp;
+        spend = sp;
+        point = { ...base, spend: sp, amer: rev / sp, newRevenue: rev, orders: t.newOrders, cac: t.newOrders > 0 ? sp / t.newOrders : 0, cm: rev * (1 - e.nc / 100) - sp, ltv60Revenue: rev * e.m60, ltv60Cm: ltvCm(e.m60), ltv365Revenue: rev * e.m365, ltv365Cm: ltvCm(e.m365) };
+      }
+    }
+    return { key, m, e, days, ms, table, spend, point, idx, cap, closed };
   };
   const rows = monthKeys.map((key) => buildRow(key));
   const cur = rows.find((r) => r.key === sel) ?? rows[0];
@@ -197,27 +214,31 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const monthLabel = (key: string) => `${plan.year} ${MONTHS[Number(key.slice(5, 7)) - 1]}`;
   const shortMonth = MONTHS[Number(cur.key.slice(5, 7)) - 1];
 
+  // Chart: every historical day is scaled to a month at that day's pace (daily spend × days), so the distance between the days
+  // we have seen and the spend the model recommends is visible. "revenue" plots new revenue, "amer" plots efficiency.
+  const yOf = (spendM: number, amer: number) => (view === "revenue" ? spendM * amer : amer);
   const scatter = ((): ScatterPoint[] => {
     if (!fit) return [];
     const lyMonth = addYears(cur.key, -1).slice(0, 7);
     const thisMonth = cur.key.slice(0, 7);
-    const out: ScatterPoint[] = fit.used.map((p) => ({ x: p.spend * cur.days, y: p.adjAmer, tone: p.date.slice(0, 7) === lyMonth ? "lastYear" : p.date.slice(0, 7) === thisMonth ? "current" : "history" }));
-    if (cur.table)
+    const out: ScatterPoint[] = fit.used.map((p) => ({ x: p.spend * cur.days, y: yOf(p.spend * cur.days, p.adjAmer), tone: p.date.slice(0, 7) === lyMonth ? "lastYear" : p.date.slice(0, 7) === thisMonth ? "current" : "history" }));
+    if (cur.table && !cur.closed)
       for (const mr of markerRows) {
         const i = cur.table.best[mr.key];
-        if (i != null) out.push({ x: cur.table.points[i].spend, y: cur.table.points[i].amer, tone: "marker", label: mr.label.replace("Max ", "").replace(" at break-even", " B/E") });
+        if (i != null) out.push({ x: cur.table.points[i].spend, y: yOf(cur.table.points[i].spend, cur.table.points[i].amer), tone: "marker", label: mr.label.replace("Max ", "").replace(" at break-even", " B/E") });
       }
-    if (cur.point) out.push({ x: cur.spend, y: cur.point.amer, tone: "selected" });
+    if (cur.point) out.push({ x: cur.spend, y: yOf(cur.spend, cur.point.amer), tone: "selected" });
     return out;
   })();
   const curve = (() => {
     if (!fit || !cur.table) return [];
-    const maxX = cur.table.points[cur.table.points.length - 1]?.spend ?? 0;
+    const maxX = Math.max(cur.cap, cur.spend, cur.table.points[cur.table.points.length - 1]?.spend ?? 0);
     return Array.from({ length: 60 }, (_, i) => {
       const x = (maxX * (i + 1)) / 60;
-      return { x, y: curveAmer(fit.curve, x / cur.days) * (1 + cur.m.overModelPct / 100) * cur.idx };
+      return { x, y: yOf(x, curveAmer(fit.curve, x / cur.days) * (1 + cur.m.overModelPct / 100) * cur.idx) };
     });
   })();
+  const maxAtEdge = !!cur.table && !cur.closed && cur.table.best.cm != null && cur.table.best.cm === cur.table.points.filter((p) => p.spend <= cur.cap + 1e-9).length - 1;
 
   /* ---- save ---- */
   const saveAndApply = async (useRows: typeof rows = rows, settingsToSave = S, prefix = "") => {
@@ -227,7 +248,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     let applied = 0;
     let skipped = 0;
     for (const r of useRows) {
-      if (!r.point) continue;
+      if (!r.point || r.closed) continue; // closed months keep their actuals
       const locked = months.find((m) => m.month === r.key)?.locked;
       if (locked) {
         skipped += 1;
@@ -463,7 +484,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                       {monthLabel(r.key)}
                     </button>
                   </td>
-                  <td className="px-2 py-1">{OPTIMIZE_LABELS[r.m.optimizeFor]}</td>
+                  <td className="px-2 py-1">{r.closed ? "Actual" : OPTIMIZE_LABELS[r.m.optimizeFor]}</td>
                   <td className={td}>{money(r.spend)}</td>
                   <td className={td}>{r.point ? r.point.amer.toFixed(2) : "–"}</td>
                   <td className={td}>{money(r.point?.newRevenue ?? 0)}</td>
@@ -554,7 +575,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
       <Panel title={`${shortMonth} ${plan.year} recommended spend`}>
         <div className="mb-3 flex flex-wrap items-end gap-4">
           <Field label="Optimize for">
-            <select className={inputClass} value={cur.m.optimizeFor} onChange={(e) => setMonth(cur.key, { optimizeFor: e.target.value as OptimizeFor, ...(e.target.value === "other" ? { spend: Math.round(cur.spend) } : {}) })}>
+            <select className={inputClass} disabled={cur.closed} value={cur.closed ? "other" : cur.m.optimizeFor} onChange={(e) => setMonth(cur.key, { optimizeFor: e.target.value as OptimizeFor, ...(e.target.value === "other" ? { spend: Math.round(cur.spend) } : {}) })}>
               {(Object.keys(OPTIMIZE_LABELS) as OptimizeFor[]).map((k) => (
                 <option key={k} value={k}>
                   {OPTIMIZE_LABELS[k]}
@@ -563,7 +584,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             </select>
           </Field>
           <Field label="Spend (counts toward aMER)">
-            <NumField value={cur.spend} className="w-28" disabled={cur.m.optimizeFor !== "other"} onCommit={(v) => setMonth(cur.key, { spend: v })} />
+            <NumField value={cur.spend} className="w-28" disabled={cur.closed || cur.m.optimizeFor !== "other"} onCommit={(v) => setMonth(cur.key, { spend: v })} />
           </Field>
           <div className="mb-3 text-center">
             <div className="text-[11px] text-text-muted">aMER</div>
@@ -571,7 +592,22 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             {lyAmer != null && <div className="text-[11px] text-text-faint">vs LY {lyAmer.toFixed(2)}</div>}
           </div>
         </div>
-        <ScatterCurve points={scatter} curve={curve} xFmt={(v) => formatValue(v, "currency0", client.currency)} />
+        <div className="mb-2 flex items-center gap-2 text-xs">
+          <span className="text-text-muted">Chart</span>
+          {(["revenue", "amer"] as const).map((v) => (
+            <button key={v} className={v === view ? btnPrimary : btn} onClick={() => setView(v)}>
+              {v === "revenue" ? "Revenue vs spend" : "aMER vs spend"}
+            </button>
+          ))}
+          <span className="text-text-faint">each dot is one past day at a monthly pace ({cur.days} days); the dotted line is the model</span>
+        </div>
+        <ScatterCurve points={scatter} curve={curve} xFmt={(v) => formatValue(v, "currency0", client.currency)} yFmt={view === "revenue" ? (v) => formatValue(v, "currency0", client.currency) : undefined} />
+        {cur.closed && <p className="mt-1 rounded-lg bg-accent/10 p-2 text-xs">{shortMonth} is closed: the table above shows what actually happened ({money(cur.spend)} spend). The model only forecasts open months.</p>}
+        {maxAtEdge && (
+          <p className="mt-1 rounded-lg bg-bad/10 p-2 text-xs text-bad">
+            Max CM sits at the top of the spend this client has actually run ({money(cur.cap)} a month at the 95th-percentile day). In this range each extra dollar returns more than it costs, so the straight line never says when it stops paying back. Treat it as &quot;the history supports spending up to here&quot;, not as the optimum. The aMER line and flattening curve (Model parameters, curve shape) show diminishing returns if you want to compare.
+          </p>
+        )}
         <Legend
           items={[
             { label: "Historical days", color: "#888" },
@@ -608,7 +644,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 const isSel = Math.abs(p.spend - cur.spend) < (cur.table!.points[1]?.spend - cur.table!.points[0]?.spend || 1) / 2;
                 const hl = (key: Exclude<OptimizeFor, "other">) => (cur.table!.best[key] === i ? "bg-good/30 font-semibold" : "");
                 return (
-                  <tr key={p.spend} className={`cursor-pointer border-b border-border/40 hover:bg-accent/10 ${isSel ? "bg-accent/15" : ""} ${p.spend / cur.days > fit.maxObservedSpend ? "italic text-text-faint" : ""}`} onClick={() => setMonth(cur.key, { optimizeFor: "other", spend: p.spend })}>
+                  <tr key={p.spend} className={`cursor-pointer border-b border-border/40 hover:bg-accent/10 ${isSel ? "bg-accent/15" : ""} ${p.spend > cur.cap + 1e-9 ? "italic text-text-faint" : ""}`} onClick={() => !cur.closed && setMonth(cur.key, { optimizeFor: "other", spend: p.spend })}>
                     <td className="px-2 py-1 text-left font-medium text-accent">{marks.map((m) => m.label).join(", ")}</td>
                     <td className={td}>{money(p.spend)}</td>
                     <td className={td}>{p.amer.toFixed(2)}</td>
@@ -628,7 +664,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the highest daily spend seen in the history: the curve is extrapolated there.</p>
+        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the spend the history has seen (the 95th-percentile day, sustained all month): the line is extrapolated there.</p>
       </Panel>
 
       <Panel title="How to read this">

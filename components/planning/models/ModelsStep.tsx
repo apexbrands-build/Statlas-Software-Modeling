@@ -127,7 +127,8 @@ export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
         setSavedAt((s) => ({ ...s, [kind]: new Date().toISOString() }));
         return null;
       } catch (e) {
-        return e instanceof Error ? e.message : "Could not save the model";
+        const msg = e instanceof Error ? e.message : "Could not save the model";
+        return /plan_models|schema cache/i.test(msg) ? "The model could not be stored because database migration 0007 has not been applied yet (supabase/migrations/0007_cohorts_and_models.sql). Spend and aMER were still applied to the plan months; press Save plan to keep them." : msg;
       }
     },
     [plan],

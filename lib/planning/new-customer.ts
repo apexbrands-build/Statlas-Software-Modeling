@@ -332,7 +332,8 @@ export function niceStep(raw: number): number {
 }
 
 /** Spend table from `step` up to `maxSpend`, plus the Max CM / 60-day CM / 1-year CM / Revenue markers. */
-export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, maxSpend: number, step: number, seasonIdx = 1): SpendTable {
+/** `markerMax`: the Max markers are only picked among rows up to this spend (the range the history supports). */
+export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, maxSpend: number, step: number, seasonIdx = 1, markerMax?: number): SpendTable {
   const points: SpendPoint[] = [];
   for (let sp = step; sp <= maxSpend + 1e-9; sp += step) points.push(evaluateSpend(curve, s, sp, days, seasonIdx));
   const pick = (value: (p: SpendPoint) => number, min: number, breakEven = false) => {
@@ -340,6 +341,7 @@ export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, ma
     points.forEach((p, i) => {
       if (min > 0 && value(p) < min) return;
       if (breakEven && p.cm < 0) return;
+      if (markerMax != null && p.spend > markerMax + 1e-9) return;
       if (bi === null || value(p) > value(points[bi])) bi = i;
     });
     return bi;

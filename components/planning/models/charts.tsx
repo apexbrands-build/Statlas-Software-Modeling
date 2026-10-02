@@ -21,12 +21,15 @@ export interface ScatterPoint {
 const TONE: Record<ScatterPoint["tone"], string> = { history: "var(--color-text-faint, #888)", lastYear: "#f97316", current: "#38bdf8", marker: "#22c55e", selected: "#ef4444" };
 
 /** aMER against spend: historical days as dots, the fitted curve as a line, the chosen spend as a red dot. */
-export function ScatterCurve({ points, curve, xFmt, height = 260 }: { points: ScatterPoint[]; curve: { x: number; y: number }[]; xFmt: (v: number) => string; height?: number }) {
+export function ScatterCurve({ points, curve, xFmt, yFmt, height = 280 }: { points: ScatterPoint[]; curve: { x: number; y: number }[]; xFmt: (v: number) => string; yFmt?: (v: number) => string; height?: number }) {
   const w = 760;
   const xs = [...points.map((p) => p.x), ...curve.map((p) => p.x)];
-  const ys = [...points.map((p) => p.y), ...curve.map((p) => p.y)];
+  // The y axis follows the days, not the wildest day: the top 2% of historical points may run off the chart.
+  const hist = points.filter((p) => p.tone !== "marker" && p.tone !== "selected").map((p) => p.y).sort((a, b) => a - b);
+  const p98 = hist.length ? hist[Math.min(hist.length - 1, Math.floor(hist.length * 0.98))] : 0;
+  const keyYs = points.filter((p) => p.tone === "marker" || p.tone === "selected").map((p) => p.y);
   const xMax = niceMax(Math.max(1, ...xs));
-  const yMax = niceMax(Math.max(1, ...ys));
+  const yMax = niceMax(Math.max(1, p98 * 1.05, ...keyYs));
   const X = (v: number) => PAD.l + (v / xMax) * (w - PAD.l - PAD.r);
   const Y = (v: number) => height - PAD.b - (Math.min(v, yMax) / yMax) * (height - PAD.t - PAD.b);
   const ticks = [0, 0.25, 0.5, 0.75, 1];
@@ -37,7 +40,7 @@ export function ScatterCurve({ points, curve, xFmt, height = 260 }: { points: Sc
         <g key={t}>
           <line x1={PAD.l} x2={w - PAD.r} y1={Y(yMax * t)} y2={Y(yMax * t)} stroke="currentColor" opacity={0.1} />
           <text x={PAD.l - 6} y={Y(yMax * t) + 3} textAnchor="end" fontSize={10} fill="currentColor" opacity={0.6}>
-            {(yMax * t).toFixed(yMax < 5 ? 1 : 0)}
+            {yFmt ? yFmt(yMax * t) : (yMax * t).toFixed(yMax < 5 ? 1 : 0)}
           </text>
           <text x={X(xMax * t)} y={height - 8} textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.6}>
             {xFmt(xMax * t)}

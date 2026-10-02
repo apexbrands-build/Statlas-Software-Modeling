@@ -122,3 +122,16 @@ describe("spend table", () => {
     expect(niceStep(900)).toBe(1000);
   });
 });
+
+describe("Max markers stay inside the spend range the history supports", () => {
+  it("never picks a Max point above markerMax, even when CM keeps rising", () => {
+    // revenue line with marginal return 2.2 per $: after a 37% cost it is 1.39 per $, so CM only ever rises with spend
+    const curve: Curve = { kind: "revenue", a: 3000, b: 2.2, r2: 1 };
+    const s: ModelSettings = { ...settings, newCostPct: 37 };
+    const open = buildSpendTable(curve, s, 30, 300000, 10000);
+    expect(optimalSpend(open, "cm")).toBe(300000); // without a cap the "best" is the edge of the table (the bug seen in Oct)
+    const capped = buildSpendTable(curve, s, 30, 300000, 10000, 1, 40000);
+    expect(optimalSpend(capped, "cm")).toBe(40000);
+    expect(optimalSpend(capped, "revenue")).toBe(40000);
+  });
+});
