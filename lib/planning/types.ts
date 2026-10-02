@@ -50,7 +50,12 @@ export interface PlanMonthInputs {
   spend: number;
   /** New order revenue / acquisition spend (same definition as the dashboard aMER). */
   amer: number;
+  /** Returning order revenue the plan uses: the override if set, else the Returning Customer Model, else typed. */
   returningRevenue: number;
+  /** What the Returning Customer Model produced for this month (kept so the override can be compared and undone). */
+  returningModel?: number;
+  /** Strategist's own number (e.g. a subscription launch); beats the model while set. */
+  returningOverride?: number | null;
   /** % of spend per platform key (sums to 100). */
   platformPct: Record<string, number>;
   /** Brand (Google) / non-acquisition (others) share of each platform's spend, %. */

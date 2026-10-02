@@ -29,7 +29,7 @@ Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in 
 
 **Reports (user-approved scope and order):** library `/reporting`, Marketing Efficiency, P&L and Paid Media Overview are built; the rest waits for the plan layer. Never build Best Creatives, DTC Index, Trend Explorer, Global Creatives. Status, order and how they work: `docs/reports-plan.md`; what Statlas does in each: `docs/statlas-findings.md` ("Reports"). Reports show Goal columns automatically once a plan exists (via `useDashboardData` / `aggregatePlan`).
 
-**Planning layer (2026-10-01):** `/planning` plan editor (phases A and B built: monthly plan, daily targets, Plan P&L, P/F in `/reporting/pnl`); migration 0004 applied. Next phases (cohort returning model, aMER model, tracker targets) wait for the user's go-ahead: `docs/planning-layer.md`.
+**Planning layer (2026-10-01):** `/planning` plan editor (phases A and B built: monthly plan, daily targets, Plan P&L, P/F in `/reporting/pnl`); migration 0004 applied. **Models (2026-10-02, uncommitted):** New Customer and Returning Customer models built in the editor's Models tab, with actualization; migration 0007 written but NOT applied (apply manually). Next: Calendar + Event model, then restructure the editor to the Statlas order. Details: `docs/planning-layer.md`.
 
 **Pending DB migrations (written, not applied):** `0005_exclude_free_orders`, `0006_order_lines`; apply, then re-run the Shopify history load. Details: `docs/statlas-docs/gap-analysis.md`.
 

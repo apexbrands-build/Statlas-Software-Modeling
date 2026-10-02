@@ -4,6 +4,8 @@ import { getBrowserClient } from "../supabase/client";
 import type { FirstProductRow } from "../reports/first-product";
 import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 import { CHANNEL_KEYS } from "../types";
+import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
+import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth, PlanMonthInputs } from "../planning/types";
 import type { Repository } from "./types";
 
@@ -304,6 +306,45 @@ export class SupabaseRepository implements Repository {
   async getPlanChanges(planId: string): Promise<PlanChange[]> {
     const { data } = await this.db.from("plan_changes").select("at,by,summary").eq("plan_id", planId).order("at", { ascending: false }).limit(30);
     return ((data ?? []) as Row[]).map((r) => ({ at: r.at as string, by: (r.by as string) ?? "", summary: r.summary as string }));
+  }
+
+  async getCohortData(clientId: string): Promise<{ available: boolean; stats: CohortStat[]; cohorts: CohortRow[] }> {
+    try {
+      const stats = await fetchAll<Row>((a, b) => this.db.from("cohort_stats").select("*").eq("client_id", clientId).order("cohort_month").range(a, b));
+      const periods = await fetchAll<Row>((a, b) => this.db.from("cohort_periods").select("*").eq("client_id", clientId).order("cohort_month").range(a, b));
+      const byMonth = new Map<string, number[]>();
+      for (const r of periods) {
+        const m = r.cohort_month as string;
+        const arr = byMonth.get(m) ?? [];
+        arr[Number(r.period) - 1] = n(r.revenue);
+        byMonth.set(m, arr);
+      }
+      const st = stats.map((r) => ({ month: r.cohort_month as string, customers: n(r.customers), firstRevenue: n(r.first_revenue), rev60d: n(r.rev_60d), rev365d: n(r.rev_365d) }));
+      const cohorts = st.map((c) => ({ month: c.month, customers: c.customers, firstRevenue: c.firstRevenue, periods: Array.from({ length: 36 }, (_, i) => byMonth.get(c.month)?.[i] ?? 0) }));
+      return { available: st.length > 0, stats: st, cohorts };
+    } catch {
+      return { available: false, stats: [], cohorts: [] };
+    }
+  }
+
+  async rebuildCohorts(clientId: string): Promise<void> {
+    const { error } = await this.db.rpc("rebuild_cohorts", { p_client: clientId });
+    if (error) throw new Error(error.message);
+  }
+
+  async getPlanModel(planId: string, kind: ModelKind): Promise<SavedModel<unknown, unknown> | null> {
+    const { data, error } = await this.db.from("plan_models").select("*").eq("plan_id", planId).eq("kind", kind).maybeSingle();
+    if (error || !data) return null;
+    const r = data as Row;
+    return { settings: r.settings, results: r.results ?? null, updatedAt: (r.updated_at as string) ?? null, updatedBy: (r.updated_by as string) ?? null };
+  }
+
+  async savePlanModel(plan: PlanVersion, kind: ModelKind, settings: unknown, results: unknown, changeNote: string): Promise<void> {
+    const up = await this.db
+      .from("plan_models")
+      .upsert({ plan_id: plan.id, client_id: plan.clientId, kind, settings, results, updated_at: new Date().toISOString(), updated_by: await this.userLabel() });
+    if (up.error) throw new Error(up.error.message);
+    await this.log(plan, changeNote);
   }
 
   async getPlanTargets(clientId: string, planId: string, from: string, to: string): Promise<PlanTargetDay[]> {

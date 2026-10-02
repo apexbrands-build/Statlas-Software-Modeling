@@ -15,12 +15,14 @@ import type { PlanCtx } from "./ctx";
 import { DetailsStep } from "./DetailsStep";
 import { InputStep } from "./InputStep";
 import { MonthlyStep } from "./MonthlyStep";
+import { ModelsStep } from "./models/ModelsStep";
 import { PnlStep } from "./PnlStep";
 import { SpendStep } from "./SpendStep";
 import { btn, btnPrimary, monthKey, MONTHS } from "./ui";
 import { usePlanHistory } from "./useHistory";
 
 const STEPS = [
+  { id: "models", label: "Models" },
   { id: "monthly", label: "Monthly plan" },
   { id: "spend", label: "Spend & days" },
   { id: "details", label: "Returning revenue" },
@@ -37,7 +39,7 @@ export function PlanEditor({ planId }: { planId: string }) {
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [seasonDraft, setSeasonDraft] = useState<PlanSeasonality | null>(null);
   const [seasonDirty, setSeasonDirty] = useState(false);
-  const [step, setStep] = useState<StepId>("monthly");
+  const [step, setStep] = useState<StepId>("models");
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -93,11 +95,30 @@ export function PlanEditor({ planId }: { planId: string }) {
   const markDirty = useCallback((month: string) => setDirty((d) => new Set(d).add(month)), []);
 
   const editInputs = useCallback(
-    (month: string, fn: (i: PlanMonthInputs) => PlanMonthInputs) => {
-      setMonths((ms) => ms && ms.map((m) => (m.month === month && !m.locked && m.inputs ? { ...m, inputs: fn(m.inputs) } : m)));
+    (month: string, fn: (i: PlanMonthInputs) => PlanMonthInputs, create = false) => {
+      if (!settings) return;
+      setMonths(
+        (ms) =>
+          ms &&
+          ms.map((m) => {
+            if (m.month !== month || m.locked) return m;
+            if (m.inputs) return { ...m, inputs: fn(m.inputs) };
+            if (!create) return m;
+            // A month with no plan yet starts from the recent actuals (platform split, rates), else blank.
+            const r = sourceRange("recent", month, todayLocal());
+            const base =
+              inputsFromFacts(
+                history.facts.filter((f) => f.date >= r.from && f.date <= r.to),
+                r.months,
+                settings,
+                "recent",
+              ) ?? { ...blankInputs(), fixedCosts: settings.monthlyFixedCosts, rates: { ...ZERO_RATES, otherVarPct: settings.otherVariablePct } };
+            return { ...m, inputs: fn(base) };
+          }),
+      );
       markDirty(month);
     },
-    [markDirty],
+    [markDirty, settings, history.facts],
   );
 
   const setLocked = useCallback(
@@ -236,6 +257,10 @@ export function PlanEditor({ planId }: { planId: string }) {
         ))}
       </div>
 
+      {/* Always mounted so model edits survive switching tabs. */}
+      <div hidden={step !== "models"}>
+        <ModelsStep ctx={ctx} />
+      </div>
       {step === "monthly" && <MonthlyStep ctx={ctx} />}
       {step === "spend" && <SpendStep ctx={ctx} />}
       {step === "details" && <DetailsStep ctx={ctx} />}

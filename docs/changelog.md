@@ -6,6 +6,11 @@ Newest first. CLAUDE.md keeps only one line per item and points here.
 - Read docs.statlas.io (all pages except Compass) and saved paraphrased notes in `docs/statlas-docs/`, with `gap-analysis.md` listing differences and decisions for the user. 
 - Follow-up: Meta click/view attribution windows now applied from Store Settings (default 7-day click, view disabled); `/onboarding` checklist page; refund timing verified. Product by First Product report built (`lib/reports/first-product.ts`, `components/reports/FirstProductReport.tsx`); sync now stores order line items. Migrations `0005_exclude_free_orders` and `0006_order_lines` are written but NOT yet applied to Supabase (see `docs/statlas-docs/gap-analysis.md`).
 
+## 2026-10-02: Forecasting models (New Customer, Returning Customer)
+- Statlas forecasting screenshots reviewed (25 images, folder `Statlas Original UX/Forecasting and Calendar Layer`); plan: models first, then Calendar + Event model, then restructure the editor to Statlas order (Models, Spend, Details, Input, P&L).
+- Built `lib/planning/new-customer.ts`, `returning.ts`, `models.ts` (+ tests, 102 passing), Models tab, Details override column, repository methods, migration 0007 file (NOT applied: the connector call was declined twice, run the SQL manually). Not committed.
+- Decisions: linear regression by default; 60-day and 1-year LTV points instead of "lifetime"; AOV and cost % from the last 30 days; actualization in both models; returning forecast includes future cohorts from the plan's new revenue; store all cohort history.
+
 ## 2026-10-01: Planning layer (phases A and B)
 - `/planning` plans list and editor (monthly grid, spend and days, returning revenue, daily input, Plan P&L), plan settings with month lock/status and change log. Weekday pattern calculated from Shopify. Details: `docs/planning-layer.md`.
 - Migration `0004_planning_layer` (applied to Supabase): plan year/description/seasonality, plan_months, plan_changes, extra plan_targets columns (tax, cogs, cost_of_delivery), write policies.

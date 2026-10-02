@@ -12,8 +12,8 @@ export interface PlanCtx {
   rows: Record<string, PlanTargetDay[]>;
   seasonality: PlanSeasonality;
   setSeasonality: (s: PlanSeasonality) => void;
-  /** Changes one month's inputs (ignored when the month is locked). */
-  editInputs: (month: string, fn: (i: PlanMonthInputs) => PlanMonthInputs) => void;
+  /** Changes one month's inputs (ignored when the month is locked). With `create`, a month with no plan yet is started from recent actuals first. */
+  editInputs: (month: string, fn: (i: PlanMonthInputs) => PlanMonthInputs, create?: boolean) => void;
   setLocked: (month: string, locked: boolean) => void;
   fill: (month: string, source: FillSource | "clear" | "blank", growthPct?: number) => string | null;
   history: { facts: DailyFact[]; lastData: string; loading: boolean };

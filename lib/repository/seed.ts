@@ -11,6 +11,8 @@ import type {
 } from "../types";
 import { CHANNEL_KEYS } from "../types";
 import { defaultExtra } from "../defaults";
+import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
+import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth } from "../planning/types";
 import type { Repository } from "./types";
 
@@ -494,5 +496,43 @@ export class SeedRepository implements Repository {
 
   async getPlanChanges(planId: string): Promise<PlanChange[]> {
     return this.changes.get(planId) ?? [];
+  }
+
+  /** Demo cohorts: first-order revenue per month from the demo facts, repeat revenue decaying by age. */
+  async getCohortData(clientId: string): Promise<{ available: boolean; stats: CohortStat[]; cohorts: CohortRow[] }> {
+    const last = await this.getLastDataDate(clientId);
+    const first = addDays(last, -365 * 3);
+    const facts = await this.getFacts(clientId, first, last);
+    const byMonth = new Map<string, number>();
+    const cust = new Map<string, number>();
+    for (const f of facts) {
+      const m = `${f.date.slice(0, 7)}-01`;
+      byMonth.set(m, (byMonth.get(m) ?? 0) + f.newOrderRevenue);
+      cust.set(m, (cust.get(m) ?? 0) + f.newOrders);
+    }
+    const lift = (p: number) => 0.09 * 0.78 ** (p - 1) + 0.012;
+    const stats: CohortStat[] = [];
+    const cohorts: CohortRow[] = [];
+    for (const [month, firstRevenue] of [...byMonth.entries()].sort()) {
+      const periods = Array.from({ length: 36 }, (_, i) => firstRevenue * lift(i + 1) * noise(`${clientId}|${month}|${i}`, 0.15));
+      cohorts.push({ month, customers: cust.get(month) ?? 0, firstRevenue, periods });
+      stats.push({ month, customers: cust.get(month) ?? 0, firstRevenue, rev60d: periods[0] + periods[1], rev365d: periods.slice(0, 12).reduce((a, b) => a + b, 0) });
+    }
+    return { available: stats.length > 0, stats, cohorts };
+  }
+
+  async rebuildCohorts(): Promise<void> {
+    /* demo cohorts are generated on read */
+  }
+
+  private modelStore = new Map<string, SavedModel<unknown, unknown>>();
+
+  async getPlanModel(planId: string, kind: ModelKind): Promise<SavedModel<unknown, unknown> | null> {
+    return this.modelStore.get(`${planId}|${kind}`) ?? null;
+  }
+
+  async savePlanModel(plan: PlanVersion, kind: ModelKind, settings: unknown, results: unknown, changeNote: string): Promise<void> {
+    this.modelStore.set(`${plan.id}|${kind}`, { settings, results, updatedAt: new Date().toISOString(), updatedBy: "demo user" });
+    this.log(plan.id, changeNote);
   }
 }
