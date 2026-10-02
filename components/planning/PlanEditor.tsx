@@ -5,13 +5,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/app-context";
 import { todayLocal } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
-import { aggregatePlan } from "@/lib/metrics";
+import { aggregate, aggregatePlan, amerSpend } from "@/lib/metrics";
+import { dayMultipliers, DEFAULT_EVENT_SETTINGS, measureEventDays, toDayFacts, type EventSettings, type MarketingEvent } from "@/lib/planning/events";
 import { FLAT_SEASONALITY, generateMonth } from "@/lib/planning/generate";
 import { dowFromHistory, inputsFromFacts, sourceRange, type FillSource } from "@/lib/planning/history";
 import { blankInputs, ZERO_RATES, type PlanMonth, type PlanMonthInputs } from "@/lib/planning/types";
 import { getRepository } from "@/lib/repository";
 import type { PlanSeasonality, PlanVersion } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
+import { CalendarStep } from "./CalendarStep";
 import { DetailsStep } from "./DetailsStep";
 import { InputStep } from "./InputStep";
 import { MonthlyStep } from "./MonthlyStep";
@@ -22,12 +24,13 @@ import { btn, btnPrimary, monthKey, MONTHS } from "./ui";
 import { usePlanHistory } from "./useHistory";
 
 const STEPS = [
+  { id: "monthly", label: "Overview" },
   { id: "models", label: "Models" },
-  { id: "monthly", label: "Monthly plan" },
-  { id: "spend", label: "Spend & days" },
-  { id: "details", label: "Returning revenue" },
-  { id: "input", label: "Daily input" },
-  { id: "pnl", label: "Plan P&L" },
+  { id: "calendar", label: "Calendar" },
+  { id: "spend", label: "Spend" },
+  { id: "details", label: "Details" },
+  { id: "input", label: "Input" },
+  { id: "pnl", label: "P&L" },
 ] as const;
 type StepId = (typeof STEPS)[number]["id"];
 
@@ -42,6 +45,9 @@ export function PlanEditor({ planId }: { planId: string }) {
   const [step, setStep] = useState<StepId>("models");
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [events, setEvents] = useState<MarketingEvent[]>([]);
+  const [eventSettings, setEventSettingsState] = useState<EventSettings>(DEFAULT_EVENT_SETTINGS);
+  const [eventSettingsDirty, setEventSettingsDirty] = useState(false);
 
   const history = usePlanHistory(client?.id, plan?.year ?? Number(todayLocal().slice(0, 4)));
 
@@ -64,6 +70,15 @@ export function PlanEditor({ planId }: { planId: string }) {
       setSeasonDraft(found.seasonality);
       setDirty(new Set());
       setSeasonDirty(false);
+      try {
+        const [evs, saved] = await Promise.all([repo.listEvents(found.clientId), repo.getPlanModel(planId, "event")]);
+        if (cancel) return;
+        setEvents(evs);
+        setEventSettingsState({ ...DEFAULT_EVENT_SETTINGS, ...((saved?.settings as Partial<EventSettings> | undefined) ?? {}) });
+        setEventSettingsDirty(false);
+      } catch {
+        /* the calendar is optional: the plan works without it */
+      }
     })();
     return () => {
       cancel = true;
@@ -72,6 +87,21 @@ export function PlanEditor({ planId }: { planId: string }) {
 
   const historySeasonality = useMemo(() => (history.lastData ? dowFromHistory(history.facts, history.lastData) : null), [history]);
   const seasonality: PlanSeasonality = seasonDraft ?? historySeasonality ?? FLAT_SEASONALITY;
+
+  // What the Event Effect Model measured on past event days (ordinary days = weekday-adjusted days around them).
+  const eventResults = useMemo(() => {
+    if (!settings || !history.lastData || !events.length) return [];
+    const days = toDayFacts(history.facts, (f) => amerSpend(aggregate([f]), settings));
+    return measureEventDays(days, events, seasonality.dow, history.lastData);
+  }, [events, history.facts, history.lastData, settings, seasonality]);
+  const eventMults = useMemo(() => {
+    if (!plan || !eventSettings.apply) return {};
+    return dayMultipliers(
+      events.filter((e) => e.endDate >= `${plan.year}-01-01` && e.date <= `${plan.year}-12-31`),
+      eventSettings,
+      eventResults,
+    );
+  }, [plan, events, eventSettings, eventResults]);
 
   const rows = useMemo(() => {
     const out: PlanCtx["rows"] = {};
@@ -87,10 +117,11 @@ export function PlanEditor({ planId }: { planId: string }) {
         deliveryCostPerOrder: settings.deliveryCostPerOrder,
         excludeBrandFromAmer: settings.excludeBrandFromAmer,
         excludeMetaReturningFromAmer: settings.excludeMetaReturningFromAmer,
+        events: eventMults,
       });
     }
     return out;
-  }, [plan, months, settings, seasonality]);
+  }, [plan, months, settings, seasonality, eventMults]);
 
   const markDirty = useCallback((month: string) => setDirty((d) => new Set(d).add(month)), []);
 
@@ -155,12 +186,59 @@ export function PlanEditor({ planId }: { planId: string }) {
     [months, settings, history, markDirty],
   );
 
+  /** Event changes reshape the days of every planned month, so those months need a new Save plan. */
+  const markEventsDirty = useCallback(() => {
+    setDirty((d) => {
+      const n = new Set(d);
+      months?.forEach((m) => m.inputs && n.add(m.month));
+      return n;
+    });
+  }, [months]);
+
+  const setEventSettings = useCallback(
+    (s: EventSettings) => {
+      setEventSettingsState(s);
+      setEventSettingsDirty(true);
+      markEventsDirty();
+    },
+    [markEventsDirty],
+  );
+
+  const saveEvents = useCallback(
+    async (list: Parameters<PlanCtx["saveEvents"]>[0]): Promise<string | null> => {
+      if (!plan) return "No plan loaded";
+      try {
+        const saved = await getRepository().saveEvents(plan.clientId, list);
+        setEvents((cur) => [...cur.filter((e) => !saved.some((s) => s.id === e.id)), ...saved].sort((a, b) => (a.date < b.date ? -1 : 1)));
+        markEventsDirty();
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : "Could not save the events";
+      }
+    },
+    [plan, markEventsDirty],
+  );
+
+  const removeEvent = useCallback(
+    async (id: string): Promise<string | null> => {
+      try {
+        await getRepository().deleteEvent(id);
+        setEvents((cur) => cur.filter((e) => e.id !== id));
+        markEventsDirty();
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : "Could not delete the event";
+      }
+    },
+    [markEventsDirty],
+  );
+
   const setSeasonality = useCallback((s: PlanSeasonality) => {
     setSeasonDraft(s);
     setSeasonDirty(true);
   }, []);
 
-  const needsSave = dirty.size > 0 || seasonDirty || (plan != null && plan.seasonality === null && history.lastData !== "" && months?.some((m) => m.inputs));
+  const needsSave = dirty.size > 0 || seasonDirty || eventSettingsDirty || (plan != null && plan.seasonality === null && history.lastData !== "" && months?.some((m) => m.inputs));
 
   const save = async () => {
     if (!plan || !months || !settings) return;
@@ -182,6 +260,14 @@ export function PlanEditor({ planId }: { planId: string }) {
       if (items.length) {
         const names = [...dirty].sort().map((k) => MONTHS[Number(k.slice(5, 7)) - 1]);
         await repo.savePlanMonths(updated, items, names.length ? `Updated plan months (${names.join(", ")})` : "Recalculated daily targets");
+      }
+      if (eventSettingsDirty) {
+        try {
+          await repo.savePlanModel(updated, "event", eventSettings, null, "Updated event settings");
+          setEventSettingsDirty(false);
+        } catch {
+          /* needs migration 0007; the targets above are saved either way */
+        }
       }
       setPlan(updated);
       setSaved(months);
@@ -210,7 +296,7 @@ export function PlanEditor({ planId }: { planId: string }) {
 
   const totals = aggregatePlan(Object.values(rows).flat());
   const money = (v: number) => formatValue(v, "currency0", client.currency);
-  const ctx: PlanCtx = { plan, client, settings, months, rows, seasonality, setSeasonality, editInputs, setLocked, fill, history, historySeasonality };
+  const ctx: PlanCtx = { plan, client, settings, months, rows, seasonality, setSeasonality, editInputs, setLocked, fill, history, historySeasonality, events, eventResults, eventSettings, setEventSettings, eventMults, saveEvents, removeEvent };
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
@@ -262,6 +348,7 @@ export function PlanEditor({ planId }: { planId: string }) {
         <ModelsStep ctx={ctx} />
       </div>
       {step === "monthly" && <MonthlyStep ctx={ctx} />}
+      {step === "calendar" && <CalendarStep ctx={ctx} />}
       {step === "spend" && <SpendStep ctx={ctx} />}
       {step === "details" && <DetailsStep ctx={ctx} />}
       {step === "input" && <InputStep ctx={ctx} />}

@@ -1,4 +1,5 @@
 import type { FirstProductRow } from "../reports/first-product";
+import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth } from "../planning/types";
@@ -40,4 +41,9 @@ export interface Repository {
   /** The saved model of a plan (null if never saved). `settings`/`results` are the model's own shapes. */
   getPlanModel(planId: string, kind: ModelKind): Promise<SavedModel<unknown, unknown> | null>;
   savePlanModel(plan: PlanVersion, kind: ModelKind, settings: unknown, results: unknown, changeNote: string): Promise<void>;
+  /** The client's marketing calendar (all dates). */
+  listEvents(clientId: string): Promise<MarketingEvent[]>;
+  /** Inserts (no id yet) or updates events; returns them with ids. Needs migration 0008 on the live database. */
+  saveEvents(clientId: string, events: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]): Promise<MarketingEvent[]>;
+  deleteEvent(id: string): Promise<void>;
 }

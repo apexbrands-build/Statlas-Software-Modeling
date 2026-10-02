@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { addYears } from "@/lib/dates";
 import { DEFAULT_NEW_CUSTOMER, DEFAULT_RETURNING, type ModelKind, type NewCustomerResults, type NewCustomerSettings, type ReturningResults, type ReturningSettings } from "@/lib/planning/models";
 import type { CohortStat } from "@/lib/planning/models";
 import type { CohortRow } from "@/lib/planning/returning";
@@ -9,7 +8,9 @@ import { getRepository } from "@/lib/repository";
 import type { DailyFact } from "@/lib/types";
 import type { PlanCtx } from "../ctx";
 import { btn, btnPrimary } from "../ui";
+import { BulletGlyph, EventIllustration, GrowthIllustration, RetentionIllustration, type BulletIcon } from "./icons";
 import { NewCustomerModel } from "./NewCustomerModel";
+import { EventModel } from "./EventModel";
 import { ReturningModel } from "./ReturningModel";
 
 export interface CohortData {
@@ -39,24 +40,29 @@ export interface ModelCtx {
   savedAt: Partial<Record<ModelKind, string | null>>;
 }
 
-type View = "info" | "new" | "returning";
+type View = "info" | "new" | "returning" | "event";
 
 const SIDE: { id: View; label: string }[] = [
   { id: "info", label: "Info" },
   { id: "new", label: "New Customer Model" },
   { id: "returning", label: "Returning Customer Model" },
+  { id: "event", label: "Event Model" },
 ];
 
-function Card({ title, sub, bullets, onOpen, disabled }: { title: string; sub: string; bullets: string[]; onOpen?: () => void; disabled?: boolean }) {
+function Card({ title, sub, art, bullets, onOpen, disabled }: { title: string; sub: string; art: React.ReactNode; bullets: { icon: BulletIcon; text: string }[]; onOpen?: () => void; disabled?: boolean }) {
   return (
     <div className="flex flex-col rounded-xl border border-border bg-surface p-5">
       <h3 className="text-lg font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
         {title}
       </h3>
-      <p className="mb-3 text-xs text-text-muted">{sub}</p>
-      <ul className="mb-4 flex-1 space-y-2 text-sm text-text-muted">
+      <p className="mb-2 text-xs text-text-muted">{sub}</p>
+      <div className="mb-3 rounded-lg bg-bg px-4 py-3 text-text">{art}</div>
+      <ul className="mb-4 flex-1 space-y-3 text-sm text-text-muted">
         {bullets.map((b) => (
-          <li key={b}>{b}</li>
+          <li key={b.text} className="flex gap-3">
+            <BulletGlyph name={b.icon} />
+            <span>{b.text}</span>
+          </li>
         ))}
       </ul>
       <button className={disabled ? btn : btnPrimary} disabled={disabled} onClick={onOpen}>
@@ -70,7 +76,6 @@ function Card({ title, sub, bullets, onOpen, disabled }: { title: string; sub: s
 export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
   const { client, plan, history } = ctx;
   const [view, setView] = useState<View>("info");
-  const [facts, setFacts] = useState<DailyFact[] | null>(null);
   const [cohort, setCohort] = useState<CohortData>({ available: false, stats: [], cohorts: [] });
   const [newSettings, setNewSettingsState] = useState<NewCustomerSettings>({ ...DEFAULT_NEW_CUSTOMER, months: {} });
   const [newResults, setNewResults] = useState<NewCustomerResults | null>(null);
@@ -85,14 +90,12 @@ export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
     let cancel = false;
     (async () => {
       const repo = getRepository();
-      const [f, c, nc, rt] = await Promise.all([
-        repo.getFacts(client.id, addYears(lastData, -6), lastData),
+      const [c, nc, rt] = await Promise.all([
         repo.getCohortData(client.id),
         repo.getPlanModel(plan.id, "new_customer"),
         repo.getPlanModel(plan.id, "returning"),
       ]);
       if (cancel) return;
-      setFacts(f);
       setCohort(c);
       if (nc) {
         setNewSettingsState({ ...DEFAULT_NEW_CUSTOMER, months: {}, ...(nc.settings as Partial<NewCustomerSettings>) });
@@ -134,6 +137,8 @@ export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
     [plan],
   );
 
+  // The models use everything since the store began (the editor already loaded it).
+  const facts: DailyFact[] | null = history.loading ? null : history.facts;
   if (!facts) return <div className="h-64 animate-pulse rounded-xl bg-surface" />;
 
   const mc: ModelCtx = {
@@ -164,37 +169,48 @@ export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
             {s.id === "returning" && retResults && <span className="ml-1 text-accent">✓</span>}
           </button>
         ))}
-        <span className="rounded-lg px-3 py-2 text-left text-sm text-text-faint">Event Model (next)</span>
       </nav>
       <div className="min-w-0 flex-1">
         {view === "info" && (
           <div className="space-y-4">
             <p className="text-center text-sm text-text-muted">Models are the starting point and form the basis for the forecast. They only use the client&apos;s own history; you can then bet against them.</p>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-3">
               <Card
                 title="New Revenue Model"
                 sub="aMER / CAC"
+                art={<GrowthIllustration />}
                 bullets={[
-                  "Fits how aMER falls as spend rises, from the client's daily history (a straight-line regression, weekday-adjusted, outliers removed).",
-                  "Shows the spend that maximises CM, 60-day CM, 1-year CM or revenue. Actualize it with recent data when the business unlocks more spending power.",
+                  { icon: "scatter", text: "Fits how revenue and aMER respond to spend from the client's daily history (weekday-adjusted, outliers removed), following the aMER_ModelV2 method." },
+                  { icon: "target", text: "Shows the spend that maximises CM, 60-day CM, 1-year CM or break-even revenue, and fades returns beyond spend the client has never run. Create forecast fills the whole year." },
                 ]}
                 onOpen={() => setView("new")}
               />
               <Card
                 title="Retention Model"
                 sub="Returning customers"
+                art={<RetentionIllustration />}
                 bullets={[
-                  "Learns how each cohort of customers keeps buying over time, from every cohort since the store began.",
-                  "Returning revenue = existing cohorts + the cohorts the plan will acquire. It fills Returning Revenue in Details, and you can override or actualize it.",
+                  { icon: "cohort", text: "Learns how each cohort of customers keeps buying over time, from every cohort since the store began." },
+                  { icon: "layers", text: "Returning revenue = existing cohorts + the cohorts the plan will acquire. Create forecast fills Details; you can override or actualize it." },
                 ]}
                 onOpen={() => setView("returning")}
               />
+              <Card
+                title="Event Effect Model"
+                sub="Historical event correlation to future events"
+                art={<EventIllustration />}
+                bullets={[
+                  { icon: "calendar", text: "Compares past marketing events from the Calendar with ordinary days: how much more spend, new revenue and returning revenue each event type brings." },
+                  { icon: "bolt", text: "Applies the pattern to upcoming events: event days run hotter and the others are compressed, so month totals stay what the models say." },
+                ]}
+                onOpen={() => setView("event")}
+              />
             </div>
-            <Card title="Event Effect Model" sub="Historical event correlation to future events" bullets={["Compares past marketing events with normal days and applies the effect to future events. Built after the Calendar."]} disabled />
           </div>
         )}
         {view === "new" && <NewCustomerModel mc={mc} />}
         {view === "returning" && <ReturningModel mc={mc} />}
+        {view === "event" && <EventModel ctx={ctx} />}
       </div>
     </div>
   );

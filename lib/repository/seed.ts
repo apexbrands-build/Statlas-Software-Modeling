@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { CHANNEL_KEYS } from "../types";
 import { defaultExtra } from "../defaults";
+import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth } from "../planning/types";
@@ -534,5 +535,21 @@ export class SeedRepository implements Repository {
   async savePlanModel(plan: PlanVersion, kind: ModelKind, settings: unknown, results: unknown, changeNote: string): Promise<void> {
     this.modelStore.set(`${plan.id}|${kind}`, { settings, results, updatedAt: new Date().toISOString(), updatedBy: "demo user" });
     this.log(plan.id, changeNote);
+  }
+
+  private eventStore: MarketingEvent[] = [];
+
+  async listEvents(clientId: string): Promise<MarketingEvent[]> {
+    return this.eventStore.filter((e) => e.clientId === clientId).sort((a, b) => (a.date < b.date ? -1 : 1));
+  }
+
+  async saveEvents(clientId: string, events: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]): Promise<MarketingEvent[]> {
+    const out = events.map((e) => ({ ...e, id: e.id ?? `ev-${Math.random().toString(36).slice(2, 10)}`, clientId }) as MarketingEvent);
+    for (const e of out) this.eventStore = [...this.eventStore.filter((x) => x.id !== e.id), e];
+    return out;
+  }
+
+  async deleteEvent(id: string): Promise<void> {
+    this.eventStore = this.eventStore.filter((e) => e.id !== id);
   }
 }

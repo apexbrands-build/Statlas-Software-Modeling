@@ -70,7 +70,7 @@ export interface ReturningResults {
   months: { month: string; total: number; preCohort: number; knownCohorts: number; futureCohorts: number }[];
 }
 
-export type ModelKind = "new_customer" | "returning";
+export type ModelKind = "new_customer" | "returning" | "event";
 
 export interface SavedModel<S, R> {
   settings: S;

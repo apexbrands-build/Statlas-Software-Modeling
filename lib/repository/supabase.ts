@@ -4,6 +4,7 @@ import { getBrowserClient } from "../supabase/client";
 import type { FirstProductRow } from "../reports/first-product";
 import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 import { CHANNEL_KEYS } from "../types";
+import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth, PlanMonthInputs } from "../planning/types";
@@ -371,5 +372,56 @@ export class SupabaseRepository implements Repository {
       ...(r.cogs != null ? { cogs: n(r.cogs) } : {}),
       ...(r.cost_of_delivery != null ? { costOfDelivery: n(r.cost_of_delivery) } : {}),
     }));
+  }
+
+  private eventOf(r: Row): MarketingEvent {
+    return {
+      id: r.id as string,
+      clientId: r.client_id as string,
+      date: r.date as string,
+      endDate: ((r.end_date as string | null) ?? (r.date as string)) as string,
+      type: r.category as string,
+      name: (r.title as string) ?? "",
+      ...(r.promo ? { promo: r.promo as string } : {}),
+      ...(r.product ? { product: r.product as string } : {}),
+      ...(r.audience ? { audience: r.audience as string } : {}),
+      segmentSize: r.segment_size == null ? null : n(r.segment_size),
+      ...(r.notes ? { notes: r.notes as string } : {}),
+      source: ((r.source as string) ?? "manual") as MarketingEvent["source"],
+    };
+  }
+
+  async listEvents(clientId: string): Promise<MarketingEvent[]> {
+    const rows = await fetchAll<Row>((a, b) => this.db.from("marketing_events").select("*").eq("client_id", clientId).order("date").range(a, b));
+    return rows.map((r) => this.eventOf(r));
+  }
+
+  async saveEvents(clientId: string, events: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]): Promise<MarketingEvent[]> {
+    const rec = (e: (typeof events)[number]) => ({
+      ...(e.id ? { id: e.id } : {}),
+      client_id: clientId,
+      date: e.date,
+      end_date: e.endDate || e.date,
+      category: e.type,
+      title: e.name || e.type,
+      source: e.source === "klaviyo" || e.source === "sms" || e.source === "import" ? e.source : "manual",
+      promo: e.promo ?? null,
+      product: e.product ?? null,
+      audience: e.audience ?? null,
+      segment_size: e.segmentSize ?? null,
+      notes: e.notes ?? null,
+    });
+    const out: MarketingEvent[] = [];
+    for (let i = 0; i < events.length; i += 200) {
+      const { data, error } = await this.db.from("marketing_events").upsert(events.slice(i, i + 200).map(rec)).select("*");
+      if (error) throw new Error(/column|policy|permission|row-level/i.test(error.message) ? `Could not save events: database migration 0008 has not been applied yet (supabase/migrations/0008_marketing_calendar.sql). ${error.message}` : error.message);
+      out.push(...((data ?? []) as Row[]).map((r) => this.eventOf(r)));
+    }
+    return out;
+  }
+
+  async deleteEvent(id: string): Promise<void> {
+    const { error } = await this.db.from("marketing_events").delete().eq("id", id);
+    if (error) throw new Error(error.message);
   }
 }

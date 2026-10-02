@@ -124,7 +124,7 @@ export function ReturningModel({ mc }: { mc: ModelCtx }) {
     setNote(
       err
         ? { tone: "bad", text: err }
-        : { tone: "ok", text: `Returning revenue was filled into Details for ${applied} month${applied === 1 ? "" : "s"}${skipped ? ` (${skipped} locked skipped)` : ""}. Overrides you typed there are kept. Press Save plan to update the daily targets.` },
+        : { tone: "ok", text: `Forecast created: returning revenue was filled into Details for ${applied} month${applied === 1 ? "" : "s"}${skipped ? ` (${skipped} locked skipped)` : ""}. Overrides you typed there are kept. Press Save plan to update the daily targets.` },
     );
   };
 
@@ -209,7 +209,7 @@ export function ReturningModel({ mc }: { mc: ModelCtx }) {
           Rebuild cohorts
         </button>
         <button className={btnPrimary} onClick={saveAndApply} disabled={busy}>
-          {busy ? "Saving…" : "Save & fill Details"}
+          {busy ? "Saving…" : "Create forecast"}
         </button>
       </div>
       {note && <p className={`rounded-lg border p-3 text-sm ${note.tone === "ok" ? "border-good/40 bg-good/10 text-good" : "border-bad/40 bg-bad/10 text-bad"}`}>{note.text}</p>}

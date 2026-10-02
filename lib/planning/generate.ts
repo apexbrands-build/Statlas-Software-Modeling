@@ -53,6 +53,12 @@ export interface GenerateOptions {
   deliveryCostPerOrder: number;
   excludeBrandFromAmer: boolean;
   excludeMetaReturningFromAmer: boolean;
+  /**
+   * Marketing events by date (multipliers from the Event Effect Model). Event days run hotter and the other days are compressed so
+   * the month totals stay what the models and the strategist set: spend and returning revenue through the day weights, new revenue
+   * through aMER multipliers re-centred on the month's spend-weighted average.
+   */
+  events?: Record<string, { spend: number; amer: number; returning: number }>;
 }
 
 /**
@@ -66,20 +72,24 @@ export function generateMonth(o: GenerateOptions): PlanTargetDay[] {
   const w = dayWeights(dates, o.seasonality);
   const ov = o.inputs.overrides ?? {};
 
-  const distribute = (total: number, pick: (d: string) => number | undefined): number[] => {
+  const ev = o.events ?? {};
+  const wSpend = w.map((x, i) => x * (ev[dates[i]]?.spend ?? 1));
+  const wReturning = w.map((x, i) => x * (ev[dates[i]]?.returning ?? 1));
+
+  const distribute = (total: number, pick: (d: string) => number | undefined, weights: number[]): number[] => {
     const fixed = dates.map((d) => pick(d));
     const fixedSum = fixed.reduce<number>((a, v) => a + (v ?? 0), 0);
     const free = spread(
       Math.max(0, total - fixedSum),
-      w.map((x, i) => (fixed[i] === undefined ? x : 0)),
+      weights.map((x, i) => (fixed[i] === undefined ? x : 0)),
     );
     return dates.map((_, i) => fixed[i] ?? free[i]);
   };
-  const spend = distribute(o.inputs.spend, (d) => ov[d]?.spend);
-  const returning = distribute(o.inputs.returningRevenue, (d) => ov[d]?.returningRevenue);
+  const spend = distribute(o.inputs.spend, (d) => ov[d]?.spend, wSpend);
+  const returning = distribute(o.inputs.returningRevenue, (d) => ov[d]?.returningRevenue, wReturning);
 
   const pctSum = PLAN_PLATFORMS.reduce((a, p) => a + (o.inputs.platformPct[p.key] ?? 0), 0);
-  return dates.map((date, i) => {
+  const channels = dates.map((_, i) => {
     const spendByChannel: Partial<Record<ChannelKey, number>> = {};
     if (pctSum > 0) {
       for (const p of PLAN_PLATFORMS) {
@@ -93,7 +103,22 @@ export function generateMonth(o: GenerateOptions): PlanTargetDay[] {
     let acqSpend = spend[i];
     if (o.excludeBrandFromAmer) acqSpend -= spendByChannel.google_brand ?? 0;
     if (o.excludeMetaReturningFromAmer) acqSpend -= spendByChannel.meta_returning ?? 0;
-    const newRevenue = ov[date]?.newRevenue ?? acqSpend * o.inputs.amer;
+    return { spendByChannel, acqSpend };
+  });
+  // aMER multipliers of event days, re-centred so the month's new revenue (acquisition spend x aMER) is unchanged.
+  const freeNew = dates.map((d) => ov[d]?.newRevenue === undefined);
+  const raw = dates.map((d) => ev[d]?.amer ?? 1);
+  let sumAcq = 0;
+  let sumAcqM = 0;
+  channels.forEach((c, i) => {
+    if (!freeNew[i]) return;
+    sumAcq += c.acqSpend;
+    sumAcqM += c.acqSpend * raw[i];
+  });
+  const centre = sumAcqM > 0 ? sumAcq / sumAcqM : 1;
+  return dates.map((date, i) => {
+    const { spendByChannel, acqSpend } = channels[i];
+    const newRevenue = ov[date]?.newRevenue ?? acqSpend * o.inputs.amer * raw[i] * centre;
     const r = o.inputs.rates;
     const newOrders = r.newAov > 0 ? newRevenue / r.newAov : 0;
     const orders = newOrders + (r.returningAov > 0 ? returning[i] / r.returningAov : 0);

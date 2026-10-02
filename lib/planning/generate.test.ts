@@ -78,3 +78,20 @@ describe("dayWeights", () => {
     expect(dayWeights(["2026-09-06"], FLAT_SEASONALITY)[0]).toBe(1);
   });
 });
+
+describe("generateMonth with events", () => {
+  const events = { "2026-09-10": { spend: 2, amer: 1.5, returning: 1.4 }, "2026-09-11": { spend: 2, amer: 1.5, returning: 1.4 } };
+  it("makes event days hotter and compresses the others, keeping every month total", () => {
+    const plain = gen(inputs());
+    const rows = gen(inputs(), [0, 0, 0, 0, 0, 0, 0], { events });
+    expect(sum(rows, "spend")).toBeCloseTo(30000);
+    expect(sum(rows, "newRevenue")).toBeCloseTo(sum(plain, "newRevenue"));
+    expect(sum(rows, "returningRevenue")).toBeCloseTo(60000);
+    const ev = rows.find((r) => r.date === "2026-09-10")!;
+    const ordinary = rows.find((r) => r.date === "2026-09-20")!;
+    expect(ev.spend / ordinary.spend).toBeCloseTo(2, 5);
+    expect(ev.returningRevenue / ordinary.returningRevenue).toBeCloseTo(1.4, 5);
+    expect(ev.newRevenue / ev.spend).toBeGreaterThan(ordinary.newRevenue / ordinary.spend);
+    expect(ordinary.spend).toBeLessThan(plain[19].spend);
+  });
+});
