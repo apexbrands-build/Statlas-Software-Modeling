@@ -73,7 +73,7 @@ export interface SavedModel<S, R> {
 }
 
 export const DEFAULT_RETURNING: ReturningSettings = { window: 12, calibrationMonths: 0, seasonality: true };
-export const DEFAULT_NEW_CUSTOMER: Omit<NewCustomerSettings, "months"> = { fitKind: "linear", actualizeFrom: null, recentWeight: 3 };
+export const DEFAULT_NEW_CUSTOMER: Omit<NewCustomerSettings, "months"> = { fitKind: "revenue", actualizeFrom: null, recentWeight: 3 };
 
 /** One cohort acquisition month's totals (migration 0007). */
 export interface CohortStat {

@@ -46,9 +46,9 @@ describe("new customer model fit", () => {
     expect(fit!.curve.b).toBeCloseTo(-0.0004, 4);
   });
 
-  it("uses the straight line by default", () => {
+  it("uses the revenue line (aMER_ModelV2 method) by default", () => {
     const fit = fitNewCustomerModel(synthetic(500, { kind: "power", a: 40, b: -0.5, r2: 1 }), flat);
-    expect(fit!.curve.kind).toBe("linear");
+    expect(fit!.curve.kind).toBe("revenue");
   });
 
   it("actualizing with recent data moves the curve toward recent behaviour", () => {

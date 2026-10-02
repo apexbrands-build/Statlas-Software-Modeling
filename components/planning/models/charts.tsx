@@ -14,10 +14,11 @@ function niceMax(v: number): number {
 export interface ScatterPoint {
   x: number;
   y: number;
-  tone: "history" | "lastYear" | "selected";
+  tone: "history" | "lastYear" | "current" | "marker" | "selected";
+  label?: string;
 }
 
-const TONE: Record<ScatterPoint["tone"], string> = { history: "var(--color-text-faint, #888)", lastYear: "#5eead4", selected: "#ef4444" };
+const TONE: Record<ScatterPoint["tone"], string> = { history: "var(--color-text-faint, #888)", lastYear: "#f97316", current: "#38bdf8", marker: "#22c55e", selected: "#ef4444" };
 
 /** aMER against spend: historical days as dots, the fitted curve as a line, the chosen spend as a red dot. */
 export function ScatterCurve({ points, curve, xFmt, height = 260 }: { points: ScatterPoint[]; curve: { x: number; y: number }[]; xFmt: (v: number) => string; height?: number }) {
@@ -44,11 +45,21 @@ export function ScatterCurve({ points, curve, xFmt, height = 260 }: { points: Sc
         </g>
       ))}
       {points
-        .filter((p) => p.tone !== "selected")
+        .filter((p) => p.tone !== "selected" && p.tone !== "marker")
         .map((p, i) => (
-          <circle key={i} cx={X(p.x)} cy={Y(p.y)} r={p.tone === "lastYear" ? 3 : 2.2} fill={TONE[p.tone]} opacity={p.tone === "lastYear" ? 0.9 : 0.55} />
+          <circle key={i} cx={X(p.x)} cy={Y(p.y)} r={p.tone === "history" ? 2.2 : 3} fill={TONE[p.tone]} opacity={p.tone === "history" ? 0.55 : 0.9} />
         ))}
       <path d={path} fill="none" stroke="#facc15" strokeWidth={2.5} strokeDasharray="1 4" strokeLinecap="round" />
+      {points
+        .filter((p) => p.tone === "marker")
+        .map((p, i) => (
+          <g key={i}>
+            <circle cx={X(p.x)} cy={Y(p.y)} r={4.5} fill={TONE.marker} stroke="white" strokeWidth={1} />
+            <text x={X(p.x)} y={Y(p.y) - 8} textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.8}>
+              {p.label}
+            </text>
+          </g>
+        ))}
       {points
         .filter((p) => p.tone === "selected")
         .map((p, i) => (

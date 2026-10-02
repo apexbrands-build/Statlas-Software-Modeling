@@ -6,6 +6,9 @@ Newest first. CLAUDE.md keeps only one line per item and points here.
 - Read docs.statlas.io (all pages except Compass) and saved paraphrased notes in `docs/statlas-docs/`, with `gap-analysis.md` listing differences and decisions for the user. 
 - Follow-up: Meta click/view attribution windows now applied from Store Settings (default 7-day click, view disabled); `/onboarding` checklist page; refund timing verified. Product by First Product report built (`lib/reports/first-product.ts`, `components/reports/FirstProductReport.tsx`); sync now stores order line items. Migrations `0005_exclude_free_orders` and `0006_order_lines` are written but NOT yet applied to Supabase (see `docs/statlas-docs/gap-analysis.md`).
 
+## 2026-10-02 (later): New Customer model follows Jack's method
+- Compiled and ran Jack's C pipeline on generated data; TS port now reproduces its table (test + fixture). Revenue-vs-spend line is the default, bucket ±1σ outliers, Max Revenue at break-even, monthly seasonality index, Create forecast (default Max CM), full history since inception, new chart colours. Outline for the rest: `docs/forecasting-build-outline.md`.
+
 ## 2026-10-02: Forecasting models (New Customer, Returning Customer)
 - Statlas forecasting screenshots reviewed (25 images, folder `Statlas Original UX/Forecasting and Calendar Layer`); plan: models first, then Calendar + Event model, then restructure the editor to Statlas order (Models, Spend, Details, Input, P&L).
 - Built `lib/planning/new-customer.ts`, `returning.ts`, `models.ts` (+ tests, 102 passing), Models tab, Details override column, repository methods, migration 0007 file (NOT applied: the connector call was declined twice, run the SQL manually). Not committed.

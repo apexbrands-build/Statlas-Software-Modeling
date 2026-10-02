@@ -20,9 +20,11 @@ import {
   curveAmer,
   evaluateSpend,
   fitNewCustomerModel,
+  monthlyAmerIndex,
   niceStep,
   OPTIMIZE_LABELS,
   optimalSpend,
+  CURVE_LABELS,
   type DayPoint,
   type ModelSettings,
   type OptimizeFor,
@@ -33,6 +35,8 @@ import type { ModelCtx } from "./ModelsStep";
 
 const daysIn = (month: string) => Number(endOfMonth(month).slice(8, 10));
 const SOURCES: Source[] = ["last30", "last90", "last365", "manual"];
+type ForecastRule = Exclude<OptimizeFor, "other"> | "lastYear";
+const RULE_LABELS: Record<ForecastRule, string> = { cm: "Max CM (default)", cm60: "Max 60-day CM", cm365: "Max 1-year CM", revenue: "Max Revenue at break-even", lastYear: "Last year + growth %" };
 
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
@@ -81,6 +85,8 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const [saving, setSaving] = useState(false);
   const [draftFrom, setDraftFrom] = useState<string>(S.actualizeFrom ?? addDays(lastData, -59));
   const [draftWeight, setDraftWeight] = useState(S.recentWeight);
+  const [rule, setRule] = useState<ForecastRule>("cm");
+  const [growth, setGrowth] = useState(10);
 
   /* ---- the fit ---- */
   const points = useMemo<DayPoint[]>(() => facts.map((f) => ({ date: f.date, spend: amerSpend(aggregate([f]), settings), newRevenue: f.newOrderRevenue })), [facts, settings]);
@@ -89,8 +95,9 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const fit = useMemo(() => fitWith(recent), [points, seasonality, S.fitKind, S.actualizeFrom, S.recentWeight]); // eslint-disable-line react-hooks/exhaustive-deps
   const baseFit = useMemo(() => (S.actualizeFrom ? fitWith(null) : fit), [points, seasonality, S.fitKind, S.actualizeFrom, fit]); // eslint-disable-line react-hooks/exhaustive-deps
   const draftFit = useMemo(() => (showActualize ? fitWith({ from: draftFrom, weight: draftWeight }) : null), [showActualize, draftFrom, draftWeight, points, seasonality, S.fitKind]); // eslint-disable-line react-hooks/exhaustive-deps
-  const linearR2 = fit?.alternatives.linear?.r2 ?? null;
-  const powerR2 = fit?.alternatives.power?.r2 ?? null;
+  const altR2 = (k: "revenue" | "linear" | "power") => fit?.alternatives[k]?.r2 ?? null;
+  const seasonal = useMemo(() => (fit ? monthlyAmerIndex(fit.used, fit.curve) : null), [fit]);
+  const seasonIdx = (key: string) => seasonal?.index[Number(key.slice(5, 7)) - 1] ?? 1;
 
   const cohortMult = useMemo(() => cohortMultipliers(cohort.stats, lastData), [cohort.stats, lastData]);
 
@@ -136,10 +143,16 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   };
 
   /* ---- the plan table ---- */
-  const rows = monthKeys.map((key) => {
-    const m = getMonth(key);
+  const markerRows: { label: string; key: Exclude<OptimizeFor, "other"> }[] = [
+    { label: "Max CM", key: "cm" },
+    { label: "Max 60-day CM", key: "cm60" },
+    { label: "Max 1-year CM", key: "cm365" },
+    { label: "Max Revenue at break-even", key: "revenue" },
+  ];
+  const buildRow = (key: string, m: NewCustomerMonth = getMonth(key)) => {
     const e = resolve(m);
     const days = daysIn(key);
+    const idx = seasonIdx(key);
     const ms: ModelSettings = { newCostPct: e.nc, returningCostPct: e.rc, aov: e.aov, ltv60Multiplier: e.m60, ltv365Multiplier: e.m365, overModelPct: m.overModelPct, minCm: m.minCm, minCm60: m.minCm60, minCm365: m.minCm365 };
     let table = null as ReturnType<typeof buildSpendTable> | null;
     let spend = m.spend;
@@ -149,15 +162,16 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
       const p95 = daily[Math.floor(daily.length * 0.95)] ?? 0;
       const top = Math.max(p95 * days * 1.8, m.spend * 1.4, 10000);
       const step = niceStep(top / 40);
-      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step);
+      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step, idx);
       if (m.optimizeFor !== "other") {
         const t = optimalSpend(table, m.optimizeFor);
         if (t != null) spend = t;
       }
-      point = evaluateSpend(fit.curve, ms, spend, days);
+      point = evaluateSpend(fit.curve, ms, spend, days, idx);
     }
-    return { key, m, e, days, ms, table, spend, point };
-  });
+    return { key, m, e, days, ms, table, spend, point, idx };
+  };
+  const rows = monthKeys.map((key) => buildRow(key));
   const cur = rows.find((r) => r.key === sel) ?? rows[0];
   const totals = rows.reduce(
     (a, r) => ({ spend: a.spend + (r.point ? r.spend : 0), rev: a.rev + (r.point?.newRevenue ?? 0), orders: a.orders + (r.point?.orders ?? 0), cm: a.cm + (r.point?.cm ?? 0) }),
@@ -172,13 +186,27 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     return t.days && sp > 0 ? t.newOrderRevenue / sp : null;
   })();
 
+  /** Spend that counted toward aMER in the same month last year (null when that month has no data). */
+  const lastYearSpend = (key: string) => {
+    const from = addYears(key, -1);
+    const t = aggregate(facts.filter((f) => f.date >= from && f.date <= endOfMonth(from)));
+    const sp = amerSpend(t, settings);
+    return t.days > 0 && sp > 0 ? sp : null;
+  };
+
   const monthLabel = (key: string) => `${plan.year} ${MONTHS[Number(key.slice(5, 7)) - 1]}`;
   const shortMonth = MONTHS[Number(cur.key.slice(5, 7)) - 1];
 
   const scatter = ((): ScatterPoint[] => {
     if (!fit) return [];
     const lyMonth = addYears(cur.key, -1).slice(0, 7);
-    const out: ScatterPoint[] = fit.used.map((p) => ({ x: p.spend * cur.days, y: p.adjAmer, tone: p.date.slice(0, 7) === lyMonth ? "lastYear" : "history" }));
+    const thisMonth = cur.key.slice(0, 7);
+    const out: ScatterPoint[] = fit.used.map((p) => ({ x: p.spend * cur.days, y: p.adjAmer, tone: p.date.slice(0, 7) === lyMonth ? "lastYear" : p.date.slice(0, 7) === thisMonth ? "current" : "history" }));
+    if (cur.table)
+      for (const mr of markerRows) {
+        const i = cur.table.best[mr.key];
+        if (i != null) out.push({ x: cur.table.points[i].spend, y: cur.table.points[i].amer, tone: "marker", label: mr.label.replace("Max ", "").replace(" at break-even", " B/E") });
+      }
     if (cur.point) out.push({ x: cur.spend, y: cur.point.amer, tone: "selected" });
     return out;
   })();
@@ -187,18 +215,18 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     const maxX = cur.table.points[cur.table.points.length - 1]?.spend ?? 0;
     return Array.from({ length: 60 }, (_, i) => {
       const x = (maxX * (i + 1)) / 60;
-      return { x, y: curveAmer(fit.curve, x / cur.days) * (1 + cur.m.overModelPct / 100) };
+      return { x, y: curveAmer(fit.curve, x / cur.days) * (1 + cur.m.overModelPct / 100) * cur.idx };
     });
   })();
 
   /* ---- save ---- */
-  const saveAndApply = async () => {
+  const saveAndApply = async (useRows: typeof rows = rows, settingsToSave = S, prefix = "") => {
     if (!fit) return;
     setSaving(true);
     setNote(null);
     let applied = 0;
     let skipped = 0;
-    for (const r of rows) {
+    for (const r of useRows) {
       if (!r.point) continue;
       const locked = months.find((m) => m.month === r.key)?.locked;
       if (locked) {
@@ -214,13 +242,30 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     }
     const results: NewCustomerResults = { fittedAt: new Date().toISOString(), kind: fit.curve.kind, a: fit.curve.a, b: fit.curve.b, r2: fit.curve.r2, daysUsed: fit.used.length, actualizedFrom: S.actualizeFrom };
     mc.setNewResults(results);
-    const err = await mc.saveModel("new_customer", S, results, S.actualizeFrom ? `Saved new customer model (actualized from ${S.actualizeFrom})` : "Saved new customer model");
+    const err = await mc.saveModel("new_customer", settingsToSave, results, S.actualizeFrom ? `Saved new customer model (actualized from ${S.actualizeFrom})` : "Saved new customer model");
     setSaving(false);
     setNote(
       err
         ? { tone: "bad", text: err }
-        : { tone: "ok", text: `Model saved. Spend and aMER were applied to ${applied} month${applied === 1 ? "" : "s"}${skipped ? ` (${skipped} locked month${skipped === 1 ? "" : "s"} skipped)` : ""}. Press Save plan (top right) to update the daily targets.` },
+        : { tone: "ok", text: `${prefix}Model saved. Spend and aMER were applied to ${applied} month${applied === 1 ? "" : "s"}${skipped ? ` (${skipped} locked month${skipped === 1 ? "" : "s"} skipped)` : ""}. Press Save plan (top right) to update the daily targets.` },
     );
+  };
+
+  /** Create forecast: every unlocked month gets spend and aMER from the chosen rule, then the model is saved. */
+  const createForecast = async () => {
+    if (!fit) return;
+    const nextMonths = { ...S.months };
+    const built = monthKeys.map((key) => {
+      let m: NewCustomerMonth = { ...getMonth(key), optimizeFor: rule === "lastYear" ? "cm" : rule };
+      if (rule === "lastYear") {
+        const ly = lastYearSpend(key);
+        if (ly != null) m = { ...m, optimizeFor: "other", spend: Math.round(ly * (1 + growth / 100)) };
+      }
+      nextMonths[key] = m;
+      return buildRow(key, m);
+    });
+    setNewSettings((s) => ({ ...s, months: nextMonths }));
+    await saveAndApply(built, { ...S, months: nextMonths }, `Forecast created (${RULE_LABELS[rule]}${rule === "lastYear" ? ` ${growth}%` : ""}). `);
   };
 
   const th = "px-2 py-1.5 text-right font-medium";
@@ -235,13 +280,6 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     );
 
   const confidence = fit.curve.r2 >= 0.5 ? "Good" : fit.curve.r2 >= 0.25 ? "Fair" : "Low";
-  const markerRows: { label: string; key: Exclude<OptimizeFor, "other"> }[] = [
-    { label: "Max CM", key: "cm" },
-    { label: "Max 60-day CM", key: "cm60" },
-    { label: "Max 1-year CM", key: "cm365" },
-    { label: "Max Revenue", key: "revenue" },
-  ];
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -258,9 +296,22 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
         <button className={btn} onClick={() => setShowActualize((v) => !v)}>
           Actualize with recent data
         </button>
-        <button className={btnPrimary} onClick={saveAndApply} disabled={saving}>
+        <button className={btnPrimary} onClick={() => saveAndApply()} disabled={saving}>
           {saving ? "Saving…" : "Save Model"}
         </button>
+        <span className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-2 py-1">
+          <select className={inputClass} value={rule} onChange={(e) => setRule(e.target.value as ForecastRule)} aria-label="Forecast rule">
+            {(Object.keys(RULE_LABELS) as ForecastRule[]).map((k) => (
+              <option key={k} value={k}>
+                {RULE_LABELS[k]}
+              </option>
+            ))}
+          </select>
+          {rule === "lastYear" && <NumField value={growth} decimals={1} className="w-16" suffix="%" onCommit={setGrowth} />}
+          <button className={btnPrimary} onClick={createForecast} disabled={saving}>
+            Create forecast
+          </button>
+        </span>
         <button className="text-xs text-accent underline" onClick={() => setShowParams((v) => !v)}>
           {showParams ? "Hide" : "Display"} model parameters
         </button>
@@ -280,34 +331,43 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
           <div className="grid gap-4 text-sm md:grid-cols-2">
             <div className="space-y-1">
               <p>
-                <span className="text-text-muted">Method:</span> {fit.curve.kind === "linear" ? "straight-line regression of weekday-adjusted aMER on daily spend" : "flattening-curve regression (log-log) of weekday-adjusted aMER on daily spend"}
+                <span className="text-text-muted">Method:</span> {fit.curve.kind === "revenue" ? "straight-line regression of weekday-adjusted revenue (spend × aMER) on daily spend, as in aMER_ModelV2" : fit.curve.kind === "linear" ? "straight-line regression of weekday-adjusted aMER on daily spend" : "flattening-curve regression (log-log) of weekday-adjusted aMER on daily spend"}
               </p>
               <p className="tabular">
-                <span className="text-text-muted">Curve:</span> {fit.curve.kind === "linear" ? `aMER = ${fit.curve.a.toFixed(3)} ${fit.curve.b < 0 ? "−" : "+"} ${Math.abs(fit.curve.b).toFixed(6)} × daily spend` : `aMER = ${fit.curve.a.toFixed(3)} × daily spend ^ ${fit.curve.b.toFixed(3)}`}
+                <span className="text-text-muted">Curve:</span> {fit.curve.kind === "revenue" ? `daily revenue = ${fit.curve.a.toFixed(0)} + ${fit.curve.b.toFixed(3)} × daily spend  (aMER = ${fit.curve.b.toFixed(3)} + ${fit.curve.a.toFixed(0)} / daily spend)` : fit.curve.kind === "linear" ? `aMER = ${fit.curve.a.toFixed(3)} ${fit.curve.b < 0 ? "−" : "+"} ${Math.abs(fit.curve.b).toFixed(6)} × daily spend` : `aMER = ${fit.curve.a.toFixed(3)} × daily spend ^ ${fit.curve.b.toFixed(3)}`}
               </p>
               <p>
                 <span className="text-text-muted">R²:</span> {fit.curve.r2.toFixed(2)} ({confidence} confidence)
-                {linearR2 != null && powerR2 != null && (
-                  <span className="ml-2 text-xs text-text-faint">
-                    straight line {linearR2.toFixed(2)} · flattening {powerR2.toFixed(2)}
-                  </span>
-                )}
+                <span className="ml-2 text-xs text-text-faint">
+                  {(["revenue", "linear", "power"] as const).filter((k) => altR2(k) != null).map((k) => `${CURVE_LABELS[k]} ${altR2(k)!.toFixed(2)}`).join(" · ")}
+                </span>
               </p>
+              {fit.curve.kind === "revenue" && (
+                <p>
+                  <span className="text-text-muted">Revenue at $0 spend:</span> {money(fit.curve.a)} a day (what the line implies the business sells with no ad spend) ·{" "}
+                  <span className="text-text-muted">each extra $1 brings:</span> {fit.curve.b.toFixed(2)}
+                </p>
+              )}
               <p>
                 <span className="text-text-muted">Days used:</span> {fit.used.length} ·{" "}
-                <span className="text-text-muted">removed:</span> {fit.dropped.filter((d) => d.reason === "bfcm").length} Black Friday week, {fit.dropped.filter((d) => d.reason === "outlier").length} outliers
+                <span className="text-text-muted">removed:</span> {fit.dropped.filter((d) => d.reason === "bfcm").length} Black Friday week, {fit.dropped.filter((d) => d.reason === "outlier").length} outliers (spend-bucket ±1σ filter)
               </p>
               <p>
                 <span className="text-text-muted">Recommended % over model:</span> {fit.recommendedOverPct}% (the 90th-percentile day sits this far above the line)
               </p>
             </div>
             <div className="space-y-2 text-xs text-text-muted">
+              <p>
+                <span className="text-text-muted">Seasonality of spending power:</span>{" "}
+                {seasonal && seasonal.years >= 2 ? `${shortMonth} runs ×${cur.idx.toFixed(2)} versus the average month (${seasonal.days[Number(cur.key.slice(5, 7)) - 1]} days over ${seasonal.years} years). Every month's table uses its own index.` : "needs two years of history, so every month uses ×1.00 for now."}
+              </p>
               <p>R² says how much of the day-to-day change in aMER the spend explains. The rest is creative, offers and noise, so treat the line as a baseline to bet against, not a promise.</p>
               <label className="flex items-center gap-2">
                 Curve shape
                 <select className={inputClass} value={S.fitKind} onChange={(e) => setNewSettings((s) => ({ ...s, fitKind: e.target.value as typeof s.fitKind }))}>
-                  <option value="linear">Straight line (recommended)</option>
-                  <option value="power">Flattening curve</option>
+                  <option value="revenue">{CURVE_LABELS.revenue} (recommended)</option>
+                  <option value="linear">{CURVE_LABELS.linear}</option>
+                  <option value="power">{CURVE_LABELS.power}</option>
                   <option value="auto">Best fit (automatic)</option>
                 </select>
               </label>
@@ -517,7 +577,9 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             { label: "Historical days", color: "#888" },
             { label: "Selected", color: "#ef4444" },
             { label: "Modeled", color: "#facc15" },
-            { label: `${shortMonth} last year`, color: "#5eead4" },
+            { label: `${shortMonth} last year`, color: "#f97316" },
+            { label: `${shortMonth} this year`, color: "#38bdf8" },
+            { label: "Max points", color: "#22c55e" },
           ]}
         />
 
@@ -546,7 +608,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 const isSel = Math.abs(p.spend - cur.spend) < (cur.table!.points[1]?.spend - cur.table!.points[0]?.spend || 1) / 2;
                 const hl = (key: Exclude<OptimizeFor, "other">) => (cur.table!.best[key] === i ? "bg-good/30 font-semibold" : "");
                 return (
-                  <tr key={p.spend} className={`cursor-pointer border-b border-border/40 hover:bg-accent/10 ${isSel ? "bg-accent/15" : ""}`} onClick={() => setMonth(cur.key, { optimizeFor: "other", spend: p.spend })}>
+                  <tr key={p.spend} className={`cursor-pointer border-b border-border/40 hover:bg-accent/10 ${isSel ? "bg-accent/15" : ""} ${p.spend / cur.days > fit.maxObservedSpend ? "italic text-text-faint" : ""}`} onClick={() => setMonth(cur.key, { optimizeFor: "other", spend: p.spend })}>
                     <td className="px-2 py-1 text-left font-medium text-accent">{marks.map((m) => m.label).join(", ")}</td>
                     <td className={td}>{money(p.spend)}</td>
                     <td className={td}>{p.amer.toFixed(2)}</td>
@@ -566,7 +628,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 1-year CM within a year.</p>
+        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the highest daily spend seen in the history: the curve is extrapolated there.</p>
       </Panel>
 
       <Panel title="How to read this">
