@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cohortMultipliers, recentNewAov } from "./models";
+import { acqShare, cohortMultipliers, recentNewAov } from "./models";
 import type { DailyFact } from "../types";
 
 const fact = (date: string, newRev: number, newOrders: number): DailyFact =>
@@ -22,6 +22,38 @@ describe("model inputs", () => {
     const m = cohortMultipliers(stats, "2026-09-30");
     expect(m.ltv365).toBeCloseTo(1 + 6000 / 20000, 4); // Jan + Feb only
     expect(m.ltv60).toBeCloseTo(1 + 2400 / 20000, 4);
-    expect(cohortMultipliers([], "2026-09-30")).toEqual({ ltv60: null, ltv365: null });
+    expect(cohortMultipliers([], "2026-09-30")).toEqual({ ltv60: null, ltv90: null, ltv365: null });
+  });
+});
+
+describe("90-day LTV multiplier", () => {
+  const stats = [
+    { month: "2025-01-01", customers: 100, firstRevenue: 10000, rev60d: 1000, rev90d: 1500, rev365d: 2500 },
+    { month: "2025-02-01", customers: 100, firstRevenue: 10000, rev60d: 1400, rev90d: 2100, rev365d: 3500 },
+    { month: "2026-08-01", customers: 100, firstRevenue: 10000, rev60d: 100, rev90d: 150, rev365d: 150 },
+  ];
+
+  it("uses cohorts that have had 90 days after their month ended", () => {
+    expect(cohortMultipliers(stats, "2026-09-30").ltv90).toBeCloseTo(1 + 3600 / 20000, 4); // the August 2026 cohort is too young
+    expect(cohortMultipliers(stats, "2026-12-15").ltv90).toBeCloseTo(1 + 3750 / 30000, 4); // 2026-08-31 + 90 days = 2026-11-29, so it counts
+  });
+
+  it("gives no 90-day multiplier for cohorts stored before the 90-day figure existed", () => {
+    const old = stats.map((c) => ({ month: c.month, customers: c.customers, firstRevenue: c.firstRevenue, rev60d: c.rev60d, rev365d: c.rev365d }));
+    expect(cohortMultipliers(old, "2026-09-30").ltv90).toBeNull();
+  });
+});
+
+describe("acqShare", () => {
+  it("removes every platform's non-acquisition spend when the retention setting is on", () => {
+    const inputs = { platformPct: { meta: 50, pinterest: 50 }, altPct: { meta: 20, pinterest: 40 } };
+    expect(acqShare(inputs, { excludeBrandFromAmer: false, excludeMetaReturningFromAmer: true })).toBeCloseTo(0.7, 9);
+    expect(acqShare(inputs, { excludeBrandFromAmer: false, excludeMetaReturningFromAmer: false })).toBe(1);
+  });
+
+  it("treats Google's alternative share as brand, controlled only by the brand setting", () => {
+    const inputs = { platformPct: { google: 50, meta: 50 }, altPct: { google: 40, meta: 0 } };
+    expect(acqShare(inputs, { excludeBrandFromAmer: false, excludeMetaReturningFromAmer: true })).toBe(1);
+    expect(acqShare(inputs, { excludeBrandFromAmer: true, excludeMetaReturningFromAmer: false })).toBeCloseTo(0.8, 9);
   });
 });

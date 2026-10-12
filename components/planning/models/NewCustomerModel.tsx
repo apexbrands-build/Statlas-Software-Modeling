@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useApp } from "@/lib/app-context";
 import { addDays, addYears, endOfMonth, todayLocal } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
 import { aggregate, amerSpend } from "@/lib/metrics";
@@ -23,6 +24,7 @@ import {
   curveAmer,
   evaluateSpend,
   fitNewCustomerModel,
+  interpolate90,
   monthlyAmerIndex,
   niceStep,
   OPTIMIZE_LABELS,
@@ -39,7 +41,7 @@ import type { ModelCtx } from "./ModelsStep";
 const daysIn = (month: string) => Number(endOfMonth(month).slice(8, 10));
 const SOURCES: Source[] = ["last30", "last90", "last365", "manual"];
 type ForecastRule = Exclude<OptimizeFor, "other"> | "lastYear";
-const RULE_LABELS: Record<ForecastRule, string> = { cm: "Max CM (default)", cm60: "Max 60-day CM", cm365: "Max 1-year CM", revenue: "Max Revenue at break-even", lastYear: "Last year + growth %" };
+const RULE_LABELS: Record<ForecastRule, string> = { cm: "Max CM (default)", cm60: "Max 60-day CM", cm90: "Max 90-day CM", cm365: "Max 1-year CM", revenue: "Max Revenue at break-even", lastYear: "Last year + growth %" };
 
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
@@ -77,6 +79,7 @@ function SourceSelect({ value, onChange, options = SOURCES }: { value: Source; o
 export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const { ctx, facts, lastData, cohort, newSettings: S, setNewSettings } = mc;
   const { plan, client, settings, months, seasonality, editInputs } = ctx;
+  const { saveSettings } = useApp();
   const money = (v: number | null) => formatValue(v, "currency0", client.currency);
   const monthKeys = months.map((m) => m.month);
 
@@ -125,11 +128,13 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
       returningCostSource: "last30",
       ltv60Multiplier: cohortMult.ltv60 ?? 1,
       ltv365Multiplier: cohortMult.ltv365 ?? 1,
+      ltv90Multiplier: cohortMult.ltv90 ?? interpolate90(cohortMult.ltv60 ?? 1, cohortMult.ltv365 ?? 1),
       ltvSource: cohortMult.ltv365 != null ? "recommended" : "manual",
       overModelPct: fit?.recommendedOverPct ?? 0,
       minCm: 0,
       minCm60: 0,
       minCm365: 0,
+      minCm90: 0,
     };
   };
   const getMonth = (key: string): NewCustomerMonth => S.months[key] ?? defaultMonth(key);
@@ -142,13 +147,15 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     const rc = m.returningCostSource === "manual" ? m.returningCostPct : (recentCostPct(facts, lastData, win(m.returningCostSource) ?? 30, settings) ?? m.returningCostPct);
     const m60 = m.ltvSource === "manual" ? m.ltv60Multiplier : (cohortMult.ltv60 ?? m.ltv60Multiplier);
     const m365 = m.ltvSource === "manual" ? m.ltv365Multiplier : (cohortMult.ltv365 ?? m.ltv365Multiplier);
-    return { aov, nc, rc, m60, m365 };
+    const m90 = m.ltvSource === "manual" ? (m.ltv90Multiplier ?? interpolate90(m60, m365)) : (cohortMult.ltv90 ?? m.ltv90Multiplier ?? interpolate90(m60, m365));
+    return { aov, nc, rc, m60, m90, m365 };
   };
 
   /* ---- the plan table ---- */
   const markerRows: { label: string; key: Exclude<OptimizeFor, "other"> }[] = [
     { label: "Max CM", key: "cm" },
     { label: "Max 60-day CM", key: "cm60" },
+    { label: "Max 90-day CM", key: "cm90" },
     { label: "Max 1-year CM", key: "cm365" },
     { label: "Max Revenue at break-even", key: "revenue" },
   ];
@@ -156,7 +163,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     const e = resolve(m);
     const days = daysIn(key);
     const idx = seasonIdx(key);
-    const ms: ModelSettings = { newCostPct: e.nc, returningCostPct: e.rc, aov: e.aov, ltv60Multiplier: e.m60, ltv365Multiplier: e.m365, overModelPct: m.overModelPct, minCm: m.minCm, minCm60: m.minCm60, minCm365: m.minCm365 };
+    const ms: ModelSettings = { newCostPct: e.nc, returningCostPct: e.rc, aov: e.aov, ltv60Multiplier: e.m60, ltv90Multiplier: e.m90, ltv365Multiplier: e.m365, overModelPct: m.overModelPct, minCm: m.minCm, minCm60: m.minCm60, minCm90: m.minCm90 ?? 0, minCm365: m.minCm365 };
     const closed = lastData !== "" && endOfMonth(key) <= lastData;
     let table = null as ReturnType<typeof buildSpendTable> | null;
     let spend = m.spend;
@@ -186,7 +193,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
         const base = point ?? evaluateSpend({ kind: "revenue", a: 0, b: 0, r2: 0 }, ms, sp, days);
         const ltvCm = (mult: number) => rev * (1 - e.nc / 100) + Math.max(0, rev * mult - rev) * (1 - e.rc / 100) - sp;
         spend = sp;
-        point = { ...base, spend: sp, amer: rev / sp, newRevenue: rev, orders: t.newOrders, cac: t.newOrders > 0 ? sp / t.newOrders : 0, cm: rev * (1 - e.nc / 100) - sp, ltv60Revenue: rev * e.m60, ltv60Cm: ltvCm(e.m60), ltv365Revenue: rev * e.m365, ltv365Cm: ltvCm(e.m365) };
+        point = { ...base, spend: sp, amer: rev / sp, newRevenue: rev, orders: t.newOrders, cac: t.newOrders > 0 ? sp / t.newOrders : 0, cm: rev * (1 - e.nc / 100) - sp, ltv60Revenue: rev * e.m60, ltv60Cm: ltvCm(e.m60), ltv90Revenue: rev * e.m90, ltv90Cm: ltvCm(e.m90), ltv365Revenue: rev * e.m365, ltv365Cm: ltvCm(e.m365) };
       }
     }
     return { key, m, e, days, ms, table, spend, point, idx, cap, closed };
@@ -220,8 +227,8 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   // Chart: every historical day is scaled to a month at that day's pace (daily spend × days), so the distance between the days
   // we have seen and the spend the model recommends is visible. Coloured points are single, clickable points, not days.
   const pickSpend = (spend: number) => setMonth(cur.key, { optimizeFor: "other", spend: Math.round(spend) });
-  const MARK_COLORS: Record<string, string> = { cm: "#22c55e", cm60: "#14b8a6", cm365: "#a855f7", revenue: "#f59e0b" };
-  const MARK_SHORT: Record<string, string> = { cm: "Max CM", cm60: "60-day CM", cm365: "1-year CM", revenue: "Revenue B/E" };
+  const MARK_COLORS: Record<string, string> = { cm: "#22c55e", cm60: "#14b8a6", cm90: "#6366f1", cm365: "#a855f7", revenue: "#f59e0b" };
+  const MARK_SHORT: Record<string, string> = { cm: "Max CM", cm60: "60-day CM", cm90: "90-day CM", cm365: "1-year CM", revenue: "Revenue B/E" };
   const monthPoint = (from: string, scaleToMonth: boolean) => {
     const to = endOfMonth(from);
     const t = aggregate(facts.filter((f) => f.date >= from && f.date <= (to < lastData ? to : lastData)));
@@ -494,8 +501,20 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
       )}
 
       <Panel title={`${plan.year} Plan`}>
+        <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-text-muted">
+          <span className="font-medium text-text">Spend counted in aMER:</span>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={settings.excludeMetaReturningFromAmer} onChange={(e) => void saveSettings({ ...settings, excludeMetaReturningFromAmer: e.target.checked })} />
+            Leave out retention (returning) spend
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={settings.excludeBrandFromAmer} onChange={(e) => void saveSettings({ ...settings, excludeBrandFromAmer: e.target.checked })} />
+            Leave out brand search spend
+          </label>
+          <span className="text-text-faint">Total spend, MER and the daily spend plan always include all spend. These are the Store Settings switches, so Home and the reports follow them. Save the model again to update the plan months.</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-xs">
+          <table className="w-full min-w-[960px] border-collapse text-xs">
             <thead>
               <tr className="border-b border-border text-text-muted">
                 <th className="px-2 py-1.5 text-left font-medium">Month</th>
@@ -506,6 +525,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 <th className={th}>AOV</th>
                 <th className={th}>CM</th>
                 <th className={th}>60-day LTV</th>
+                <th className={th}>90-day LTV</th>
                 <th className={th}>1-year LTV</th>
                 <th className={th}>New cost %</th>
                 <th className={th}>Returning cost %</th>
@@ -527,6 +547,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                   <td className={td}>{r.e.aov.toFixed(2)}</td>
                   <td className={td}>{money(r.point?.cm ?? 0)}</td>
                   <td className={td}>{(r.e.aov * r.e.m60).toFixed(2)}</td>
+                  <td className={td}>{(r.e.aov * r.e.m90).toFixed(2)}</td>
                   <td className={td}>{(r.e.aov * r.e.m365).toFixed(2)}</td>
                   <td className={td}>{r.e.nc.toFixed(1)}%</td>
                   <td className={td}>{r.e.rc.toFixed(1)}%</td>
@@ -547,7 +568,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-bad/80">* aMER is calculated in this model as new order revenue / spend that counts toward aMER (brand and Meta returning spend excluded per store settings).</p>
+        <p className="mt-2 text-xs text-bad/80">* aMER is calculated in this model as new order revenue / spend that counts toward aMER (brand search and retention spend left out when the switches above are on; total spend and MER always include all spend).</p>
       </Panel>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -575,17 +596,20 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
           <Field label="LTV multiplier" hint="repeat revenue as a multiple of the first order">
             <span className="text-xs text-text-muted">60-day</span>
             <NumField value={cur.e.m60} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv60Multiplier: v })} />
+            <span className="text-xs text-text-muted">90-day</span>
+            <NumField value={cur.e.m90} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv90Multiplier: v })} />
             <span className="text-xs text-text-muted">1-year</span>
             <NumField value={cur.e.m365} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv365Multiplier: v })} />
             <SourceSelect
               value={cur.m.ltvSource}
               options={["recommended", "manual"]}
-              onChange={(s) => setMonth(cur.key, s === "manual" ? { ltvSource: s, ltv60Multiplier: cur.e.m60, ltv365Multiplier: cur.e.m365 } : { ltvSource: s })}
+              onChange={(s) => setMonth(cur.key, s === "manual" ? { ltvSource: s, ltv60Multiplier: cur.e.m60, ltv90Multiplier: cur.e.m90, ltv365Multiplier: cur.e.m365 } : { ltvSource: s })}
             />
           </Field>
           {!cohortMult.ltv365 && <p className="text-xs text-text-faint">No cohort history yet, so the multiplier is typed by hand. Build the cohorts in the Returning Customer Model.</p>}
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="rounded-lg bg-good/10 p-2 tabular">60-day LTV: {(cur.e.aov * cur.e.m60).toFixed(2)}</div>
+            <div className="rounded-lg bg-good/10 p-2 tabular">90-day LTV: {(cur.e.aov * cur.e.m90).toFixed(2)}</div>
             <div className="rounded-lg bg-good/10 p-2 tabular">1-year LTV: {(cur.e.aov * cur.e.m365).toFixed(2)}</div>
           </div>
         </Panel>
@@ -595,6 +619,9 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
           </Field>
           <Field label="Min 60-day CM">
             <NumField value={cur.m.minCm60} className="w-28" onCommit={(v) => setMonth(cur.key, { minCm60: v })} />
+          </Field>
+          <Field label="Min 90-day CM">
+            <NumField value={cur.m.minCm90 ?? 0} className="w-28" onCommit={(v) => setMonth(cur.key, { minCm90: v })} />
           </Field>
           <Field label="Min 1-year CM">
             <NumField value={cur.m.minCm365} className="w-28" onCommit={(v) => setMonth(cur.key, { minCm365: v })} />
@@ -643,6 +670,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             { label: `${shortMonth} this year so far`, color: "#38bdf8" },
             { label: "Max CM", color: MARK_COLORS.cm },
             { label: "Max 60-day CM", color: MARK_COLORS.cm60 },
+            { label: "Max 90-day CM", color: MARK_COLORS.cm90 },
             { label: "Max 1-year CM", color: MARK_COLORS.cm365 },
             { label: "Max revenue at break-even", color: MARK_COLORS.revenue },
             { label: "Selected spend", color: "#ef4444" },
@@ -651,7 +679,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
         />
 
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[1000px] border-collapse text-xs">
+          <table className="w-full min-w-[1150px] border-collapse text-xs">
             <thead>
               <tr className="border-b border-border text-text-muted">
                 <th className="w-28 px-2 py-1.5" />
@@ -665,6 +693,8 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 <th className={th}>CM</th>
                 <th className={th}>60-day revenue</th>
                 <th className={th}>60-day CM</th>
+                <th className={th}>90-day revenue</th>
+                <th className={th}>90-day CM</th>
                 <th className={th}>1-year revenue</th>
                 <th className={th}>1-year CM</th>
               </tr>
@@ -687,6 +717,8 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                     <td className={`${td} ${hl("cm")}`}>{money(p.cm)}</td>
                     <td className={td}>{money(p.ltv60Revenue)}</td>
                     <td className={`${td} ${hl("cm60")}`}>{money(p.ltv60Cm)}</td>
+                    <td className={td}>{money(p.ltv90Revenue)}</td>
+                    <td className={`${td} ${hl("cm90")}`}>{money(p.ltv90Cm)}</td>
                     <td className={td}>{money(p.ltv365Revenue)}</td>
                     <td className={`${td} ${hl("cm365")}`}>{money(p.ltv365Cm)}</td>
                   </tr>
@@ -695,7 +727,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the spend the history has seen (the 95th-percentile day, sustained all month): returns are an assumption there.</p>
+        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 90-day CM within 90 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the spend the history has seen (the 95th-percentile day, sustained all month): returns are an assumption there.</p>
       </Panel>
 
       <Panel title="How to read this">

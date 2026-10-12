@@ -95,3 +95,15 @@ describe("generateMonth with events", () => {
     expect(ordinary.spend).toBeLessThan(plain[19].spend);
   });
 });
+
+describe("retention spend and aMER", () => {
+  it("leaves every platform's non-acquisition spend out of the spend that earns new revenue, while total spend still adds both", () => {
+    const i = inputs({ platformPct: { meta: 50, pinterest: 50 }, altPct: { meta: 0, pinterest: 50 } });
+    const flat = [0, 0, 0, 0, 0, 0, 0];
+    const off = gen(i, flat);
+    const on = gen(i, flat, { excludeMetaReturningFromAmer: true });
+    expect(sum(off, "newRevenue")).toBeCloseTo(60000);
+    expect(sum(on, "spend")).toBeCloseTo(30000);
+    expect(sum(on, "newRevenue")).toBeCloseTo(45000); // acquisition spend 22,500 x aMER 2
+  });
+});

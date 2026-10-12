@@ -523,7 +523,7 @@ export class SeedRepository implements Repository {
     for (const [month, firstRevenue] of [...byMonth.entries()].sort()) {
       const periods = Array.from({ length: 36 }, (_, i) => firstRevenue * lift(i + 1) * noise(`${clientId}|${month}|${i}`, 0.15));
       cohorts.push({ month, customers: cust.get(month) ?? 0, firstRevenue, periods });
-      stats.push({ month, customers: cust.get(month) ?? 0, firstRevenue, rev60d: periods[0] + periods[1], rev365d: periods.slice(0, 12).reduce((a, b) => a + b, 0) });
+      stats.push({ month, customers: cust.get(month) ?? 0, firstRevenue, rev60d: periods[0] + periods[1], rev90d: periods[0] + periods[1] + periods[2], rev365d: periods.slice(0, 12).reduce((a, b) => a + b, 0) });
     }
     return { available: stats.length > 0, stats, cohorts };
   }

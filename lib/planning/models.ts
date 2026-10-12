@@ -22,11 +22,14 @@ export interface NewCustomerMonth {
   /** Repeat revenue within 60 days / 365 days as a multiple of the first order. */
   ltv60Multiplier: number;
   ltv365Multiplier: number;
+  /** 90-day payback. Missing in models saved before it existed: the screen then uses the recommended value or an estimate between 60 days and 1 year. */
+  ltv90Multiplier?: number;
   ltvSource: Source;
   overModelPct: number;
   minCm: number;
   minCm60: number;
   minCm365: number;
+  minCm90?: number;
 }
 
 export type BeyondHistory = "off" | "mild" | "standard" | "strict";
@@ -88,6 +91,8 @@ export interface CohortStat {
   customers: number;
   firstRevenue: number;
   rev60d: number;
+  /** Repeat revenue within 90 days (the first three 30-day periods). Missing for cohorts stored before this existed. */
+  rev90d?: number;
   rev365d: number;
 }
 
@@ -123,19 +128,19 @@ export function recentCostPct(facts: DailyFact[], asOf: string, days: number, se
  * (a month's cohort counts for 60 days once 60 days have passed since the month ended; same for 365).
  * Uses the most recent 12 such cohorts, weighted by first-order revenue. Null when there is no mature cohort yet.
  */
-export function cohortMultipliers(stats: CohortStat[], asOf: string): { ltv60: number | null; ltv365: number | null } {
-  const mult = (horizon: number, pick: (c: CohortStat) => number) => {
-    const mature = stats.filter((c) => c.firstRevenue > 0 && addDays(endOfMonth(c.month), horizon) <= asOf).sort((a, b) => (a.month < b.month ? -1 : 1)).slice(-12);
+export function cohortMultipliers(stats: CohortStat[], asOf: string): { ltv60: number | null; ltv90: number | null; ltv365: number | null } {
+  const mult = (horizon: number, pick: (c: CohortStat) => number | undefined) => {
+    const mature = stats.filter((c) => c.firstRevenue > 0 && pick(c) !== undefined && addDays(endOfMonth(c.month), horizon) <= asOf).sort((a, b) => (a.month < b.month ? -1 : 1)).slice(-12);
     if (!mature.length) return null;
     const first = mature.reduce((a, c) => a + c.firstRevenue, 0);
-    const repeat = mature.reduce((a, c) => a + pick(c), 0);
+    const repeat = mature.reduce((a, c) => a + (pick(c) ?? 0), 0);
     return Math.round((1 + repeat / first) * 10000) / 10000;
   };
-  return { ltv60: mult(60, (c) => c.rev60d), ltv365: mult(365, (c) => c.rev365d) };
+  return { ltv60: mult(60, (c) => c.rev60d), ltv90: mult(90, (c) => c.rev90d), ltv365: mult(365, (c) => c.rev365d) };
 }
 
 /**
- * Share of total ad spend that counts toward aMER for a plan month (brand and Meta returning spend removed per client settings).
+ * Share of total ad spend that counts toward aMER for a plan month (brand search and every platform's retention spend removed per client settings).
  * Model spend (acquisition spend) x aMER = new revenue, so total spend = model spend / this share.
  */
 export function acqShare(inputs: { platformPct: Record<string, number>; altPct: Record<string, number> }, s: { excludeBrandFromAmer: boolean; excludeMetaReturningFromAmer: boolean }): number {
@@ -143,6 +148,8 @@ export function acqShare(inputs: { platformPct: Record<string, number>; altPct: 
   if (sum <= 0) return 1;
   let excluded = 0;
   if (s.excludeBrandFromAmer) excluded += ((inputs.platformPct.google ?? 0) / sum) * ((inputs.altPct.google ?? 0) / 100);
-  if (s.excludeMetaReturningFromAmer) excluded += ((inputs.platformPct.meta ?? 0) / sum) * ((inputs.altPct.meta ?? 0) / 100);
+  if (s.excludeMetaReturningFromAmer) {
+    for (const [platform, pct] of Object.entries(inputs.platformPct)) if (platform !== "google") excluded += (pct / sum) * ((inputs.altPct[platform] ?? 0) / 100);
+  }
   return Math.max(0.05, 1 - excluded);
 }

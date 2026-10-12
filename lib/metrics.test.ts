@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addYears, comparisonRange, diffDays } from "./dates";
-import { aggregate, channelGroups, channelMetricDefs, cmParts, compare, METRICS } from "./metrics";
+import { aggregate, amerSpend, channelGroups, channelMetricDefs, cmParts, compare, METRICS, totalSpend } from "./metrics";
 import { defaultExtra } from "./defaults";
 import { SeedRepository } from "./repository/seed";
 import { splitCampaignDays } from "./sync/meta-split";
@@ -312,5 +312,25 @@ describe("metaWindows", () => {
     expect(metaWindows("7 Day", "Disabled")).toEqual(["7d_click"]);
     expect(metaWindows("1 Day", "1 Day")).toEqual(["1d_click", "1d_view"]);
     expect(metaWindows(undefined, undefined)).toEqual(["7d_click"]);
+  });
+});
+
+describe("aMER spend and the retention switch", () => {
+  const t = aggregate([fact({}, { meta_acquisition: { spend: 300 }, meta_returning: { spend: 200 }, pinterest_returning: { spend: 100 }, google_brand: { spend: 50 } })]);
+
+  it("counts all spend when nothing is excluded", () => {
+    expect(amerSpend(t, settings)).toBe(650);
+  });
+
+  it("leaves out every platform's returning spend, but not brand search, with the retention switch", () => {
+    expect(amerSpend(t, { ...settings, excludeMetaReturningFromAmer: true })).toBe(350);
+  });
+
+  it("leaves out brand search only with the brand switch", () => {
+    expect(amerSpend(t, { ...settings, excludeBrandFromAmer: true })).toBe(600);
+  });
+
+  it("keeps total spend, and so MER, on all spend whatever the switches say", () => {
+    expect(totalSpend(t)).toBe(650);
   });
 });

@@ -336,7 +336,7 @@ export class SupabaseRepository implements Repository {
         arr[Number(r.period) - 1] = n(r.revenue);
         byMonth.set(m, arr);
       }
-      const st = stats.map((r) => ({ month: r.cohort_month as string, customers: n(r.customers), firstRevenue: n(r.first_revenue), rev60d: n(r.rev_60d), rev365d: n(r.rev_365d) }));
+      const st = stats.map((r) => ({ month: r.cohort_month as string, customers: n(r.customers), firstRevenue: n(r.first_revenue), rev60d: n(r.rev_60d), rev90d: (byMonth.get(r.cohort_month as string) ?? []).slice(0, 3).reduce((a, b) => a + (b ?? 0), 0), rev365d: n(r.rev_365d) }));
       const cohorts = st.map((c) => ({ month: c.month, customers: c.customers, firstRevenue: c.firstRevenue, periods: Array.from({ length: 36 }, (_, i) => byMonth.get(c.month)?.[i] ?? 0) }));
       return { available: st.length > 0, stats: st, cohorts };
     } catch {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "../dates";
-import { buildSpendTable, curveAmer, curveMarginal, evaluateSpend, fitNewCustomerModel, niceStep, optimalSpend, type Curve, type DayPoint, type ModelSettings } from "./new-customer";
+import { buildSpendTable, curveAmer, curveMarginal, evaluateSpend, fitNewCustomerModel, interpolate90, niceStep, optimalSpend, type Curve, type DayPoint, type ModelSettings } from "./new-customer";
 
 const settings: ModelSettings = {
   newCostPct: 26,
@@ -161,5 +161,36 @@ describe("guardrail beyond the observed spend", () => {
     const best = optimalSpend(t, "cm")!;
     expect(best).toBeGreaterThan(1000);
     expect(best).toBeLessThan(2000); // marginal return 2.2·(1000/x) × 0.63 = 1 at x ≈ 1,390
+  });
+});
+
+describe("90-day payback window", () => {
+  const curve0: Curve = { kind: "power", a: 1, b: 0, r2: 1 };
+  const curve: Curve = { kind: "power", a: 40, b: -0.5, r2: 1 };
+
+  it("interpolates a 90-day multiplier between the 60-day and 1-year ones", () => {
+    expect(interpolate90(1.12, 1.2604)).toBeCloseTo(1.12 + ((1.2604 - 1.12) * 30) / 305, 9);
+  });
+
+  it("values 90-day LTV with its own multiplier, and falls back to the interpolation when none is saved", () => {
+    const own = evaluateSpend(curve0, { ...settings, ltv90Multiplier: 1.18 }, 95617, 31);
+    expect(own.ltv90Revenue / own.newRevenue).toBeCloseTo(1.18, 6);
+    const saved = evaluateSpend(curve0, settings, 95617, 31);
+    expect(saved.ltv90Revenue / saved.newRevenue).toBeCloseTo(interpolate90(1.12, 1.2604), 6);
+    expect(own.ltv90Cm).toBeGreaterThan(own.cm);
+  });
+
+  it("puts the Max 90-day CM marker between the 60-day and 1-year markers", () => {
+    const t = buildSpendTable(curve, { ...settings, ltv90Multiplier: 1.18 }, 30, 400000, 5000);
+    const cm60 = optimalSpend(t, "cm60")!;
+    const cm90 = optimalSpend(t, "cm90")!;
+    const cm365 = optimalSpend(t, "cm365")!;
+    expect(cm90).toBeGreaterThanOrEqual(cm60);
+    expect(cm365).toBeGreaterThanOrEqual(cm90);
+  });
+
+  it("leaves a point out of the 90-day marker when it is below the minimum 90-day CM", () => {
+    const t = buildSpendTable(curve, { ...settings, ltv90Multiplier: 1.18, minCm90: 1e12 }, 30, 400000, 5000);
+    expect(t.best.cm90).toBeNull();
   });
 });

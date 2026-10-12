@@ -102,7 +102,7 @@ export function generateMonth(o: GenerateOptions): PlanTargetDay[] {
     }
     let acqSpend = spend[i];
     if (o.excludeBrandFromAmer) acqSpend -= spendByChannel.google_brand ?? 0;
-    if (o.excludeMetaReturningFromAmer) acqSpend -= spendByChannel.meta_returning ?? 0;
+    if (o.excludeMetaReturningFromAmer) for (const p of PLAN_PLATFORMS) if (p.key !== "google") acqSpend -= spendByChannel[p.alt] ?? 0;
     return { spendByChannel, acqSpend };
   });
   // aMER multipliers of event days, re-centred so the month's new revenue (acquisition spend x aMER) is unchanged.

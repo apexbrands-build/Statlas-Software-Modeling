@@ -8,7 +8,7 @@ import type {
   Source,
 } from "./types";
 import { CHANNEL_KEYS } from "./types";
-import { CORE_CHANNELS, PLATFORMS } from "./channels";
+import { CORE_CHANNELS, PLATFORMS, RETENTION_CHANNELS } from "./channels";
 
 /* ------------------------------------------------------------------ */
 /* Aggregation                                                         */
@@ -218,11 +218,14 @@ export function paidStats(t: Totals, s: ClientSettings) {
   return groupStats(t, s, CHANNEL_KEYS);
 }
 
-/** Spend counted as acquisition spend for aMER (settings can exclude brand and Meta returning). */
+/**
+ * Spend counted as acquisition spend for aMER. Settings can leave out brand search and the retention (returning) spend of every platform;
+ * total spend, and so MER, always keep all of it.
+ */
 export function amerSpend(t: Totals, s: ClientSettings): number {
   let sp = totalSpend(t);
   if (s.excludeBrandFromAmer) sp -= t.channels.google_brand.spend;
-  if (s.excludeMetaReturningFromAmer) sp -= t.channels.meta_returning.spend;
+  if (s.excludeMetaReturningFromAmer) for (const k of RETENTION_CHANNELS) sp -= t.channels[k].spend;
   return sp;
 }
 

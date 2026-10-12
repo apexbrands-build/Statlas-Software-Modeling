@@ -33,5 +33,8 @@ export function platformOf(key: ChannelKey): { platform: Platform; kind: "Acquis
   throw new Error(`Unknown channel ${key}`);
 }
 
+/** Non-acquisition (returning) channel of every platform except Google, whose non-acquisition channel is brand search. */
+export const RETENTION_CHANNELS: ChannelKey[] = PLATFORMS.filter((p) => p.id !== "google").map((p) => p.nonAcquisition);
+
 /** Channels that are never hidden on the dashboard, even with zero spend. */
 export const CORE_CHANNELS: ChannelKey[] = ["google_nonbrand", "google_brand", "meta_acquisition", "meta_returning"];

@@ -281,6 +281,9 @@ export function fitNewCustomerModel(points: DayPoint[], dowOffsets: number[], op
 /* Spend table                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Estimate of the 90-day multiplier from the 60-day and 1-year ones (straight line between them), used when no 90-day value is known. */
+export const interpolate90 = (m60: number, m365: number): number => m60 + ((m365 - m60) * 30) / 305;
+
 export interface ModelSettings {
   /** Costs as % of new order revenue (COGS, delivery, returns, tax). Same for the first order and for later orders. */
   newCostPct: number;
@@ -290,12 +293,15 @@ export interface ModelSettings {
   /** Repeat revenue within 60 days / 365 days as a multiple of the first order (LTV = AOV x multiplier). */
   ltv60Multiplier: number;
   ltv365Multiplier: number;
+  /** 90-day payback; missing = estimated between the 60-day and 1-year multipliers. */
+  ltv90Multiplier?: number;
   /** How far above the fitted line to plan, % (Statlas "% Over Model"). */
   overModelPct: number;
   /** Points below these are not eligible for the "Max" markers. */
   minCm: number;
   minCm60: number;
   minCm365: number;
+  minCm90?: number;
 }
 
 export interface SpendPoint {
@@ -309,6 +315,8 @@ export interface SpendPoint {
   cm: number;
   ltv60Revenue: number;
   ltv60Cm: number;
+  ltv90Revenue: number;
+  ltv90Cm: number;
   ltv365Revenue: number;
   ltv365Cm: number;
 }
@@ -322,6 +330,7 @@ export function evaluateSpend(curve: Curve, s: ModelSettings, monthlySpend: numb
   const newRevenue = monthlySpend * amer;
   const orders = s.aov > 0 ? newRevenue / s.aov : 0;
   const cm = newRevenue * (1 - s.newCostPct / 100) - monthlySpend;
+  const m90 = s.ltv90Multiplier ?? interpolate90(s.ltv60Multiplier, s.ltv365Multiplier);
   const ltvRev = (mult: number) => orders * s.aov * mult;
   const ltvCm = (mult: number) => {
     const total = ltvRev(mult);
@@ -338,13 +347,15 @@ export function evaluateSpend(curve: Curve, s: ModelSettings, monthlySpend: numb
     cm,
     ltv60Revenue: ltvRev(s.ltv60Multiplier),
     ltv60Cm: ltvCm(s.ltv60Multiplier),
+    ltv90Revenue: ltvRev(m90),
+    ltv90Cm: ltvCm(m90),
     ltv365Revenue: ltvRev(s.ltv365Multiplier),
     ltv365Cm: ltvCm(s.ltv365Multiplier),
   };
 }
 
-export type OptimizeFor = "cm" | "cm60" | "cm365" | "revenue" | "other";
-export const OPTIMIZE_LABELS: Record<OptimizeFor, string> = { cm: "Max CM", cm60: "Max 60-day CM", cm365: "Max 1-year CM", revenue: "Max Revenue at break-even", other: "Other" };
+export type OptimizeFor = "cm" | "cm60" | "cm90" | "cm365" | "revenue" | "other";
+export const OPTIMIZE_LABELS: Record<OptimizeFor, string> = { cm: "Max CM", cm60: "Max 60-day CM", cm90: "Max 90-day CM", cm365: "Max 1-year CM", revenue: "Max Revenue at break-even", other: "Other" };
 
 export interface SpendTable {
   points: SpendPoint[];
@@ -360,7 +371,7 @@ export function niceStep(raw: number): number {
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
 }
 
-/** Spend table from `step` up to `maxSpend`, plus the Max CM / 60-day CM / 1-year CM / Revenue markers. */
+/** Spend table from `step` up to `maxSpend`, plus the Max CM / 60-day CM / 90-day CM / 1-year CM / Revenue markers. */
 /** `markerMax`: the Max markers are only picked among rows up to this spend (the range the history supports). */
 export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, maxSpend: number, step: number, seasonIdx = 1, markerMax?: number): SpendTable {
   const points: SpendPoint[] = [];
@@ -380,6 +391,7 @@ export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, ma
     best: {
       cm: pick((p) => p.cm, s.minCm),
       cm60: pick((p) => p.ltv60Cm, s.minCm60),
+      cm90: pick((p) => p.ltv90Cm, s.minCm90 ?? 0),
       cm365: pick((p) => p.ltv365Cm, s.minCm365),
       revenue: pick((p) => p.newRevenue, 0, true),
     },
