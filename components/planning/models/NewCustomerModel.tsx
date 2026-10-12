@@ -594,12 +594,18 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             <SourceSelect value={cur.m.aovSource} onChange={(s) => setMonth(cur.key, s === "manual" ? { aovSource: s, aov: cur.e.aov } : { aovSource: s })} />
           </Field>
           <Field label="LTV multiplier" hint="repeat revenue as a multiple of the first order">
-            <span className="text-xs text-text-muted">60-day</span>
-            <NumField value={cur.e.m60} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv60Multiplier: v })} />
-            <span className="text-xs text-text-muted">90-day</span>
-            <NumField value={cur.e.m90} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv90Multiplier: v })} />
-            <span className="text-xs text-text-muted">1-year</span>
-            <NumField value={cur.e.m365} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv365Multiplier: v })} />
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+              <span className="text-xs text-text-muted">60-day</span>
+              <NumField value={cur.e.m60} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv60Multiplier: v })} />
+            </span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+              <span className="text-xs text-text-muted">90-day</span>
+              <NumField value={cur.e.m90} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv90Multiplier: v })} />
+            </span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+              <span className="text-xs text-text-muted">1-year</span>
+              <NumField value={cur.e.m365} decimals={4} className="w-20" disabled={cur.m.ltvSource !== "manual"} onCommit={(v) => setMonth(cur.key, { ltv365Multiplier: v })} />
+            </span>
             <SourceSelect
               value={cur.m.ltvSource}
               options={["recommended", "manual"]}
