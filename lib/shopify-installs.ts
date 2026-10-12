@@ -112,7 +112,7 @@ export async function linkInstallToClient(shop: string, clientId: string, tokens
   const { data: integration, error } = await admin
     .from("integrations")
     .upsert(
-      { client_id: clientId, provider: "shopify", account_id: shop, account_name: name, status: "connected", last_error: null },
+      { client_id: clientId, provider: "shopify", account_id: shop, account_name: name, status: "connected", last_error: null, consecutive_failures: 0 },
       { onConflict: "client_id,provider,account_id" },
     )
     .select("id")

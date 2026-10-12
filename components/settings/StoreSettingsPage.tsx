@@ -4,8 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { BrandIcon } from "@/components/BrandIcon";
 import { EditStoreDialog } from "./EditStoreDialog";
+import { ProviderCards, ReplaceKey } from "./ProviderCards";
 import { inputCls, Modal } from "./ui";
 import { useApp } from "@/lib/app-context";
+import { selectIntegrations } from "@/lib/integrations-query";
+import { needsAttention, PROVIDERS, providerLabel, type ProviderId } from "@/lib/providers";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { dataMode } from "@/lib/supabase/env";
 import type { ClientSettings } from "@/lib/types";
@@ -20,9 +23,8 @@ interface Integration {
   coverage_end: string | null;
   last_synced_at: string | null;
   last_error: string | null;
+  consecutive_failures: number | null;
 }
-
-const PROVIDER_LABEL: Record<string, string> = { shopify: "Shopify", meta: "Facebook", google_ads: "Google Ads", pinterest: "Pinterest", klaviyo: "Klaviyo", ga4: "GA4" };
 
 type Dialog = null | "edit" | "add" | "costs" | "store" | { connection: Integration };
 
@@ -40,12 +42,7 @@ export function StoreSettingsPage() {
 
   const load = useCallback(async () => {
     if (!client || !live) return;
-    const { data } = await getBrowserClient()
-      .from("integrations")
-      .select("id,provider,account_id,account_name,status,coverage_start,coverage_end,last_synced_at,last_error")
-      .eq("client_id", client.id)
-      .order("created_at");
-    const list = (data ?? []) as Integration[];
+    const list = (await selectIntegrations((columns) => getBrowserClient().from("integrations").select(columns).eq("client_id", client.id).order("created_at"))) as Integration[];
     setRows(list);
     const latest: Record<string, Job> = {};
     for (const r of list) {
@@ -160,9 +157,14 @@ export function StoreSettingsPage() {
                     <tr key={r.id} className="border-t border-border align-top">
                       <td className="px-5 py-3">
                         <span className="flex items-center gap-2 font-medium">
-                          <BrandIcon provider={r.provider} title={PROVIDER_LABEL[r.provider]} />
-                          {PROVIDER_LABEL[r.provider] ?? r.provider}
+                          <BrandIcon provider={r.provider} title={providerLabel(r.provider)} />
+                          {providerLabel(r.provider)}
                           {r.status === "error" && <span title={r.last_error ?? ""}>⚠️</span>}
+                          {needsAttention(r.consecutive_failures) && (
+                            <span title={r.last_error ?? ""} className="rounded-full border border-bad px-2 text-[10px] uppercase tracking-wide text-bad">
+                              Needs attention
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="px-5 py-3">{r.account_name ?? r.account_id}</td>
@@ -251,8 +253,17 @@ export function StoreSettingsPage() {
           }}
           onClose={() => setDialog(null)}
           onSync={async () => {
-            await syncAll(dialog.connection.provider === "meta" ? "meta" : dialog.connection.provider === "google_ads" ? "google_ads" : "shopify");
-            setMsg("Synced.");
+            const c = dialog.connection;
+            if (c.provider === "shopify" || c.provider === "meta" || c.provider === "google_ads") {
+              await syncAll(c.provider);
+              setMsg("Synced.");
+              return;
+            }
+            // Providers added through the registry sync as a background job.
+            const res = await fetch("/api/jobs/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ integrationId: c.id, kind: "recent" }) });
+            if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? "Could not start the sync");
+            await load();
+            setMsg("Sync started in the background.");
           }}
         />
       )}
@@ -312,12 +323,7 @@ function AddConnectionDialog({ clientId, initialShop, isAdmin, onClose, onChange
         {err && <p className="text-xs text-bad">{err}</p>}
       </div>
       <GoogleConnect clientId={clientId} isAdmin={isAdmin} onChanged={onChanged} onClose={onClose} setMsg={setMsg} />
-      {[["pinterest", "Pinterest"], ["klaviyo", "Klaviyo"], ["ga4", "GA4"]].map(([id, p]) => (
-        <div key={p} className="flex items-center justify-between rounded-xl border border-border px-4 py-3 text-sm text-text-muted">
-          <span className="flex items-center gap-2"><BrandIcon provider={id} title={p} />{p}</span>
-          <span className="rounded-full border border-border px-2 text-[10px] uppercase tracking-wide text-text-faint">Soon</span>
-        </div>
-      ))}
+      <ProviderCards clientId={clientId} onChanged={onChanged} onClose={onClose} setMsg={setMsg} />
     </Modal>
   );
 }
@@ -326,10 +332,10 @@ function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected }: { 
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const syncable = row.provider === "shopify" || row.provider === "meta" || row.provider === "google_ads";
+  const syncable = PROVIDERS[row.provider as ProviderId]?.available ?? false;
   return (
-    <Modal title={`${PROVIDER_LABEL[row.provider] ?? row.provider} connection`} onClose={onClose}>
-      <BrandIcon provider={row.provider} size={32} title={PROVIDER_LABEL[row.provider]} />
+    <Modal title={`${providerLabel(row.provider)} connection`} onClose={onClose}>
+      <BrandIcon provider={row.provider} size={32} title={providerLabel(row.provider)} />
       <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
         <dt className="text-text-muted">Account</dt>
         <dd>{row.account_name ?? row.account_id}</dd>
@@ -364,6 +370,7 @@ function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected }: { 
         </button>
       )}
       {syncable && <HistoryLoader row={row} />}
+      {PROVIDERS[row.provider as ProviderId]?.auth === "client-key" && <ReplaceKey row={row} clientId={clientId} />}
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
         {row.provider === "shopify" && (
           <a href={`/api/shopify/install?client=${clientId}&shop=${encodeURIComponent(row.account_id)}`} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text">

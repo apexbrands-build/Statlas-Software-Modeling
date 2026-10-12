@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
   const { error } = await getAdminClient()
     .from("integrations")
-    .upsert({ client_id: body.clientId, provider: "meta", account_id: account, account_name: info.name, status: "connected", last_error: null }, { onConflict: "client_id,provider,account_id" });
+    .upsert({ client_id: body.clientId, provider: "meta", account_id: account, account_name: info.name, status: "connected", last_error: null, consecutive_failures: 0 }, { onConflict: "client_id,provider,account_id" });
   if (error) return NextResponse.json({ error: "Could not save connection" }, { status: 500 });
   return NextResponse.json({ ok: true, name: info.name, currency: info.currency });
 }

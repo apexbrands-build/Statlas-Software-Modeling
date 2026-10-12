@@ -166,7 +166,7 @@ export async function syncShopify(integrationId: string, opts: ShopifySyncOption
     const { data: cov } = await admin.from("integrations").select("coverage_start,coverage_end").eq("id", integrationId).single();
     const covStart = cov?.coverage_start && cov.coverage_start < range.from ? cov.coverage_start : range.from;
     const covEnd = cov?.coverage_end && cov.coverage_end > range.to ? cov.coverage_end : range.to;
-    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
+    await admin.from("integrations").update({ status: "connected", consecutive_failures: 0, last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
     await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: orderRows.length, message: `${range.from} → ${range.to}${note ? ` | ${note}` : ""}` }).eq("id", run?.id ?? "");
     void integration;
     return { orders: orderRows.length, range, note };

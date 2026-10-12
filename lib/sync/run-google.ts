@@ -76,7 +76,7 @@ export async function syncGoogle(integrationId: string, body: { from?: string; t
     const { data: cov } = await admin.from("integrations").select("coverage_start,coverage_end").eq("id", integrationId).single();
     const covStart = cov?.coverage_start && cov.coverage_start < since ? cov.coverage_start : since;
     const covEnd = cov?.coverage_end && cov.coverage_end > until ? cov.coverage_end : until;
-    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
+    await admin.from("integrations").update({ status: "connected", consecutive_failures: 0, last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
     await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: [note, `Brand spend (name contains "${keyword}", not tagged ${nonBrandTag || "–"}): ${brandSpend.toFixed(2)}`].filter(Boolean).join(" | ") }).eq("id", run?.id ?? "");
     return { rows: spendRows.length, note };
   } catch (e) {

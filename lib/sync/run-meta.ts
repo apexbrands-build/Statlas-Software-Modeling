@@ -79,7 +79,7 @@ export async function syncMeta(integrationId: string, body: { from?: string; to?
     const { data: cov } = await admin.from("integrations").select("coverage_start,coverage_end").eq("id", integrationId).single();
     const covStart = cov?.coverage_start && cov.coverage_start < since ? cov.coverage_start : since;
     const covEnd = cov?.coverage_end && cov.coverage_end > until ? cov.coverage_end : until;
-    await admin.from("integrations").update({ status: "connected", last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
+    await admin.from("integrations").update({ status: "connected", consecutive_failures: 0, last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
     const existingSpend = [...existing.values()].reduce((s, e) => s + e.spend, 0);
     const runMessage = [note, diagnostics, `Existing-customer spend: ${existingSpend.toFixed(2)}`].filter(Boolean).join(" | ");
     await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: runMessage }).eq("id", run?.id ?? "");

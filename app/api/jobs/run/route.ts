@@ -1,5 +1,5 @@
 import { after, NextResponse } from "next/server";
-import { kickRunner, processNextChunk, verifyJobSignature } from "@/lib/jobs";
+import { kickRunner, kickWaitingJobs, processNextChunk, verifyJobSignature } from "@/lib/jobs";
 import { getServerClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
   after(async () => {
     const { more } = await processNextChunk(jobId);
     if (more) await kickRunner(jobId);
+    else await kickWaitingJobs(); // this job is over: start the next waiting one
   });
   return NextResponse.json({ ok: true }, { status: 202 });
 }
