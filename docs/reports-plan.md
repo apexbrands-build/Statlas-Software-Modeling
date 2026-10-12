@@ -13,8 +13,14 @@ Build all Recommended reports from Statlas **except** Best Creatives, DTC Index,
 | P&L | `pnl` | Built (#s As: Whole / Thousands / % of revenue; Revenue By: Simplified / New vs Returning / Paid vs Organic; Compare A/P/F: P and F live now, see docs/planning-layer.md) |
 | Paid Media Overview | `ads` | Built (columns are our design; Statlas's table never loaded) |
 | Facebook / Google Trackers | `facebook-tracker`, `google-tracker` | Paused: needs per-campaign daily targets from the plan layer |
-| Total Net Customer, Variable Costs Dashboard, Calendar Report | `total-net-customer`, `variable-costs`, `calendar` | Not built (Calendar needs plan goals and events) |
-| LTV Dashboard, Revenue Over Time, Net Active Customer Detail, New Vs Returning | `ltv-dashboard`, `revenue-over-time`, `net-active-customers`, `new-vs-returning` | Not built (need cohort data from customers/orders) |
+| Contribution Margin | `contribution-margin` | Built 2026-10-12 (daily rollups; CM equals the Home tile) |
+| Revenue Overview | `revenue-overview` | Built 2026-10-12 (added to the approved scope) |
+| New Vs Returning Overview | `new-vs-returning` | Built 2026-10-12 |
+| AOV Histogram | `aov-histogram` | Built 2026-10-12 (added to the approved scope; database functions in migration 0010, applied) |
+| Total Net Customer, Variable Costs Dashboard, Calendar Report | `total-net-customer`, `variable-costs`, `calendar` | Coming soon (status `planned`, no page yet; Calendar needs plan goals and events) |
+| LTV Dashboard, Revenue Over Time, Net Active Customer Detail | `ltv-dashboard`, `revenue-over-time`, `net-active-customers` | Coming soon (status `planned`; cohort data exists since migration 0007) |
+
+Registry status meanings (`lib/reports/registry.ts`): `ready` = the page is built, `waiting` = page and layout built but the data source is not connected, `planned` = no page yet. A test checks that every `ready` report has a case in `ReportRouter`.
 | Hourly, Email Metrics, Email/SMS Trackers, Pinterest/TikTok/Snapchat/Bing/YouTube/AppLovin Trackers | see registry | Not built: layout only, "waiting for data source" |
 
 ## Order of work

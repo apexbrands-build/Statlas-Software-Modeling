@@ -82,3 +82,11 @@ Notes: Google applies each conversion action's own attribution window (not a for
 - **Load history** creates a job on the server (table `sync_jobs`). Each chunk runs as its own short server task and starts the next, so you can close the window or leave the page. A chunk that is too heavy is split in half automatically. Progress shows on the connection's row in Store Settings. **Stop** cancels; **Resume** restarts a job that was cut off.
 - **Daily refresh:** `vercel.json` schedules `/api/jobs/tick` every day at 06:00 UTC. It restarts stalled jobs and re-syncs the last 14 days of every connection. To turn it on add the Vercel variable **`CRON_SECRET`** (any long random string, Sensitive); Vercel then sends it to the cron route automatically. Without it the route refuses to run.
 - On the Hobby plan Vercel allows one cron run per day. A paid plan allows more frequent runs (change the schedule in `vercel.json`).
+
+## Adding a connector (registry, 2026-10-12)
+1. `lib/providers.ts`: set `available: true` for the provider and fill `accountLabel`, `accountPlaceholder` and `setupSteps` (the steps shown on its Add Connection card).
+2. `lib/sync/registry.ts`: add a `ProviderSync` entry with `chunkDays`, `sync(integrationId, range, ctx)` and, if needed, `finalize` (runs once after the last chunk) and `verify` (checks a new connection and returns the account name). The daily cron picks the provider up automatically.
+3. If the provider id is not in the database provider check (`supabase/migrations/0009_providers_and_failures.sql` lists them), add a migration. `lib/providers.test.ts` fails when the code list and the migration list differ.
+4. Credentials: a client API key is saved by `POST /api/integrations/connect` into `integration_secrets` (encrypted) and read with `readApiKey(integrationId)` from `lib/integration-secrets.ts`. Providers on the agency Google login need no key. Never put keys in files, chat or git.
+5. Tests: fixture-based, like `lib/shopify.test.ts`; run `npm test`.
+6. Behaviour you get for free: at most 10 sync jobs run at once (`MAX_PARALLEL_JOBS`), and two failed daily runs in a row show "Needs attention" on the connection in Store Settings.
