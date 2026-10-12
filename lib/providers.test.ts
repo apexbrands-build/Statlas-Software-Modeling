@@ -8,9 +8,20 @@ describe("provider metadata", () => {
     for (const [key, meta] of Object.entries(PROVIDERS)) expect(meta.id).toBe(key);
   });
 
-  it("marks only Shopify, Meta and Google Ads as available", () => {
-    const available = Object.values(PROVIDERS).filter((p) => p.available).map((p) => p.id).sort();
-    expect(available).toEqual(["google_ads", "meta", "shopify"]);
+  it("can connect Shopify, Meta, Google Ads and the three messaging platforms, but only the first three sync data", () => {
+    const list = (pick: (p: (typeof PROVIDERS)[keyof typeof PROVIDERS]) => boolean) => Object.values(PROVIDERS).filter(pick).map((p) => p.id).sort();
+    expect(list((p) => p.available)).toEqual(["google_ads", "klaviyo", "meta", "omnisend", "postscript", "shopify"]);
+    expect(list((p) => p.syncs)).toEqual(["google_ads", "meta", "shopify"]);
+  });
+
+  it("never lets a provider sync without being connectable", () => {
+    for (const p of Object.values(PROVIDERS)) if (p.syncs) expect(p.available).toBe(true);
+  });
+
+  it("takes Klaviyo's account from its key, and asks for a name for the others", () => {
+    expect(PROVIDERS.klaviyo.accountFromKey).toBe(true);
+    expect(PROVIDERS.omnisend.accountFromKey).toBeFalsy();
+    expect(PROVIDERS.postscript.accountFromKey).toBeFalsy();
   });
 
   it("matches the provider list in migration 0009 (so the code and the database check cannot drift)", () => {

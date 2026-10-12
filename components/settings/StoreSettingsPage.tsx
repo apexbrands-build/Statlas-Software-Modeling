@@ -332,7 +332,7 @@ function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected }: { 
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const syncable = PROVIDERS[row.provider as ProviderId]?.available ?? false;
+  const syncable = PROVIDERS[row.provider as ProviderId]?.syncs ?? false;
   return (
     <Modal title={`${providerLabel(row.provider)} connection`} onClose={onClose}>
       <BrandIcon provider={row.provider} size={32} title={providerLabel(row.provider)} />
@@ -370,6 +370,7 @@ function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected }: { 
         </button>
       )}
       {syncable && <HistoryLoader row={row} />}
+      {!syncable && <p className="rounded-lg border border-border px-3 py-2 text-xs text-text-muted">Connected. The key was checked and saved. Pulling data from {providerLabel(row.provider)} is the next build, so there is nothing to sync yet.</p>}
       {PROVIDERS[row.provider as ProviderId]?.auth === "client-key" && <ReplaceKey row={row} clientId={clientId} />}
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
         {row.provider === "shopify" && (

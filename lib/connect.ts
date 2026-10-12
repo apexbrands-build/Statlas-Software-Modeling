@@ -22,7 +22,8 @@ export function parseConnectBody(body: unknown, providers: Record<string, Provid
   if (!provider || !provider.available || (provider.auth !== "client-key" && provider.auth !== "agency-google")) return { ok: false, error: "Provider not supported here" };
 
   const accountId = asText(b.accountId);
-  if (!accountId) return { ok: false, error: "Account ID is required" };
+  // A provider that tells its own account from the key (Klaviyo) does not need one typed.
+  if (!accountId && !provider.accountFromKey) return { ok: false, error: "Account ID is required" };
 
   if (provider.auth === "client-key") {
     const apiKey = asText(b.apiKey);
@@ -38,7 +39,7 @@ export function redact(message: string, secret: string | undefined): string {
 }
 
 export interface ConnectDeps {
-  verify(input: { accountId: string; apiKey?: string }): Promise<{ accountName: string }>;
+  verify(input: { accountId: string; apiKey?: string }): Promise<{ accountName: string; accountId?: string }>;
   upsertIntegration(row: { clientId: string; provider: ProviderId; accountId: string; accountName: string }): Promise<{ id: string }>;
   saveApiKey(integrationId: string, apiKey: string): Promise<void>;
   markError(integrationId: string, message: string): Promise<void>;
@@ -47,12 +48,16 @@ export interface ConnectDeps {
 /** Verify first (nothing is saved if the account is rejected), then save the connection, then the key. */
 export async function connectProvider(input: ConnectInput, deps: ConnectDeps): Promise<{ id: string; accountName: string }> {
   let accountName: string;
+  let accountId = input.accountId;
   try {
-    ({ accountName } = await deps.verify({ accountId: input.accountId, apiKey: input.apiKey }));
+    const verified = await deps.verify({ accountId: input.accountId, apiKey: input.apiKey });
+    accountName = verified.accountName;
+    // When the platform names the account, that id wins: the same key always lands on the same connection.
+    accountId = verified.accountId ?? input.accountId;
   } catch (e) {
     throw new Error(redact(e instanceof Error ? e.message : "Verification failed", input.apiKey));
   }
-  const { id } = await deps.upsertIntegration({ clientId: input.clientId, provider: input.provider, accountId: input.accountId, accountName });
+  const { id } = await deps.upsertIntegration({ clientId: input.clientId, provider: input.provider, accountId, accountName });
   if (input.apiKey !== undefined) {
     try {
       await deps.saveApiKey(id, input.apiKey);

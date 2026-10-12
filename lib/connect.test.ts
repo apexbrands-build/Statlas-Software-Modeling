@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { connectProvider, parseConnectBody, redact, type ConnectDeps } from "./connect";
 import { PROVIDERS, type ProviderMeta } from "./providers";
 
-// No client-key provider is available yet, so the tests pass a registry with an available one.
+// The tests pass their own registry: Klaviyo and GA4 available, Omnisend switched off so the "unavailable" case stays covered.
 const registry: Record<string, ProviderMeta> = {
   klaviyo: { ...PROVIDERS.klaviyo, available: true },
   ga4: { ...PROVIDERS.ga4, available: true },
   meta: PROVIDERS.meta,
-  omnisend: PROVIDERS.omnisend,
+  omnisend: { ...PROVIDERS.omnisend, available: false },
 };
 const good = { clientId: "c1", provider: "klaviyo", accountId: "acme", apiKey: "pk_123" };
 
@@ -23,8 +23,8 @@ describe("parseConnectBody", () => {
     }
   });
 
-  it("rejects an empty account id", () => {
-    expect(parseConnectBody({ ...good, accountId: "  " }, registry)).toEqual({ ok: false, error: "Account ID is required" });
+  it("rejects an empty account id for a provider that cannot tell its own account", () => {
+    expect(parseConnectBody({ clientId: "c1", provider: "ga4", accountId: "  " }, registry)).toEqual({ ok: false, error: "Account ID is required" });
   });
 
   it("rejects providers that are unknown, unavailable, or connected another way", () => {
@@ -104,5 +104,59 @@ describe("connectProvider", () => {
     const { calls, deps } = fakeDeps();
     await connectProvider({ clientId: "c1", provider: "ga4", accountId: "123456789" }, deps);
     expect(calls).toEqual(["verify", "upsert"]);
+  });
+});
+
+describe("connecting a provider whose account comes from the key", () => {
+  it("lets the account id be empty when the platform tells it (Klaviyo)", () => {
+    const r = parseConnectBody({ clientId: "c1", provider: "klaviyo", accountId: "", apiKey: "pk_1" }, registry);
+    expect(r).toEqual({ ok: true, value: { clientId: "c1", provider: "klaviyo", accountId: "", apiKey: "pk_1" } });
+    const missing = parseConnectBody({ clientId: "c1", provider: "klaviyo", apiKey: "pk_1" }, registry);
+    expect(missing.ok).toBe(true);
+  });
+
+  it("still requires a typed name for a provider that cannot tell its own account", () => {
+    const r = parseConnectBody({ clientId: "c1", provider: "omnisend", accountId: "", apiKey: "k" }, { omnisend: { ...PROVIDERS.omnisend } });
+    expect(r).toEqual({ ok: false, error: "Account ID is required" });
+  });
+
+  it("saves the connection under the account id the platform returned", async () => {
+    const rows: { accountId: string }[] = [];
+    const { deps } = fakeDeps({
+      verify: async () => ({ accountName: "Acme Co", accountId: "AcCt12" }),
+      upsertIntegration: async (row) => {
+        rows.push(row);
+        return { id: "int-1" };
+      },
+    });
+    await connectProvider({ clientId: "c1", provider: "klaviyo", accountId: "", apiKey: "pk_1" }, deps);
+    expect(rows).toEqual([expect.objectContaining({ accountId: "AcCt12", accountName: "Acme Co" })]);
+  });
+
+  it("connecting the same key twice targets the same account, so there is one connection and not two", async () => {
+    const rows: string[] = [];
+    const { deps } = fakeDeps({
+      verify: async () => ({ accountName: "Acme Co", accountId: "AcCt12" }),
+      upsertIntegration: async (row) => {
+        rows.push(row.accountId);
+        return { id: "int-1" };
+      },
+    });
+    const input = { clientId: "c1", provider: "klaviyo" as const, accountId: "", apiKey: "pk_1" };
+    await connectProvider(input, deps);
+    await connectProvider({ ...input, accountId: "typed later" }, deps);
+    expect(rows).toEqual(["AcCt12", "AcCt12"]);
+  });
+
+  it("falls back to the typed account id when the platform returns none", async () => {
+    const rows: string[] = [];
+    const { deps } = fakeDeps({
+      upsertIntegration: async (row) => {
+        rows.push(row.accountId);
+        return { id: "int-1" };
+      },
+    });
+    await connectProvider({ clientId: "c1", provider: "omnisend", accountId: "Acme", apiKey: "k" }, deps);
+    expect(rows).toEqual(["Acme"]);
   });
 });

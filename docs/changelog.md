@@ -2,9 +2,13 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-10-12: Klaviyo, Postscript and Omnisend can be connected
+- Add Connection now has live cards for the three platforms: paste a read-only key, the app checks it (one read-only call), saves it encrypted and shows the connection with the platform's logo. Klaviyo needs only the key (account id and name come from Klaviyo); Postscript and Omnisend take a label. Wrong, revoked or under-scoped keys, rate limits and outages come back as plain messages and save nothing. No data is pulled yet: `ProviderMeta.syncs` is false for them, so no Sync now button and no daily job. Plan: `docs/superpowers/plans/2026-10-12-messaging-connect.md`; setup steps: `docs/connector-setup.md`.
+- Migration `0011_plan_scenarios` was applied to the live project. Also fixed after the review: Home plan selector no longer flickers, the stretch card text when a model is saved but cannot be fitted, and the Summary check is cheaper.
+
 ## 2026-10-12: Forecast summary, stretch scenarios and the Home selector
 - New **Summary** tab in the plan editor (step 2): the plan by month against last year with EBITDA, year over year, month over month, share of the year and "Above model"; a Baseline | Stretch | Compare view and a Plan | Forecast basis. **Create stretch** builds the "Would like" plan from one goal (new or total revenue growth, or a total amount) on the saved models; **Regenerate** keeps locked months. Home has a **Plan: Baseline | Stretch** selector once the year has a stretch. Details: `docs/planning-layer.md` ("Scenarios and Summary").
-- Migration `0011_plan_scenarios` (`plan_versions.scenario`, `base_plan_id`, `goal`, one stretch per client and year): written, **not applied** until confirmed; baselines work without it.
+- Migration `0011_plan_scenarios` (`plan_versions.scenario`, `base_plan_id`, `goal`, one stretch per client and year): **applied** to the live project on 2026-10-12 (columns and the one-stretch-per-year index checked); baselines also work without it.
 - Shared logic extracted from the New Customer screen into `lib/planning/plan-fit.ts` and `month-model.ts` (behaviour unchanged). 331 tests passing; a fresh review found and fixed unhandled errors on Create stretch, a stale editor after Regenerate, ended months outside the goal, and growth goals with no last year.
 
 ## 2026-10-12: Calendar page, specs for subscriptions, creative demand and messaging

@@ -1,3 +1,5 @@
+import Image from "next/image";
+import { BRAND_FILES } from "@/lib/brand-files";
 import { siFacebook, siGoogleads, siGoogleanalytics, siInstagram, siPinterest, siShopify, siSnapchat, siTiktok, siYoutube } from "simple-icons";
 
 interface Brand {
@@ -5,7 +7,7 @@ interface Brand {
   hex: string;
 }
 
-// Logos come from the open "simple-icons" set. Brands not in it (e.g. Klaviyo, Postscript) fall back to a lettered badge.
+// Logos come from the open "simple-icons" set; Klaviyo, Postscript and Omnisend use the icon from their own website (lib/brand-files.ts). Anything else falls back to a lettered badge.
 const ICONS: Record<string, Brand> = {
   shopify: siShopify,
   meta: siFacebook,
@@ -37,6 +39,14 @@ export function BrandIcon({ provider, size = 20, title }: { provider: string; si
         <title>{title ?? provider}</title>
         <path d={brand.path} />
       </svg>
+    );
+  }
+  const file = BRAND_FILES[key];
+  if (file) {
+    return (
+      <span aria-label={title ?? provider} className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-white" style={{ width: size, height: size }}>
+        <Image src={file} alt={title ?? provider} width={size} height={size} unoptimized />
+      </span>
     );
   }
   const color = FALLBACK_COLOR[key] ?? "#6b6b6b";

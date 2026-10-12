@@ -1,6 +1,6 @@
 # Creative Demand model, Creative Score and ad-level creative data
 
-Date: 2026-10-12. Status: draft for the strategist's review. Depends on the Meta connector, the planning layer (`docs/planning-layer.md`) and the marketing calendar. Source of the method: `Agency/Training/CTC Canon/creative-strategy.md`; layout from the strategist's screenshot (the Statlas creative demand model, 2026-10-12, saved in `docs/creative-demand-reference/`).
+Date: 2026-10-12. Status: approved by the strategist 2026-10-12 (zero-revenue definition confirmed); next step is its implementation plan. Depends on the Meta connector, the planning layer (`docs/planning-layer.md`) and the marketing calendar. Source of the method: `Agency/Training/CTC Canon/creative-strategy.md`; layout from the strategist's screenshot (the Statlas creative demand model, 2026-10-12, saved in `docs/creative-demand-reference/`).
 
 ## Goal
 For each month of a plan, say **how many new ads the account needs**, how many are evergreen and how many are for marketing moments, how many images and how many videos, tied to the plan's Meta spend and the marketing calendar, and show it next to a **Creative Score** that diagnoses the account's creative health. Actuals come from Meta at ad level, so the strategist sees what was launched and what it did.
@@ -35,7 +35,7 @@ Reading: below 50 the account needs more ads (Canon). The score is a diagnostic 
 1. **Provisional bands** until the portfolio has data: each metric maps linearly between two anchors, set from the one Statlas example in the screenshot and the Canon's numbers (74% of ads get any spend, about 1 in 100 ads becomes a whale). Zero-revenue 30% = 100 and 70% = 0; concentration 15% = 100 and 42% = 0; ROAS degradation 0% = 100 and -15% = 0; spend degradation 0% = 100 and -60% = 0; evergreen share 0% = 0, 33% = 76, 50% = 100. The screen labels the score "provisional".
 2. **Percentile against our own portfolio:** once at least 10 clients have 90 days of ad-level data, each metric is percentile-ranked across the agency's clients (direction-aware), which is the Canon's method with our stores as the reference set. Bands live in one file (`lib/creative/score.ts`) so the switch is a data change.
 
-To confirm with the strategist: "zero-revenue rate" is read as ads that **spent but returned no revenue**; the strategist remembered it as ads with zero spend. Ads with no delivery at all are shown separately as "undelivered".
+Confirmed by the strategist (2026-10-12): "zero-revenue rate" means ads that **spent but had zero attributed revenue**, not ads with zero spend. Ads with no delivery at all are shown separately as "undelivered".
 
 ## Demand model (per plan month)
 - **Target spend** = the plan month's Meta spend (acquisition and returning) minus the catalog share (`is_catalog`). Catalog ads are carved out (Canon: different math).

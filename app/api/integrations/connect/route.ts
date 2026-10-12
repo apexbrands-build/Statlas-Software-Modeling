@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectProvider, parseConnectBody, redact } from "@/lib/connect";
 import { saveApiKey } from "@/lib/integration-secrets";
 import { getAdminClient, getServerClient } from "@/lib/supabase/server";
-import { getSync } from "@/lib/sync/registry";
+import { getVerifier } from "@/lib/sync/registry";
 
 // Connects an account for a provider that uses a client API key (Klaviyo, Postscript, Omnisend) or the agency Google login (GA4).
 // Meta and Google Ads keep their own routes. The key is encrypted server-side and never returned, not even in an error.
@@ -24,13 +24,13 @@ export async function POST(request: Request) {
   const { data: client } = await supabase.from("clients").select("id").eq("id", input.clientId).maybeSingle();
   if (!client) return NextResponse.json({ error: "No access to this client" }, { status: 403 });
 
-  const sync = getSync(input.provider);
-  if (!sync?.verify) return NextResponse.json({ error: "This provider cannot be verified yet" }, { status: 400 });
+  const verify = getVerifier(input.provider);
+  if (!verify) return NextResponse.json({ error: "This provider cannot be verified yet" }, { status: 400 });
 
   const admin = getAdminClient();
   try {
     const result = await connectProvider(input, {
-      verify: (v) => sync.verify!(v),
+      verify,
       async upsertIntegration(row) {
         const { data, error } = await admin
           .from("integrations")

@@ -84,9 +84,17 @@ Notes: Google applies each conversion action's own attribution window (not a for
 - On the Hobby plan Vercel allows one cron run per day. A paid plan allows more frequent runs (change the schedule in `vercel.json`).
 
 ## Adding a connector (registry, 2026-10-12)
-1. `lib/providers.ts`: set `available: true` for the provider and fill `accountLabel`, `accountPlaceholder` and `setupSteps` (the steps shown on its Add Connection card).
+1. `lib/providers.ts`: set `available: true` (it can be connected) and, once it pulls data, `syncs: true`; fill `accountLabel`, `accountPlaceholder` and `setupSteps` (the steps shown on its Add Connection card). `accountFromKey: true` hides the account field when the platform names the account itself (Klaviyo).
 2. `lib/sync/registry.ts`: add a `ProviderSync` entry with `chunkDays`, `sync(integrationId, range, ctx)` and, if needed, `finalize` (runs once after the last chunk) and `verify` (checks a new connection and returns the account name). The daily cron picks the provider up automatically.
 3. If the provider id is not in the database provider check (`supabase/migrations/0009_providers_and_failures.sql` lists them), add a migration. `lib/providers.test.ts` fails when the code list and the migration list differ.
 4. Credentials: a client API key is saved by `POST /api/integrations/connect` into `integration_secrets` (encrypted) and read with `readApiKey(integrationId)` from `lib/integration-secrets.ts`. Providers on the agency Google login need no key. Never put keys in files, chat or git.
 5. Tests: fixture-based, like `lib/shopify.test.ts`; run `npm test`.
 6. Behaviour you get for free: at most 10 sync jobs run at once (`MAX_PARALLEL_JOBS`), and two failed daily runs in a row show "Needs attention" on the connection in Store Settings.
+
+## Messaging keys (Klaviyo, Postscript, Omnisend), connect only (2026-10-12)
+These three can be connected from Store Settings, Add Connection: paste the key, the app checks it with one read-only call, saves it encrypted and shows the connection. They do **not** pull data yet (`syncs: false`), so there is no Sync now button and no daily job for them. Their key checkers live in `lib/messaging/` and are registered as `VERIFIERS` in `lib/sync/registry.ts`.
+- **Klaviyo:** Settings, API keys, create a Private API key with Read-Only access (or read scopes Accounts, Campaigns, Flows, Metrics, Events, Lists, Segments). No account field: the account id and name come from Klaviyo (`GET /api/accounts`).
+- **Postscript:** Account, API, the **Private** API key (not the Public one). Type the shop name. Its public API lists subscribers and events only, so campaign and revenue data may not be reachable; the test key will show.
+- **Omnisend:** Store settings, Integrations and API, API keys, a key with read access. Type the brand name. Its reports API allows 10 requests a minute and 55 a day per brand, which the data sync will plan around.
+- Logos: simple-icons has none of the three, so each uses the small icon from the brand's own website (`public/brand/partners`, `lib/brand-files.ts`).
+

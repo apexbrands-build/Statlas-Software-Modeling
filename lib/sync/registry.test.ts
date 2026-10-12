@@ -11,7 +11,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("./run-shopify", () => ({ syncShopify: mocks.syncShopify, finalizeShopify: mocks.finalizeShopify }));
 vi.mock("./run-meta", () => ({ syncMeta: mocks.syncMeta }));
 vi.mock("./run-google", () => ({ syncGoogle: mocks.syncGoogle }));
-const { SYNCS, getSync, syncableProviderIds } = await import("./registry");
+const { SYNCS, getSync, getVerifier, syncableProviderIds } = await import("./registry");
 
 const range = { from: "2026-01-01", to: "2026-01-14" };
 
@@ -23,8 +23,8 @@ describe("sync registry", () => {
     expect([...syncableProviderIds()].sort()).toEqual(["google_ads", "meta", "shopify"]);
   });
 
-  it("keeps the provider metadata and the registry in agreement: available means it has a sync", () => {
-    for (const id of Object.keys(PROVIDERS) as ProviderId[]) expect(PROVIDERS[id].available).toBe(id in SYNCS);
+  it("keeps the provider metadata and the registry in agreement: syncs means it has a sync", () => {
+    for (const id of Object.keys(PROVIDERS) as ProviderId[]) expect(PROVIDERS[id].syncs).toBe(id in SYNCS);
   });
 
   it("keeps today's chunk sizes", () => {
@@ -64,3 +64,24 @@ describe("sync registry", () => {
     expect(getSync("nope")).toBeUndefined();
   });
 });
+
+describe("verifiers", () => {
+  it("every connectable client-key provider can check a key", () => {
+    for (const id of Object.keys(PROVIDERS) as ProviderId[]) {
+      const meta = PROVIDERS[id];
+      if (meta.available && meta.auth === "client-key") expect(getVerifier(id), id).toBeTypeOf("function");
+    }
+  });
+
+  it("has none for a provider that cannot be connected here", () => {
+    expect(getVerifier("pinterest")).toBeUndefined();
+    expect(getVerifier("nope")).toBeUndefined();
+    expect(getVerifier("constructor")).toBeUndefined();
+  });
+
+  it("does not register the messaging platforms as syncs, so they get no daily job", () => {
+    for (const id of ["klaviyo", "postscript", "omnisend"] as const) expect(id in SYNCS).toBe(false);
+    expect(syncableProviderIds()).not.toContain("klaviyo");
+  });
+});
+

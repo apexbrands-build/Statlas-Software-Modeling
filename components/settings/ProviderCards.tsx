@@ -57,6 +57,7 @@ function ConnectCard({ meta, clientId, onChanged, onClose, setMsg }: { meta: Pro
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const needsKey = meta.auth === "client-key";
+  const needsAccount = !meta.accountFromKey;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -65,7 +66,7 @@ function ConnectCard({ meta, clientId, onChanged, onClose, setMsg }: { meta: Pro
     try {
       const json = await postConnect({ clientId, provider: meta.id, accountId: account, ...(needsKey ? { apiKey: key } : {}) });
       setKey("");
-      setMsg(`Connected ${json.name ?? meta.label}. Click Edit, then Sync now.`);
+      setMsg(meta.syncs ? `Connected ${json.name ?? meta.label}. Click Edit, then Sync now.` : `Connected ${json.name ?? meta.label}. The key was checked and saved; pulling data from ${meta.label} is the next build.`);
       await onChanged();
       onClose();
     } catch (e2) {
@@ -88,12 +89,13 @@ function ConnectCard({ meta, clientId, onChanged, onClose, setMsg }: { meta: Pro
         </ol>
       )}
       <form className="space-y-2" onSubmit={submit}>
-        <input className={inputCls} aria-label={meta.accountLabel} placeholder={meta.accountPlaceholder || meta.accountLabel} value={account} onChange={(e) => setAccount(e.target.value)} />
+        {needsAccount && <input className={inputCls} aria-label={meta.accountLabel} placeholder={meta.accountPlaceholder || meta.accountLabel} value={account} onChange={(e) => setAccount(e.target.value)} />}
         {needsKey && <input className={inputCls} type="password" autoComplete="off" aria-label="Read-only API key" placeholder="Read-only API key" value={key} onChange={(e) => setKey(e.target.value)} />}
-        <button disabled={busy || !account.trim() || (needsKey && !key.trim())} className={btn}>
+        <button disabled={busy || (needsAccount && !account.trim()) || (needsKey && !key.trim())} className={btn}>
           {busy ? "…" : "Connect"}
         </button>
       </form>
+      {!meta.syncs && <p className="text-xs text-text-faint">Connecting checks the key and saves it. Pulling data from {meta.label} comes next.</p>}
       {err && <p className="text-xs text-bad">{err}</p>}
     </div>
   );

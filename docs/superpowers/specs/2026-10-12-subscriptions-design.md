@@ -1,6 +1,6 @@
 # Subscriptions: data, report and forecast
 
-Date: 2026-10-12. Status: draft for the strategist's review. Depends on the connector foundation (`2026-10-11-connector-foundation-design.md`), the returning model (`docs/planning-layer.md`) and the report infrastructure (`2026-10-12-four-reports-design.md`).
+Date: 2026-10-12. Status: approved by the strategist 2026-10-12; next step is its implementation plan. Depends on the connector foundation (`2026-10-11-connector-foundation-design.md`), the returning model (`docs/planning-layer.md`) and the report infrastructure (`2026-10-12-four-reports-design.md`).
 
 ## Goal
 Know every client's subscription business inside Apex Analytics: how many people subscribe, how many leave, how much revenue it carries and what rebills are coming. Show it in a Subscriptions report, and put the rebill schedule into the returning revenue forecast.

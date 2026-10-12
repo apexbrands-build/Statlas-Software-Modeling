@@ -35,7 +35,9 @@ Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in 
 
 **Reports (2026-10-12):** Contribution Margin, Revenue Overview, New Vs Returning and AOV Histogram are built (migration 0010 applied) and every Home tile links to its report; registry statuses are `ready` (page exists), `waiting`, `planned`. Specs written, not built: channel mix, markets (needs Shopify address access first, so the Shopify submission files are updated but must not be sent before Markets exists), email and SMS plan, subscriptions, creative demand.
 
-**Scenarios (2026-10-12):** the plan editor's Summary tab, stretch plans (`scenario = 'target'`, one per client and year, generated from the baseline and one goal) and the Home Plan selector are built; migration 0011 is written but not applied. Details in `docs/planning-layer.md`.
+**Messaging connectors (2026-10-12):** Klaviyo, Postscript and Omnisend can be connected (key checked and saved, `syncs: false`, no data yet); the data sync is the next phase (`docs/superpowers/specs/2026-10-11-messaging-klaviyo-sms-design.md`).
+
+**Scenarios (2026-10-12):** the plan editor's Summary tab, stretch plans (`scenario = 'target'`, one per client and year, generated from the baseline and one goal) and the Home Plan selector are built; migration 0011 is applied. Details in `docs/planning-layer.md`.
 
 **Connector registry (2026-10-12):** `lib/providers.ts` (browser metadata) + `lib/sync/registry.ts` (sync per provider) + `lib/job-plan.ts` (job logic); max 10 parallel jobs; "Needs attention" badge after 2 failed daily syncs. Migration 0009 must be applied before deploying. How to add a connector: `docs/connector-setup.md`.
 

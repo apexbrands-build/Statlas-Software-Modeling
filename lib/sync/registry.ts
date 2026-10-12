@@ -1,4 +1,7 @@
 import "server-only";
+import { verifyKlaviyo } from "@/lib/messaging/klaviyo";
+import { verifyOmnisend } from "@/lib/messaging/omnisend";
+import { verifyPostscript } from "@/lib/messaging/postscript";
 import type { ProviderId } from "@/lib/providers";
 import type { SyncRange } from "./range";
 import { syncGoogle } from "./run-google";
@@ -20,8 +23,17 @@ export interface ProviderSync {
   /** Runs once after the last chunk of a job, over the whole job range. */
   finalize?(integrationId: string, range: SyncRange): Promise<void>;
   /** Checks a new connection (account id, optional client API key) and returns the account's name. */
-  verify?(input: { accountId: string; apiKey?: string }): Promise<{ accountName: string }>;
+  verify?(input: { accountId: string; apiKey?: string }): Promise<{ accountName: string; accountId?: string }>;
 }
+
+type Verify = NonNullable<ProviderSync["verify"]>;
+
+/** Providers that can be connected (key checked and saved) but do not pull data yet, so they have no sync and no daily job. */
+export const VERIFIERS: Partial<Record<ProviderId, Verify>> = {
+  klaviyo: (input) => verifyKlaviyo(input),
+  postscript: (input) => verifyPostscript(input),
+  omnisend: (input) => verifyOmnisend(input),
+};
 
 export const SYNCS: Partial<Record<ProviderId, ProviderSync>> = {
   shopify: {
@@ -54,4 +66,10 @@ export function getSync(provider: string): ProviderSync | undefined {
 /** Providers the daily tick can sync. A new connector joins the cron by registering here. */
 export function syncableProviderIds(): ProviderId[] {
   return Object.keys(SYNCS) as ProviderId[];
+}
+
+/** Checks a new connection's key or account: the provider's sync verifier if it has one, else a connection-only verifier. */
+export function getVerifier(provider: string): Verify | undefined {
+  if (Object.hasOwn(SYNCS, provider) && SYNCS[provider as ProviderId]?.verify) return SYNCS[provider as ProviderId]!.verify;
+  return Object.hasOwn(VERIFIERS, provider) ? VERIFIERS[provider as ProviderId] : undefined;
 }
