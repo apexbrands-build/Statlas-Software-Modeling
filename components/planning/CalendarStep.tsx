@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { addDays, dayOfWeek, eachDay, endOfMonth } from "@/lib/dates";
 import { aggregate, amerSpend } from "@/lib/metrics";
-import { CSV_TEMPLATE, EVENT_TYPES, eventDays, GROUP_LABELS, parseEventCsv, suggestEvents, toDayFacts, TYPE_LABEL, typeGroup, type EventGroup, type MarketingEvent } from "@/lib/planning/events";
+import { CSV_TEMPLATE, EVENT_TYPES, eventDays, GROUP_LABELS, parseEventCsv, suggestEvents, toDayFacts, TYPE_LABEL, typeGroup, type DayMultipliers, type EventGroup, type MarketingEvent } from "@/lib/planning/events";
+import type { ClientSettings, DailyFact } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
 import { btn, btnPrimary, inputClass, Modal, MONTHS, WEEKDAYS } from "./ui";
 
@@ -17,6 +18,38 @@ const GROUP_COLOR: Record<EventGroup, string> = {
 };
 
 type Draft = Omit<MarketingEvent, "id" | "clientId"> & { id?: string };
+
+/**
+ * What the calendar needs. The plan editor passes its own (`planCalendarCtx`); the standalone Calendar page builds one from the client alone.
+ * Events belong to the client, so both show and edit the same events.
+ */
+export interface CalendarCtx {
+  /** Year whose months the selector lists. */
+  year: number;
+  settings: ClientSettings;
+  events: MarketingEvent[];
+  /** Day multipliers the plan applies (empty on the standalone page). */
+  eventMults: Record<string, DayMultipliers>;
+  history: { facts: DailyFact[]; lastData: string };
+  /** Weekday offsets (index 0 = Sunday) used to find unlabelled spikes. */
+  dow: number[];
+  saveEvents: (list: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]) => Promise<string | null>;
+  removeEvent: (id: string) => Promise<string | null>;
+  /** Inside a plan the days are reshaped and need Save plan; on the standalone page plans pick the events up when they next open. */
+  inPlan: boolean;
+}
+
+export const planCalendarCtx = (ctx: PlanCtx): CalendarCtx => ({
+  year: ctx.plan.year,
+  settings: ctx.settings,
+  events: ctx.events,
+  eventMults: ctx.eventMults,
+  history: ctx.history,
+  dow: ctx.seasonality.dow,
+  saveEvents: ctx.saveEvents,
+  removeEvent: ctx.removeEvent,
+  inPlan: true,
+});
 const blank = (date: string): Draft => ({ date, endDate: date, type: "promotion", name: "", source: "manual" });
 
 function TypeSelect({ value, onChange, className = inputClass }: { value: string; onChange: (v: string) => void; className?: string }) {
@@ -101,10 +134,10 @@ function EventForm({ draft, onChange, onSave, onCancel, onDelete, busy }: { draf
 }
 
 /** Marketing calendar: events per day, last year's events for reference, CSV import and suggestions from the data. */
-export function CalendarStep({ ctx }: { ctx: PlanCtx }) {
-  const { plan, events, eventMults, saveEvents, removeEvent } = ctx;
+export function CalendarStep({ ctx }: { ctx: CalendarCtx }) {
+  const { year, events, eventMults, saveEvents, removeEvent } = ctx;
   const today = new Date().toISOString().slice(0, 10);
-  const [month, setMonth] = useState(() => (today.slice(0, 4) === String(plan.year) ? `${today.slice(0, 7)}-01` : `${plan.year}-01-01`));
+  const [month, setMonth] = useState(() => (today.slice(0, 4) === String(year) ? `${today.slice(0, 7)}-01` : `${year}-01-01`));
   const [onlyEvents, setOnlyEvents] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -128,7 +161,7 @@ export function CalendarStep({ ctx }: { ctx: PlanCtx }) {
     setBusy(false);
     if (err) setMsg({ tone: "bad", text: err });
     else {
-      setMsg({ tone: "ok", text: "Event saved. The plan days are reshaped; press Save plan to update the targets." });
+      setMsg({ tone: "ok", text: ctx.inPlan ? "Event saved. The plan days are reshaped; press Save plan to update the targets." : "Event saved. Plans that use the event model pick it up the next time they are opened." });
       setDraft(null);
     }
   };
@@ -146,8 +179,8 @@ export function CalendarStep({ ctx }: { ctx: PlanCtx }) {
       <div className="flex flex-wrap items-center gap-3">
         <select className={inputClass} value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
           {MONTHS.map((m, i) => (
-            <option key={m} value={`${plan.year}-${String(i + 1).padStart(2, "0")}-01`}>
-              {m} {plan.year}
+            <option key={m} value={`${year}-${String(i + 1).padStart(2, "0")}-01`}>
+              {m} {year}
             </option>
           ))}
         </select>
@@ -216,7 +249,7 @@ export function CalendarStep({ ctx }: { ctx: PlanCtx }) {
   );
 }
 
-function ImportModal({ ctx, onClose, onDone }: { ctx: PlanCtx; onClose: () => void; onDone: (text: string) => void }) {
+function ImportModal({ ctx, onClose, onDone }: { ctx: CalendarCtx; onClose: () => void; onDone: (text: string) => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -297,13 +330,13 @@ function ImportModal({ ctx, onClose, onDone }: { ctx: PlanCtx; onClose: () => vo
   );
 }
 
-function Suggestions({ ctx, onAdd, onClose }: { ctx: PlanCtx; onAdd: (d: Draft) => void; onClose: () => void }) {
-  const { history, settings, seasonality, events } = ctx;
+function Suggestions({ ctx, onAdd, onClose }: { ctx: CalendarCtx; onAdd: (d: Draft) => void; onClose: () => void }) {
+  const { history, settings, dow, events } = ctx;
   const list = useMemo(() => {
     if (!history.lastData) return [];
     const days = toDayFacts(history.facts, (f) => amerSpend(aggregate([f]), settings));
-    return suggestEvents(days, events, seasonality.dow, addDays(history.lastData, -730), history.lastData).slice(0, 25);
-  }, [history, settings, seasonality, events]);
+    return suggestEvents(days, events, dow, addDays(history.lastData, -730), history.lastData).slice(0, 25);
+  }, [history, settings, dow, events]);
   return (
     <div className="space-y-2 rounded-xl border border-border bg-surface p-4">
       <div className="flex items-center">

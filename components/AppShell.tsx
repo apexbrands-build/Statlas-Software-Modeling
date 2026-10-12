@@ -40,7 +40,7 @@ const NAV_GROUPS: { title: string; items: { href: string; label: string; icon: I
     title: "Planning",
     items: [
       { href: "/planning", label: "Planning", icon: "target", enabled: true },
-      { href: "#", label: "Calendar", icon: "calendar", enabled: false },
+      { href: "/calendar", label: "Calendar", icon: "calendar", enabled: true },
     ],
   },
   {

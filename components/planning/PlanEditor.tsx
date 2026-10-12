@@ -13,7 +13,7 @@ import { blankInputs, ZERO_RATES, type PlanMonth, type PlanMonthInputs } from "@
 import { getRepository } from "@/lib/repository";
 import type { PlanSeasonality, PlanVersion } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
-import { CalendarStep } from "./CalendarStep";
+import { CalendarStep, planCalendarCtx } from "./CalendarStep";
 import { DetailsStep } from "./DetailsStep";
 import { InputStep } from "./InputStep";
 import { MonthlyStep } from "./MonthlyStep";
@@ -348,7 +348,7 @@ export function PlanEditor({ planId }: { planId: string }) {
         <ModelsStep ctx={ctx} />
       </div>
       {step === "monthly" && <MonthlyStep ctx={ctx} />}
-      {step === "calendar" && <CalendarStep ctx={ctx} />}
+      {step === "calendar" && <CalendarStep ctx={planCalendarCtx(ctx)} />}
       {step === "spend" && <SpendStep ctx={ctx} />}
       {step === "details" && <DetailsStep ctx={ctx} />}
       {step === "input" && <InputStep ctx={ctx} />}
