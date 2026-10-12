@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { DailyChart, type ChartSeries } from "./DailyChart";
 import { DateRangePicker } from "./DateRangePicker";
@@ -27,6 +28,7 @@ import {
   type MetricDef,
 } from "@/lib/metrics";
 import { chartGranularity, dayRows, monthRows } from "@/lib/monthly";
+import { homeReportHref } from "@/lib/reports/home-links";
 
 interface Open {
   def: MetricDef;
@@ -165,6 +167,7 @@ function Body(props: {
         source={def.source}
         formula={def.formula}
         onInfo={() => setOpen({ def, title })}
+        reportHref={homeReportHref(def.key, data.range)}
       />
     );
   };
@@ -172,6 +175,7 @@ function Body(props: {
 
   const cm = cmParts(data.cur, data.settings);
   const cmNums = tileNumbers(METRICS.cm, data, mode);
+  const cmReportHref = homeReportHref("cm", data.range);
   const incremental = roasMode === "iroas" || roasMode === "iroas_acq";
   const acquisitionOnly = roasMode === "iroas_acq" || roasMode === "roas_acq";
   const groups = visibleGroups(channelGroups(breakout, acquisitionOnly), data.cur);
@@ -207,6 +211,19 @@ function Body(props: {
                 {formatDiff(cmNums.diff)}
               </div>
             </div>
+            {cmReportHref && (
+              <Link
+                href={cmReportHref}
+                aria-label="Open the Contribution Margin report"
+                title="Open report"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-text-faint hover:border-accent hover:text-accent"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+                  <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+                </svg>
+              </Link>
+            )}
             <button
               type="button"
               aria-label="Trend for Contribution Margin"

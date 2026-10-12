@@ -1,6 +1,7 @@
 import { addDays, todayLocal } from "../dates";
 import { defaultSettings, DEFAULT_MULTIPLIERS } from "../defaults";
 import { getBrowserClient } from "../supabase/client";
+import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
 import { CHANNEL_KEYS } from "../types";
@@ -152,6 +153,21 @@ export class SupabaseRepository implements Repository {
       refundOrders: n(r.refund_orders),
       refundAmount: n(r.refund_amount),
     }));
+  }
+
+  async getAovHistogram(clientId: string, from: string, to: string, mode: AovMode, step: number): Promise<AovData | null> {
+    const missing = /aov_stats|aov_histogram|PGRST202|PGRST205|42883/;
+    const stats = await this.db.rpc("aov_stats", { p_client: clientId, p_from: from, p_to: to });
+    if (stats.error) {
+      if (missing.test(`${stats.error.code} ${stats.error.message}`)) return null;
+      throw new Error(stats.error.message);
+    }
+    const buckets = await this.db.rpc("aov_histogram", { p_client: clientId, p_from: from, p_to: to, p_mode: mode, p_step: step });
+    if (buckets.error) {
+      if (missing.test(`${buckets.error.code} ${buckets.error.message}`)) return null;
+      throw new Error(buckets.error.message);
+    }
+    return mapAovRows(((stats.data ?? []) as Row[])[0], (buckets.data ?? []) as Row[]);
   }
 
   async getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]> {

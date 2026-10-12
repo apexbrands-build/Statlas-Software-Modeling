@@ -1,26 +1,33 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { useApp } from "@/lib/app-context";
 import { endOfMonth, startOfMonth, todayLocal, type Range } from "@/lib/dates";
+import { parseRangeParams } from "@/lib/reports/home-links";
 import { getReport } from "@/lib/reports/registry";
 
-/** Selected date range for a report (defaults to the current month, like Home). */
+/** Selected date range for a report: the picker's choice, else `?from=&to=` from the link (Home passes its range), else the current month. */
 export function useReportRange() {
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
   );
+  const params = useSearchParams();
+  const fromParam = params.get("from");
+  const toParam = params.get("to");
   const [range, setRange] = useState<Range | null>(null);
   const active = useMemo(() => {
     if (range) return range;
+    const fromUrl = parseRangeParams(fromParam, toParam);
+    if (fromUrl) return fromUrl;
     if (!mounted) return null;
     const t = todayLocal();
     return { from: startOfMonth(t), to: endOfMonth(t) };
-  }, [range, mounted]);
+  }, [range, mounted, fromParam, toParam]);
   return { range: active, setRange };
 }
 

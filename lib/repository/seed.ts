@@ -1,4 +1,5 @@
 import { addDays, dayOfWeek, diffDays, eachDay, todayLocal } from "../dates";
+import type { AovData } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type {
   CampaignDay,
@@ -385,6 +386,11 @@ export class SeedRepository implements Repository {
     const end = to < last ? to : last;
     if (from > end) return [];
     return eachDay(from, end).map((d) => factFor(clientId, d));
+  }
+
+  /** Demo data has no individual orders. */
+  async getAovHistogram(): Promise<AovData | null> {
+    return null;
   }
 
   async getFirstProducts(): Promise<FirstProductRow[] | null> {

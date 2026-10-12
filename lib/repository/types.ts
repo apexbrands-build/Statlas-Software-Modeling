@@ -1,3 +1,4 @@
+import type { AovData, AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
@@ -19,6 +20,8 @@ export interface Repository {
   getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]>;
   /** Product by First Product rows; null when order line items are not available yet (migration 0006 / history reload). */
   getFirstProducts(clientId: string, from: string, to: string): Promise<FirstProductRow[] | null>;
+  /** AOV histogram buckets and order-value stats (migration 0010); null in demo data or before the migration is applied. `step` only applies to mode "step". */
+  getAovHistogram(clientId: string, from: string, to: string, mode: AovMode, step: number): Promise<AovData | null>;
   /** Last day with actual data (inclusive). */
   getLastDataDate(clientId: string): Promise<string>;
   listPlans(clientId: string): Promise<PlanVersion[]>;

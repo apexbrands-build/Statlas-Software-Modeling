@@ -87,6 +87,7 @@ export function ReportLibrary() {
                     </span>
                   ))}
                   {r.status === "waiting" && <span className="ml-auto rounded-full border border-accent px-2 py-0.5 text-[10px] text-accent">Waiting for data</span>}
+                  {r.status === "planned" && <span className="ml-auto rounded-full border border-accent px-2 py-0.5 text-[10px] text-accent">Coming soon</span>}
                 </div>
               </div>
             ))}

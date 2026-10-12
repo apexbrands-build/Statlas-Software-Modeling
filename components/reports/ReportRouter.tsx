@@ -1,6 +1,10 @@
 "use client";
 
+import { AovHistogramReport } from "./AovHistogramReport";
+import { ContributionMarginReport } from "./ContributionMarginReport";
 import { MetricGoalReport } from "./MetricGoalReport";
+import { NewVsReturningReport } from "./NewVsReturningReport";
+import { RevenueOverviewReport } from "./RevenueOverviewReport";
 import { PaidMediaReport } from "./PaidMediaReport";
 import { FirstProductReport } from "./FirstProductReport";
 import { PnlReport } from "./PnlReport";
@@ -24,7 +28,16 @@ export function ReportRouter({ slug }: { slug: string }) {
       return <FirstProductReport />;
     case "pnl":
       return <PnlReport />;
+    case "contribution-margin":
+      return <ContributionMarginReport />;
+    case "revenue-overview":
+      return <RevenueOverviewReport />;
+    case "new-vs-returning":
+      return <NewVsReturningReport />;
+    case "aov-histogram":
+      return <AovHistogramReport />;
     default:
-      return def.status === "waiting" ? <WaitingForData slug={slug} outline={OUTLINES[slug] ?? []} /> : <Empty>{def.title} is not built yet.</Empty>;
+      if (def.status === "waiting") return <WaitingForData slug={slug} outline={OUTLINES[slug] ?? []} />;
+      return <Empty>{def.status === "planned" ? `${def.title} is coming soon.` : `${def.title} is not built yet.`}</Empty>;
   }
 }
