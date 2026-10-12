@@ -160,3 +160,40 @@ describe("connecting a provider whose account comes from the key", () => {
     expect(rows).toEqual(["Acme"]);
   });
 });
+
+describe("replacing a key", () => {
+  const base = { clientId: "c1", provider: "klaviyo" as const, accountId: "AcCt12", apiKey: "pk_new", expectedAccountId: "AcCt12" };
+
+  it("passes the account the connection already has through the request", () => {
+    const r = parseConnectBody({ clientId: "c1", provider: "klaviyo", accountId: "AcCt12", apiKey: "pk_new", expectedAccountId: "  AcCt12 " }, registry);
+    expect(r).toEqual({ ok: true, value: { clientId: "c1", provider: "klaviyo", accountId: "AcCt12", apiKey: "pk_new", expectedAccountId: "AcCt12" } });
+    const none = parseConnectBody({ clientId: "c1", provider: "klaviyo", accountId: "AcCt12", apiKey: "pk_new" }, registry);
+    expect(none.ok && "expectedAccountId" in none.value).toBe(false);
+  });
+
+  it("accepts a new key from the same account", async () => {
+    const { calls, deps } = fakeDeps({ verify: async () => ({ accountName: "Acme Co", accountId: "AcCt12" }) });
+    await expect(connectProvider(base, deps)).resolves.toEqual({ id: "int-1", accountName: "Acme Co" });
+    expect(calls).toEqual(["upsert", "saveKey"]);
+  });
+
+  it("refuses a key from a different account instead of quietly making a second connection", async () => {
+    const { calls, deps } = fakeDeps({ verify: async () => ({ accountName: "Other Brand", accountId: "ZzZ99" }) });
+    await expect(connectProvider(base, deps)).rejects.toThrow("This key belongs to a different Klaviyo account (Other Brand). Disconnect this connection or add the key as a new connection.");
+    expect(calls).toEqual([]);
+  });
+
+  it("does not compare accounts for a platform that cannot name its account", async () => {
+    const { calls, deps } = fakeDeps();
+    await connectProvider({ clientId: "c1", provider: "omnisend", accountId: "Acme", apiKey: "k", expectedAccountId: "Acme" }, deps);
+    expect(calls).toEqual(["verify", "upsert", "saveKey"]);
+  });
+});
+
+describe("a connection with no account id", () => {
+  it("is refused rather than saved with a blank id", async () => {
+    const { calls, deps } = fakeDeps({ verify: async () => ({ accountName: "Acme Co" }) });
+    await expect(connectProvider({ clientId: "c1", provider: "klaviyo", accountId: "", apiKey: "pk_1" }, deps)).rejects.toThrow("Could not identify the account for this key");
+    expect(calls).toEqual([]);
+  });
+});

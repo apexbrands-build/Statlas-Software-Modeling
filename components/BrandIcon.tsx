@@ -44,8 +44,8 @@ export function BrandIcon({ provider, size = 20, title }: { provider: string; si
   const file = BRAND_FILES[key];
   if (file) {
     return (
-      <span aria-label={title ?? provider} className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-white" style={{ width: size, height: size }}>
-        <Image src={file} alt={title ?? provider} width={size} height={size} unoptimized />
+      <span aria-label={title ?? provider} className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-white p-0.5" style={{ width: size, height: size }}>
+        <Image src={file} alt={title ?? provider} width={size - 4} height={size - 4} unoptimized />
       </span>
     );
   }

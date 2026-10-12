@@ -69,4 +69,11 @@ describe("requestJson", () => {
     expect(err.message).not.toContain("sk-live-123");
     expect(err.message).toContain("***");
   });
+
+  it("caps how long it waits for a Retry-After so a person is not left staring at a spinner", async () => {
+    const sleep = vi.fn<(ms: number) => Promise<void>>(async () => {});
+    const fetchImpl = vi.fn(async () => ok({}, 429, { "Retry-After": "60" }));
+    await requestJson("https://x.test", { headers: {} }, opts({ fetchImpl, sleep, retries: 1, maxWaitMs: 5000 })).catch(() => undefined);
+    expect(sleep).toHaveBeenCalledWith(5000);
+  });
 });

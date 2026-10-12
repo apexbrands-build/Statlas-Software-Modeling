@@ -102,7 +102,7 @@ function ConnectCard({ meta, clientId, onChanged, onClose, setMsg }: { meta: Pro
 }
 
 /** Shown in a connection's dialog for providers that use a client API key: the key itself is never shown, only that one is saved. */
-export function ReplaceKey({ row, clientId }: { row: { provider: string; account_id: string }; clientId: string }) {
+export function ReplaceKey({ row, clientId, onChanged }: { row: { provider: string; account_id: string }; clientId: string; onChanged?: () => Promise<void> }) {
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -112,9 +112,11 @@ export function ReplaceKey({ row, clientId }: { row: { provider: string; account
     setBusy(true);
     setNote(null);
     try {
-      await postConnect({ clientId, provider: row.provider, accountId: row.account_id, apiKey: key });
+      // expectedAccountId makes the server refuse a key that belongs to a different account instead of adding a second connection.
+      await postConnect({ clientId, provider: row.provider, accountId: row.account_id, expectedAccountId: row.account_id, apiKey: key });
       setKey("");
       setNote({ ok: true, text: "Key replaced." });
+      await onChanged?.();
     } catch (e2) {
       setNote({ ok: false, text: e2 instanceof Error ? e2.message : "Could not replace the key" });
     }

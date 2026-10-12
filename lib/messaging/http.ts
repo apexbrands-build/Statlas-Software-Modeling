@@ -21,12 +21,16 @@ export interface RequestOptions {
   /** Extra attempts after the first for 429, 5xx and network failures. Default 2. */
   retries?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Longest wait honoured for a Retry-After (default 30 s). */
+  maxWaitMs?: number;
   /** The API key: removed from any message. */
   secret?: string;
 }
 
 const BACKOFF_MS = [1000, 3000];
 const MAX_WAIT_MS = 30000;
+/** Limits for the interactive key check: a person is waiting, so one retry and short waits. Background syncs keep the generous defaults. */
+export const CONNECT_LIMITS = { retries: 1, timeoutMs: 8000, maxWaitMs: 5000 };
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
@@ -62,7 +66,7 @@ export async function requestJson(url: string, init: { headers: Record<string, s
       last = new PlatformError("rate_limited", `${platform} is limiting requests right now. Try again in a minute.`);
       if (attempt < retries) {
         const seconds = Number(res.headers.get("Retry-After"));
-        await sleep(Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, MAX_WAIT_MS) : BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)]);
+        await sleep(Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, o.maxWaitMs ?? MAX_WAIT_MS) : BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)]);
       }
       continue;
     }

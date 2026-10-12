@@ -246,6 +246,7 @@ export function StoreSettingsPage() {
         <ConnectionDialog
           row={dialog.connection}
           clientId={client.id}
+          onChanged={load}
           onDisconnected={async () => {
             setDialog(null);
             setMsg("Connection removed. Loaded data is kept.");
@@ -328,7 +329,7 @@ function AddConnectionDialog({ clientId, initialShop, isAdmin, onClose, onChange
   );
 }
 
-function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected }: { row: Integration; clientId: string; onClose: () => void; onSync: () => Promise<void>; onDisconnected: () => Promise<void> }) {
+function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected, onChanged }: { row: Integration; clientId: string; onClose: () => void; onSync: () => Promise<void>; onDisconnected: () => Promise<void>; onChanged: () => Promise<void> }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -371,7 +372,7 @@ function ConnectionDialog({ row, clientId, onClose, onSync, onDisconnected }: { 
       )}
       {syncable && <HistoryLoader row={row} />}
       {!syncable && <p className="rounded-lg border border-border px-3 py-2 text-xs text-text-muted">Connected. The key was checked and saved. Pulling data from {providerLabel(row.provider)} is the next build, so there is nothing to sync yet.</p>}
-      {PROVIDERS[row.provider as ProviderId]?.auth === "client-key" && <ReplaceKey row={row} clientId={clientId} />}
+      {PROVIDERS[row.provider as ProviderId]?.auth === "client-key" && <ReplaceKey row={row} clientId={clientId} onChanged={onChanged} />}
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
         {row.provider === "shopify" && (
           <a href={`/api/shopify/install?client=${clientId}&shop=${encodeURIComponent(row.account_id)}`} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text">

@@ -6,8 +6,6 @@ import { getSync } from "@/lib/sync/registry";
 
 const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
 const daysBetween = (a: string, b: string) => Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000) + 1;
-/** Chunk size for a provider with no registry entry (its job will fail with "No sync for ..."). */
-const DEFAULT_CHUNK_DAYS = 30;
 /** Each chunk must finish inside one 60-second server task; stop fetching a little before that. */
 const CHUNK_BUDGET_MS = 45_000;
 
@@ -39,10 +37,20 @@ export async function kickRunner(jobId: string): Promise<void> {
 
 /* ---------- creating jobs ---------- */
 
+/** A connection whose provider only checks and saves its key has no data to pull, so no job may be queued for it. */
+export class NothingToSyncError extends Error {
+  constructor() {
+    super("This connection has nothing to sync yet");
+    this.name = "NothingToSyncError";
+  }
+}
+
 export async function createJob(integrationId: string, opts: { months?: number; kind?: "history" | "recent" }): Promise<{ id: string; alreadyRunning: boolean }> {
   const admin = getAdminClient();
   const { data: integration } = await admin.from("integrations").select("id,client_id,provider,coverage_start").eq("id", integrationId).single();
   if (!integration) throw new Error("Connection not found");
+  const sync = getSync(integration.provider as string);
+  if (!sync) throw new NothingToSyncError();
 
   const { data: active } = await admin.from("sync_jobs").select("id").eq("integration_id", integrationId).in("status", ["queued", "running"]).limit(1);
   if (active && active.length > 0) return { id: active[0].id as string, alreadyRunning: true };
@@ -65,7 +73,7 @@ export async function createJob(integrationId: string, opts: { months?: number; 
       from_date: from,
       to_date: yesterday,
       cursor_end: done ? from : cursorEnd,
-      chunk_days: getSync(integration.provider as string)?.chunkDays ?? DEFAULT_CHUNK_DAYS,
+      chunk_days: sync.chunkDays,
       total_days: daysBetween(from, yesterday),
       done_days: daysBetween(from, yesterday) - (done ? 0 : daysBetween(from, cursorEnd)),
       message: done ? "Already loaded" : null,

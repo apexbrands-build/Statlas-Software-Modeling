@@ -1,5 +1,5 @@
 import { after, NextResponse } from "next/server";
-import { createJob, kickRunner } from "@/lib/jobs";
+import { createJob, kickRunner, NothingToSyncError } from "@/lib/jobs";
 import { getServerClient } from "@/lib/supabase/server";
 
 export const maxDuration = 30;
@@ -18,6 +18,6 @@ export async function POST(request: Request) {
     if (!job.alreadyRunning) after(() => kickRunner(job.id));
     return NextResponse.json({ ok: true, ...job });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Could not start" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Could not start" }, { status: e instanceof NothingToSyncError ? 400 : 500 });
   }
 }

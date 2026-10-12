@@ -1,9 +1,9 @@
-import { PlatformError, requestJson, type RequestOptions } from "./http";
+import { CONNECT_LIMITS, PlatformError, requestJson, type RequestOptions } from "./http";
 
 /** Klaviyo API revision sent with every call (a date; Klaviyo keeps each revision working for about two years). */
 export const KLAVIYO_REVISION = "2026-07-15";
 
-type Extra = Pick<RequestOptions, "retries" | "sleep" | "timeoutMs">;
+type Extra = Pick<RequestOptions, "retries" | "sleep" | "timeoutMs" | "maxWaitMs">;
 
 /**
  * Checks a Klaviyo Private API key with one read-only call (GET /api/accounts, scope accounts:read) and returns the account the key belongs to.
@@ -13,7 +13,7 @@ export async function verifyKlaviyo(input: { accountId: string; apiKey?: string 
   const apiKey = input.apiKey?.trim();
   if (!apiKey) throw new Error("API key is required");
   try {
-    const { json } = await requestJson("https://a.klaviyo.com/api/accounts", { headers: { Authorization: `Klaviyo-API-Key ${apiKey}`, revision: KLAVIYO_REVISION, accept: "application/vnd.api+json" } }, { platform: "Klaviyo", secret: apiKey, fetchImpl, ...extra });
+    const { json } = await requestJson("https://a.klaviyo.com/api/accounts", { headers: { Authorization: `Klaviyo-API-Key ${apiKey}`, revision: KLAVIYO_REVISION, accept: "application/vnd.api+json" } }, { platform: "Klaviyo", secret: apiKey, fetchImpl, ...CONNECT_LIMITS, ...extra });
     const account = (json as { data?: { id?: string; attributes?: { contact_information?: { organization_name?: string } } }[] } | null)?.data?.[0];
     if (!account) throw new Error("Klaviyo returned no account for this key");
     return { accountName: account.attributes?.contact_information?.organization_name?.trim() || "Klaviyo account", accountId: account.id };

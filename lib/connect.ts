@@ -7,6 +7,8 @@ export interface ConnectInput {
   provider: ProviderId;
   accountId: string;
   apiKey?: string;
+  /** Replacing the key of an existing connection: the account it belongs to. A key from another account is refused. */
+  expectedAccountId?: string;
 }
 
 const asText = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -28,7 +30,8 @@ export function parseConnectBody(body: unknown, providers: Record<string, Provid
   if (provider.auth === "client-key") {
     const apiKey = asText(b.apiKey);
     if (!apiKey) return { ok: false, error: "API key is required" };
-    return { ok: true, value: { clientId, provider: provider.id, accountId, apiKey } };
+    const expectedAccountId = asText(b.expectedAccountId);
+    return { ok: true, value: { clientId, provider: provider.id, accountId, apiKey, ...(expectedAccountId ? { expectedAccountId } : {}) } };
   }
   return { ok: true, value: { clientId, provider: provider.id, accountId } };
 }
@@ -54,6 +57,10 @@ export async function connectProvider(input: ConnectInput, deps: ConnectDeps): P
     accountName = verified.accountName;
     // When the platform names the account, that id wins: the same key always lands on the same connection.
     accountId = verified.accountId ?? input.accountId;
+    if (input.expectedAccountId && verified.accountId && verified.accountId !== input.expectedAccountId) {
+      throw new Error(`This key belongs to a different ${PROVIDERS[input.provider]?.label ?? "platform"} account (${accountName}). Disconnect this connection or add the key as a new connection.`);
+    }
+    if (!accountId) throw new Error("Could not identify the account for this key");
   } catch (e) {
     throw new Error(redact(e instanceof Error ? e.message : "Verification failed", input.apiKey));
   }

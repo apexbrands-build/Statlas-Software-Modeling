@@ -39,4 +39,13 @@ describe("verifyKlaviyo", () => {
     const err = await verifyKlaviyo(input, async () => { throw new Error("socket hang up pk_secret_1"); }, { retries: 0 }).catch((e) => e);
     expect(String(err.message)).not.toContain("pk_secret_1");
   });
+
+  it("gives up quickly when the platform keeps rate limiting: one retry and a short wait", async () => {
+    const sleep = vi.fn<(ms: number) => Promise<void>>(async () => {});
+    const f = vi.fn(async () => answer({}, 429));
+    const err = await verifyKlaviyo(input, f, { sleep }).catch((e) => e);
+    expect(String(err.message)).toMatch(/limiting requests/);
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(sleep.mock.calls.every(([ms]) => ms <= 5000)).toBe(true);
+  });
 });
