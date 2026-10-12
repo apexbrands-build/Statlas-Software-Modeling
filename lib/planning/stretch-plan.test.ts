@@ -3,7 +3,7 @@ import { addDays } from "../dates";
 import { DEFAULT_NEW_CUSTOMER, DEFAULT_RETURNING } from "./models";
 import { FLAT_SEASONALITY } from "./generate";
 import { baseMonths, baseRows, cohortsFor, factsFrom, lastData, settings } from "./stretch-fixtures";
-import { planStretch, type StretchPlanInput } from "./stretch-plan";
+import { planStretch, preflightStretch, type StretchPlanInput } from "./stretch-plan";
 
 function input(over: Partial<StretchPlanInput> = {}): StretchPlanInput {
   return {
@@ -120,5 +120,34 @@ describe("planStretch: nothing to grow from", () => {
   it("still builds a stretch for an amount goal", () => {
     const out = planStretch(input({ facts: thisYearOnly, goal: { metric: "totalRevenue", value: 4000000 } }));
     expect(out.ok).toBe(true);
+  });
+});
+
+describe("preflightStretch", () => {
+  const { goal: _goal, planId: _planId, ...base } = input();
+  void _goal;
+  void _planId;
+
+  it("is ok for a baseline that can be stretched", () => {
+    expect(preflightStretch(base)).toEqual({ ok: true });
+  });
+
+  it("gives the same reasons as planStretch for what is missing", () => {
+    const cases: Partial<StretchPlanInput>[] = [
+      { facts: factsFrom(addDays(lastData, -20), lastData) },
+      { cohort: { available: false, stats: [], cohorts: [] } },
+      { baseline: { months: baseMonths.map((m) => ({ ...m, inputs: null })), rows: {} } },
+    ];
+    for (const c of cases) {
+      const pre = preflightStretch({ ...base, ...c });
+      const full = planStretch(input(c));
+      expect(pre.ok).toBe(false);
+      expect(full.ok).toBe(false);
+      if (!pre.ok && !full.ok) expect(pre.reason).toBe(full.reason);
+    }
+  });
+
+  it("does not refuse a client with no revenue last year: that only matters for a growth goal", () => {
+    expect(preflightStretch({ ...base, facts: factsFrom("2026-01-01", lastData) })).toEqual({ ok: true });
   });
 });

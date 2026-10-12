@@ -153,6 +153,7 @@ export function SummaryStep({ ctx }: { ctx: PlanCtx }) {
   const check = stretchPlan?.goal && stretchYear ? goalCheck(stretchPlan.goal, stretchYear, lastYear) : null;
 
   const fit = useMemo(() => (nc && history.facts.length ? fitPlanModel(history.facts, settings, seasonality.dow, nc) : null), [nc, history.facts, settings, seasonality.dow]);
+  const modelNote = fit ? null : nc ? "The New Customer Model is saved but cannot be fitted yet: it needs about 60 days with ad spend and new-customer revenue." : "Save the New Customer Model (Models tab) to see how far above the model each month sits.";
   const above = (f: MonthFigures[] | null) =>
     f?.map((m) => {
       if (!fit || !m.hasData) return null;
@@ -304,7 +305,7 @@ export function SummaryStep({ ctx }: { ctx: PlanCtx }) {
         </div>
       )}
 
-      {view !== "compare" && shown && shownPlan && <Grid figures={shown} lastYear={lastYear} extras={extras} money={money} above={above(shown)} hasModel={Boolean(fit)} flags={shown.map((m) => monthFlags(m, view === "stretch" ? shownPlan.goal : null, fit?.curve ?? null, daysIn(m.month)))} showFlags={view === "stretch"} />}
+      {view !== "compare" && shown && shownPlan && <Grid figures={shown} lastYear={lastYear} extras={extras} money={money} above={above(shown)} modelNote={modelNote} flags={shown.map((m) => monthFlags(m, view === "stretch" ? shownPlan.goal : null, fit?.curve ?? null, daysIn(m.month)))} showFlags={view === "stretch"} />}
       {view !== "compare" && !shown && <p className="text-sm text-text-muted">No plan to show yet.</p>}
       {view === "compare" && baseFig && stretchFig && <Compare base={baseFig} stretch={stretchFig} actual={actual} lastData={lastData} money={money} aboveBase={above(baseFig)} aboveStretch={above(stretchFig)} />}
       <p className="text-xs text-text-faint">aMER here is new revenue over acquisition spend (brand search and retention spend are left out per Store Settings), not over all spend. Operating expenses are the plan month&apos;s SG&amp;A, else the client&apos;s monthly setting.</p>
@@ -343,7 +344,7 @@ function GoalFields({ metric, setMetric, goalText, setGoalText, floors, setFloor
 
 const higherIsBetter = (k: SummaryKey) => k !== "opex";
 
-function Grid({ figures, lastYear, extras, money, above, hasModel, flags, showFlags }: { figures: MonthFigures[]; lastYear: MonthFigures[]; extras: Set<Extra>; money: (v: number | null, f?: Format) => string; above: ({ v: number; stretch: boolean } | null)[] | null; hasModel: boolean; flags: StretchFlag[][]; showFlags: boolean }) {
+function Grid({ figures, lastYear, extras, money, above, modelNote, flags, showFlags }: { figures: MonthFigures[]; lastYear: MonthFigures[]; extras: Set<Extra>; money: (v: number | null, f?: Format) => string; above: ({ v: number; stretch: boolean } | null)[] | null; modelNote: string | null; flags: StretchFlag[][]; showFlags: boolean }) {
   const grid = buildSummaryGrid(figures, lastYear);
   const cell = "px-2 py-1 text-right tabular whitespace-nowrap";
   return (
@@ -391,7 +392,7 @@ function Grid({ figures, lastYear, extras, money, above, hasModel, flags, showFl
               {extras.has("share") && r.months.some((m) => m.share !== null) && <SubRow label="% of year" cells={r.months.map((m) => (m.share === null ? "–" : `${(m.share * 100).toFixed(1)}%`))} total="100%" />}
             </Fragment>
           ))}
-          {hasModel && above && (
+          {!modelNote && above && (
             <tr className="border-t-2 border-border">
               <th className="sticky left-0 bg-surface px-3 py-1 text-left font-medium" title="Plan aMER against what the New Customer Model gives at that acquisition spend and season, without the over-model % you set">
                 Above model
@@ -407,7 +408,7 @@ function Grid({ figures, lastYear, extras, money, above, hasModel, flags, showFl
           )}
         </tbody>
       </table>
-      {!hasModel && <p className="border-t border-border px-3 py-2 text-xs text-text-faint">Save the New Customer Model (Models tab) to see how far above the model each month sits.</p>}
+      {modelNote && <p className="border-t border-border px-3 py-2 text-xs text-text-faint">{modelNote}</p>}
     </div>
   );
 }

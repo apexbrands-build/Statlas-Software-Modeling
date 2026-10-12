@@ -48,6 +48,16 @@ const SPEND_CAP_FACTOR = 10;
  * the returning revenue the Returning Customer Model gives for that new revenue, and the same rates, SG&A and platform split.
  */
 export function planStretch(inp: StretchPlanInput): StretchPlanOutcome {
+  return run(inp, false) as StretchPlanOutcome;
+}
+
+/** Whether a stretch can be built from this baseline at all, without solving one: the same checks and reasons as planStretch, much cheaper. */
+export function preflightStretch(inp: Omit<StretchPlanInput, "goal" | "planId">): { ok: true } | { ok: false; reason: string } {
+  const r = run({ ...inp, planId: "check", goal: { metric: "totalRevenue", value: 1 } }, true);
+  return r.ok ? { ok: true } : r;
+}
+
+function run(inp: StretchPlanInput, checkOnly: boolean): StretchPlanOutcome | { ok: true; checkOnly: true } {
   const { settings, facts, lastData, year } = inp;
   const fit = fitPlanModel(facts, settings, inp.seasonality.dow, inp.newSettings);
   if (!fit) return fail("Not enough history to fit the New Customer Model (it needs about 60 days with ad spend and new-customer revenue).");
@@ -111,6 +121,7 @@ export function planStretch(inp: StretchPlanInput): StretchPlanOutcome {
   };
   const baselineNewByMonth = Object.fromEntries(monthInputs.map((m) => [m.month, m.baselineNewRevenue]));
   if (!model(baselineNewByMonth)) return fail("Not enough cohort history for the Returning Customer Model (it needs at least 3 cohorts with a few months of repeat purchases).");
+  if (checkOnly) return { ok: true, checkOnly: true };
 
   const returningFor = (newByMonth: Record<string, number>) => {
     const totals = new Map((model(newByMonth)?.months ?? []).map((m) => [m.month, m.total]));

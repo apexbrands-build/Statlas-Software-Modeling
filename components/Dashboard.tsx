@@ -70,7 +70,13 @@ export function Dashboard() {
     writeScenarioChoice(client.id, s);
     if (s === "target") setMode("plan");
   };
-  const data = useDashboardData(client, settings, activeRange, cmpRange, scenario);
+  const fresh = useDashboardData(client, settings, activeRange, cmpRange, scenario);
+  // While only the plan scenario is being switched, keep showing the last numbers (dimmed) instead of the skeleton and a vanishing selector.
+  const [last, setLast] = useState<DashData | null>(null);
+  if (fresh && fresh !== last) setLast(fresh);
+  const sameView = Boolean(last && client && activeRange && last.client.id === client.id && last.range.from === activeRange.from && last.range.to === activeRange.to);
+  const data = fresh ?? (sameView ? last : null);
+  const refreshing = !fresh && data !== null;
 
   if (!mounted || !client || !settings || !activeRange) return <Skeleton />;
 
@@ -83,7 +89,7 @@ export function Dashboard() {
         setMode={setMode}
         hasPlan={data?.hasPlan ?? false}
         hasStretch={data?.hasStretch ?? false}
-        scenario={data?.planScenario ?? "baseline"}
+        scenario={data?.hasStretch ? scenario : "baseline"}
         setScenario={chooseScenario}
         cmpRange={cmpRange}
         setCmpRange={setCustomCmp}
@@ -95,7 +101,9 @@ export function Dashboard() {
           No actual data in this range yet (data runs through {data.lastData}). Pick an earlier period.
         </div>
       ) : (
-        <Body data={data} mode={mode} breakout={breakout} setBreakout={setBreakout} roasMode={roasMode ?? (settings.extra.showIncrementalByDefault ? "iroas" : "roas")} setRoasMode={setRoasMode} chartType={chartType} setChartType={setChartType} setOpen={setOpen} />
+        <div className={refreshing ? "opacity-60 transition-opacity" : undefined} aria-busy={refreshing}>
+          <Body data={data} mode={mode} breakout={breakout} setBreakout={setBreakout} roasMode={roasMode ?? (settings.extra.showIncrementalByDefault ? "iroas" : "roas")} setRoasMode={setRoasMode} chartType={chartType} setChartType={setChartType} setOpen={setOpen} />
+        </div>
       )}
       {open && data && <MetricModal def={open.def} title={open.title} data={data} mode={mode} onClose={() => setOpen(null)} />}
     </div>

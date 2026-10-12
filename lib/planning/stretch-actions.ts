@@ -4,7 +4,7 @@ import type { DayMultipliers } from "./events";
 import { FLAT_SEASONALITY } from "./generate";
 import { DEFAULT_NEW_CUSTOMER, DEFAULT_RETURNING, type NewCustomerSettings, type ReturningSettings } from "./models";
 import { stretchName } from "./scenarios";
-import { planStretch, type StretchPlanInput } from "./stretch-plan";
+import { planStretch, preflightStretch, type StretchPlanInput } from "./stretch-plan";
 import type { PlanMonth } from "./types";
 
 /** What the stretch actions need from the open plan editor. */
@@ -72,8 +72,7 @@ export async function checkStretch(repo: Repository, ctx: StretchCtx, baseline: 
   try {
     const loaded = await loadBaseline(repo, ctx, baseline);
     if (!loaded.ok) return loaded;
-    const out = planStretch({ ...loaded.input, planId: "check", goal: { metric: "totalRevenue", value: 1 } });
-    return out.ok ? { ok: true } : { ok: false, reason: out.reason };
+    return preflightStretch(loaded.input);
   } catch (e) {
     return { ok: false, reason: explainStretchError(e) };
   }
