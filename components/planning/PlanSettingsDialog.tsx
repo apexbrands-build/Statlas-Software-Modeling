@@ -70,8 +70,14 @@ export function PlanSettingsDialog({ plan, onClose, onChanged }: { plan: PlanVer
         </label>
 
         <div className="flex items-center gap-3">
-          <span className="text-text-muted">{plan.isDefault ? "This is the default plan for the year (Home and reports compare against it)." : "This plan is not the default."}</span>
-          {!plan.isDefault && (
+          <span className="text-text-muted">
+            {plan.scenario === "target"
+              ? "This is the stretch scenario for the year (Would like). Home can switch to it; the default plan stays the baseline."
+              : plan.isDefault
+                ? "This is the default plan for the year (Home and reports compare against it)."
+                : "This plan is not the default."}
+          </span>
+          {!plan.isDefault && plan.scenario !== "target" && (
             <button
               className={btn}
               onClick={async () => {

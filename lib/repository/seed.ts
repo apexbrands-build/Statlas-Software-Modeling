@@ -7,8 +7,10 @@ import type {
   Client,
   ClientSettings,
   DailyFact,
+  PlanScenario,
   PlanTargetDay,
   PlanVersion,
+  StretchGoal,
 } from "../types";
 import { CHANNEL_KEYS } from "../types";
 import { defaultExtra } from "../defaults";
@@ -441,7 +443,7 @@ export class SeedRepository implements Repository {
   async listPlans(clientId: string): Promise<PlanVersion[]> {
     const own = this.plans.filter((p) => p.clientId === clientId);
     if (own.length || !ENABLE_SEED_PLANS) return own;
-    return [{ id: `${clientId}-2026-official`, clientId, name: "2026 Official Plan", isDefault: true, year: 2026, description: "", seasonality: null, updatedAt: null, updatedBy: null }];
+    return [{ id: `${clientId}-2026-official`, clientId, name: "2026 Official Plan", isDefault: true, year: 2026, description: "", seasonality: null, updatedAt: null, updatedBy: null, scenario: "baseline", baseId: null, goal: null }];
   }
 
   async getPlanTargets(clientId: string, planId: string, from: string, to: string): Promise<PlanTargetDay[]> {
@@ -451,17 +453,21 @@ export class SeedRepository implements Repository {
     return eachDay(from, to).map((d) => buildPlanDay(p, planId, d));
   }
 
-  async createPlan(clientId: string, input: { name: string; year: number; description?: string }): Promise<PlanVersion> {
+  async createPlan(clientId: string, input: { name: string; year: number; description?: string; scenario?: PlanScenario; baseId?: string; goal?: StretchGoal }): Promise<PlanVersion> {
+    const isTarget = input.scenario === "target";
     const plan: PlanVersion = {
       id: `plan-${Date.now()}-${this.plans.length}`,
       clientId,
       name: input.name,
       year: input.year,
       description: input.description ?? "",
-      isDefault: !this.plans.some((p) => p.clientId === clientId && p.year === input.year && p.isDefault),
+      isDefault: !isTarget && !this.plans.some((p) => p.clientId === clientId && p.year === input.year && p.isDefault),
       seasonality: null,
       updatedAt: new Date().toISOString(),
       updatedBy: "demo user",
+      scenario: isTarget ? "target" : "baseline",
+      baseId: isTarget ? input.baseId ?? null : null,
+      goal: isTarget ? input.goal ?? null : null,
     };
     this.plans.push(plan);
     this.log(plan.id, "Created plan");

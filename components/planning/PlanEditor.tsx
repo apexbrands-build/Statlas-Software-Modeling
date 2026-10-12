@@ -20,11 +20,13 @@ import { MonthlyStep } from "./MonthlyStep";
 import { ModelsStep } from "./models/ModelsStep";
 import { PnlStep } from "./PnlStep";
 import { SpendStep } from "./SpendStep";
+import { SummaryStep } from "./SummaryStep";
 import { btn, btnPrimary, monthKey, MONTHS } from "./ui";
 import { usePlanHistory } from "./useHistory";
 
 const STEPS = [
   { id: "monthly", label: "Overview" },
+  { id: "summary", label: "Summary" },
   { id: "models", label: "Models" },
   { id: "calendar", label: "Calendar" },
   { id: "spend", label: "Spend" },
@@ -48,6 +50,8 @@ export function PlanEditor({ planId }: { planId: string }) {
   const [events, setEvents] = useState<MarketingEvent[]>([]);
   const [eventSettings, setEventSettingsState] = useState<EventSettings>(DEFAULT_EVENT_SETTINGS);
   const [eventSettingsDirty, setEventSettingsDirty] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   const history = usePlanHistory(client?.id, plan?.year ?? Number(todayLocal().slice(0, 4)));
 
@@ -83,7 +87,7 @@ export function PlanEditor({ planId }: { planId: string }) {
     return () => {
       cancel = true;
     };
-  }, [client, planId]);
+  }, [client, planId, reloadKey]);
 
   const historySeasonality = useMemo(() => (history.lastData ? dowFromHistory(history.facts, history.lastData) : null), [history]);
   const seasonality: PlanSeasonality = seasonDraft ?? historySeasonality ?? FLAT_SEASONALITY;
@@ -296,7 +300,7 @@ export function PlanEditor({ planId }: { planId: string }) {
 
   const totals = aggregatePlan(Object.values(rows).flat());
   const money = (v: number) => formatValue(v, "currency0", client.currency);
-  const ctx: PlanCtx = { plan, client, settings, months, rows, seasonality, setSeasonality, editInputs, setLocked, fill, history, historySeasonality, events, eventResults, eventSettings, setEventSettings, eventMults, saveEvents, removeEvent };
+  const ctx: PlanCtx = { plan, client, settings, months, rows, seasonality, setSeasonality, editInputs, setLocked, fill, history, historySeasonality, events, eventResults, eventSettings, setEventSettings, eventMults, saveEvents, removeEvent, unsaved: Boolean(needsSave), reload };
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
@@ -308,6 +312,7 @@ export function PlanEditor({ planId }: { planId: string }) {
           <h1 className="text-xl font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
             {plan.name}
             {plan.isDefault && <span className="ml-2 rounded-full bg-accent px-2 py-0.5 align-middle text-[11px] font-medium text-black">Default</span>}
+            {plan.scenario === "target" && <span className="ml-2 rounded-full bg-surface-raised px-2 py-0.5 align-middle text-[11px] font-medium">Stretch</span>}
           </h1>
           <p className="text-xs text-text-muted">
             {plan.year} · {client.name} · {client.currency}
@@ -348,6 +353,7 @@ export function PlanEditor({ planId }: { planId: string }) {
         <ModelsStep ctx={ctx} />
       </div>
       {step === "monthly" && <MonthlyStep ctx={ctx} />}
+      {step === "summary" && <SummaryStep ctx={ctx} />}
       {step === "calendar" && <CalendarStep ctx={planCalendarCtx(ctx)} />}
       {step === "spend" && <SpendStep ctx={ctx} />}
       {step === "details" && <DetailsStep ctx={ctx} />}

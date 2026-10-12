@@ -33,7 +33,9 @@ Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in 
 
 **DB migrations 0001-0008:** all applied (checked against the live database 2026-10-11; `order_lines` holds 91,635 rows, cohort tables are built). Older notes in `docs/` that call 0005-0008 "pending" are stale.
 
-**Reports (2026-10-12):** Contribution Margin, Revenue Overview, New Vs Returning and AOV Histogram are built (migration 0010 applied) and every Home tile links to its report; registry statuses are `ready` (page exists), `waiting`, `planned`. Specs written, not built: forecast summary and scenarios, channel mix, markets (needs Shopify address access first, so the Shopify submission files are updated but must not be sent before Markets exists), email and SMS plan.
+**Reports (2026-10-12):** Contribution Margin, Revenue Overview, New Vs Returning and AOV Histogram are built (migration 0010 applied) and every Home tile links to its report; registry statuses are `ready` (page exists), `waiting`, `planned`. Specs written, not built: channel mix, markets (needs Shopify address access first, so the Shopify submission files are updated but must not be sent before Markets exists), email and SMS plan, subscriptions, creative demand.
+
+**Scenarios (2026-10-12):** the plan editor's Summary tab, stretch plans (`scenario = 'target'`, one per client and year, generated from the baseline and one goal) and the Home Plan selector are built; migration 0011 is written but not applied. Details in `docs/planning-layer.md`.
 
 **Connector registry (2026-10-12):** `lib/providers.ts` (browser metadata) + `lib/sync/registry.ts` (sync per provider) + `lib/job-plan.ts` (job logic); max 10 parallel jobs; "Needs attention" badge after 2 failed daily syncs. Migration 0009 must be applied before deploying. How to add a connector: `docs/connector-setup.md`.
 

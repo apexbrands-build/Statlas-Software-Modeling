@@ -85,6 +85,7 @@ export function PlanList() {
             <div className="flex items-center gap-2 text-[11px] font-medium">
               <span className="rounded-full bg-surface-raised px-2 py-0.5">{plan.year}</span>
               {plan.isDefault && <span className="rounded-full bg-accent px-2 py-0.5 text-black">Default</span>}
+              {plan.scenario === "target" && <span className="rounded-full bg-surface-raised px-2 py-0.5">Stretch</span>}
               <button className="ml-auto text-text-muted hover:text-text" onClick={() => setSettings(plan)} aria-label={`Settings for ${plan.name}`}>
                 ⚙ Settings
               </button>

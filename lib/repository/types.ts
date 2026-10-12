@@ -4,7 +4,7 @@ import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth } from "../planning/types";
-import type { CampaignDay, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
+import type { CampaignDay, Client, ClientSettings, DailyFact, PlanScenario, PlanTargetDay, PlanVersion, StretchGoal } from "../types";
 
 /**
  * Data access boundary. The dashboard only talks to this interface.
@@ -27,7 +27,8 @@ export interface Repository {
   listPlans(clientId: string): Promise<PlanVersion[]>;
   getPlanTargets(clientId: string, planId: string, from: string, to: string): Promise<PlanTargetDay[]>;
   /** The first plan of a client and year becomes the default. */
-  createPlan(clientId: string, input: { name: string; year: number; description?: string }): Promise<PlanVersion>;
+  /** A `target` plan is a stretch generated from `baseId` and is never the default plan. */
+  createPlan(clientId: string, input: { name: string; year: number; description?: string; scenario?: PlanScenario; baseId?: string; goal?: StretchGoal }): Promise<PlanVersion>;
   /** Saves name, description and seasonality. */
   updatePlan(plan: PlanVersion, changeNote?: string): Promise<void>;
   deletePlan(plan: PlanVersion): Promise<void>;

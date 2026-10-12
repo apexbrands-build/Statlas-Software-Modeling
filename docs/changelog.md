@@ -2,6 +2,11 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-10-12: Forecast summary, stretch scenarios and the Home selector
+- New **Summary** tab in the plan editor (step 2): the plan by month against last year with EBITDA, year over year, month over month, share of the year and "Above model"; a Baseline | Stretch | Compare view and a Plan | Forecast basis. **Create stretch** builds the "Would like" plan from one goal (new or total revenue growth, or a total amount) on the saved models; **Regenerate** keeps locked months. Home has a **Plan: Baseline | Stretch** selector once the year has a stretch. Details: `docs/planning-layer.md` ("Scenarios and Summary").
+- Migration `0011_plan_scenarios` (`plan_versions.scenario`, `base_plan_id`, `goal`, one stretch per client and year): written, **not applied** until confirmed; baselines work without it.
+- Shared logic extracted from the New Customer screen into `lib/planning/plan-fit.ts` and `month-model.ts` (behaviour unchanged). 331 tests passing; a fresh review found and fixed unhandled errors on Create stretch, a stale editor after Regenerate, ended months outside the goal, and growth goals with no last year.
+
 ## 2026-10-12: Calendar page, specs for subscriptions, creative demand and messaging
 - The sidebar Calendar opens its own page again (`/calendar`), sharing `CalendarStep` with the plan editor through `CalendarCtx`. Events are stored per client, so both views read and write the same rows. The LTV multiplier labels in the New Customer model no longer wrap away from their fields.
 - New specs: `2026-10-12-subscriptions-design.md` (Loop and Skio connectors, Shopify-only estimate, Subscriptions report, forecast split of returning revenue) and `2026-10-12-creative-demand-design.md` (ad-level Meta data, Creative Score, Creative Demand model). Messaging spec updated (phase 1 is connect and verify; Postscript's public API has no revenue endpoint). Markets spec updated (what `read_markets` does and does not give). Plan written for the forecast summary and scenarios.

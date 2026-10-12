@@ -7,13 +7,9 @@ import { formatValue } from "@/lib/format";
 import { aggregate, amerSpend } from "@/lib/metrics";
 import {
   acqShare,
-  BEYOND_GAMMA,
   BEYOND_LABELS,
   type BeyondHistory,
   cohortMultipliers,
-  recentCostPct,
-  recentNewAov,
-  SOURCE_DAYS,
   SOURCE_LABELS,
   type NewCustomerMonth,
   type NewCustomerResults,
@@ -23,8 +19,6 @@ import {
   buildSpendTable,
   curveAmer,
   evaluateSpend,
-  fitNewCustomerModel,
-  interpolate90,
   monthlyAmerIndex,
   niceStep,
   OPTIMIZE_LABELS,
@@ -34,6 +28,8 @@ import {
   type ModelSettings,
   type OptimizeFor,
 } from "@/lib/planning/new-customer";
+import { defaultNewCustomerMonth, monthModelSettings, resolveNewCustomerMonth, type MonthModelCtx } from "@/lib/planning/month-model";
+import { dayPoints, fitFromPoints } from "@/lib/planning/plan-fit";
 import { btn, btnPrimary, inputClass, MONTHS, NumField } from "../ui";
 import { Legend, ScatterCurve, type ScatterPoint } from "./charts";
 import type { ModelCtx } from "./ModelsStep";
@@ -95,8 +91,8 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const [growth, setGrowth] = useState(10);
 
   /* ---- the fit ---- */
-  const points = useMemo<DayPoint[]>(() => facts.map((f) => ({ date: f.date, spend: amerSpend(aggregate([f]), settings), newRevenue: f.newOrderRevenue })), [facts, settings]);
-  const fitWith = (recent: { from: string; weight: number } | null) => fitNewCustomerModel(points, seasonality.dow, { kind: S.fitKind, recent, guard: BEYOND_GAMMA[S.beyondHistory ?? "standard"] });
+  const points = useMemo<DayPoint[]>(() => dayPoints(facts, settings), [facts, settings]);
+  const fitWith = (recent: { from: string; weight: number } | null) => fitFromPoints(points, seasonality.dow, S, recent);
   const recent = S.actualizeFrom ? { from: S.actualizeFrom, weight: S.recentWeight } : null;
   const fit = useMemo(() => fitWith(recent), [points, seasonality, S.fitKind, S.beyondHistory, S.actualizeFrom, S.recentWeight]); // eslint-disable-line react-hooks/exhaustive-deps
   const baseFit = useMemo(() => (S.actualizeFrom ? fitWith(null) : fit), [points, seasonality, S.fitKind, S.beyondHistory, S.actualizeFrom, fit]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -108,48 +104,12 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
   const cohortMult = useMemo(() => cohortMultipliers(cohort.stats, lastData), [cohort.stats, lastData]);
 
   /* ---- month defaults and resolving "Last 30 days / Recommended / Manual" ---- */
-  const defaultMonth = (key: string): NewCustomerMonth => {
-    const inputs = months.find((m) => m.month === key)?.inputs ?? null;
-    const aov = recentNewAov(facts, lastData, 30) ?? inputs?.rates.newAov ?? 0;
-    const cost = recentCostPct(facts, lastData, 30, settings) ?? 30;
-    const recentSpend = (() => {
-      const from = addDays(lastData, -89);
-      const t = aggregate(facts.filter((f) => f.date >= from && f.date <= lastData));
-      return t.days ? (amerSpend(t, settings) / t.days) * daysIn(key) : 0;
-    })();
-    return {
-      optimizeFor: "cm",
-      spend: inputs ? Math.round(inputs.spend * acqShare(inputs, settings)) : Math.round(recentSpend),
-      aov: Math.round(aov * 100) / 100,
-      aovSource: "last30",
-      newCostPct: cost,
-      newCostSource: "last30",
-      returningCostPct: cost,
-      returningCostSource: "last30",
-      ltv60Multiplier: cohortMult.ltv60 ?? 1,
-      ltv365Multiplier: cohortMult.ltv365 ?? 1,
-      ltv90Multiplier: cohortMult.ltv90 ?? interpolate90(cohortMult.ltv60 ?? 1, cohortMult.ltv365 ?? 1),
-      ltvSource: cohortMult.ltv365 != null ? "recommended" : "manual",
-      overModelPct: fit?.recommendedOverPct ?? 0,
-      minCm: 0,
-      minCm60: 0,
-      minCm365: 0,
-      minCm90: 0,
-    };
-  };
+  const mctx: MonthModelCtx = { facts, lastData, settings, cohortMult };
+  const defaultMonth = (key: string): NewCustomerMonth => defaultNewCustomerMonth(key, months.find((m) => m.month === key)?.inputs ?? null, mctx, fit?.recommendedOverPct ?? 0);
   const getMonth = (key: string): NewCustomerMonth => S.months[key] ?? defaultMonth(key);
   const setMonth = (key: string, patch: Partial<NewCustomerMonth>) => setNewSettings((s) => ({ ...s, months: { ...s.months, [key]: { ...(s.months[key] ?? defaultMonth(key)), ...patch } } }));
 
-  const resolve = (m: NewCustomerMonth) => {
-    const win = (src: Source) => SOURCE_DAYS[src];
-    const aov = m.aovSource === "manual" ? m.aov : (recentNewAov(facts, lastData, win(m.aovSource) ?? 30) ?? m.aov);
-    const nc = m.newCostSource === "manual" ? m.newCostPct : (recentCostPct(facts, lastData, win(m.newCostSource) ?? 30, settings) ?? m.newCostPct);
-    const rc = m.returningCostSource === "manual" ? m.returningCostPct : (recentCostPct(facts, lastData, win(m.returningCostSource) ?? 30, settings) ?? m.returningCostPct);
-    const m60 = m.ltvSource === "manual" ? m.ltv60Multiplier : (cohortMult.ltv60 ?? m.ltv60Multiplier);
-    const m365 = m.ltvSource === "manual" ? m.ltv365Multiplier : (cohortMult.ltv365 ?? m.ltv365Multiplier);
-    const m90 = m.ltvSource === "manual" ? (m.ltv90Multiplier ?? interpolate90(m60, m365)) : (cohortMult.ltv90 ?? m.ltv90Multiplier ?? interpolate90(m60, m365));
-    return { aov, nc, rc, m60, m90, m365 };
-  };
+  const resolve = (m: NewCustomerMonth) => resolveNewCustomerMonth(m, mctx);
 
   /* ---- the plan table ---- */
   const markerRows: { label: string; key: Exclude<OptimizeFor, "other"> }[] = [
@@ -163,7 +123,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     const e = resolve(m);
     const days = daysIn(key);
     const idx = seasonIdx(key);
-    const ms: ModelSettings = { newCostPct: e.nc, returningCostPct: e.rc, aov: e.aov, ltv60Multiplier: e.m60, ltv90Multiplier: e.m90, ltv365Multiplier: e.m365, overModelPct: m.overModelPct, minCm: m.minCm, minCm60: m.minCm60, minCm90: m.minCm90 ?? 0, minCm365: m.minCm365 };
+    const ms: ModelSettings = monthModelSettings(m, e);
     const closed = lastData !== "" && endOfMonth(key) <= lastData;
     let table = null as ReturnType<typeof buildSpendTable> | null;
     let spend = m.spend;

@@ -177,6 +177,18 @@ export interface ClientSettings {
   dtcChannels: string[];
 }
 
+/** baseline = "Most likely" (the client's default plan); target = "Would like" (the stretch generated from a goal). */
+export type PlanScenario = "baseline" | "target";
+
+/** The one number the strategist types to generate a stretch scenario, with optional guardrails. */
+export interface StretchGoal {
+  metric: "newRevenueGrowth" | "totalRevenueGrowth" | "totalRevenue";
+  /** Percent for the two growth goals (20 = +20% against last year); an amount for totalRevenue. */
+  value: number;
+  cmFloor?: number;
+  amerFloor?: number;
+}
+
 export interface PlanVersion {
   id: string;
   clientId: string;
@@ -188,6 +200,10 @@ export interface PlanVersion {
   seasonality: PlanSeasonality | null;
   updatedAt: string | null;
   updatedBy: string | null;
+  scenario: PlanScenario;
+  /** The baseline a stretch was generated from; null for baselines. */
+  baseId: string | null;
+  goal: StretchGoal | null;
 }
 
 /** Day-of-week pattern: offsets in % vs the average day (index 0 = Sunday), and how much of it to apply. */

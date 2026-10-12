@@ -3,9 +3,10 @@ import { defaultSettings, DEFAULT_MULTIPLIERS } from "../defaults";
 import { getBrowserClient } from "../supabase/client";
 import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
-import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanTargetDay, PlanVersion } from "../types";
+import type { CampaignDay, ChannelKey, Client, ClientSettings, DailyFact, PlanScenario, PlanTargetDay, PlanVersion, StretchGoal } from "../types";
 import { CHANNEL_KEYS } from "../types";
 import type { MarketingEvent } from "../planning/events";
+import { readScenarioFields } from "../planning/scenarios";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth, PlanMonthInputs } from "../planning/types";
@@ -215,6 +216,7 @@ export class SupabaseRepository implements Repository {
       seasonality: (p.seasonality as PlanVersion["seasonality"]) ?? null,
       updatedAt: (p.updated_at as string) ?? null,
       updatedBy: (p.updated_by as string) ?? null,
+      ...readScenarioFields(p),
     };
   }
 
@@ -227,8 +229,9 @@ export class SupabaseRepository implements Repository {
     await this.db.from("plan_changes").insert({ plan_id: plan.id, client_id: plan.clientId, by: await this.userLabel(), summary });
   }
 
-  async createPlan(clientId: string, input: { name: string; year: number; description?: string }): Promise<PlanVersion> {
+  async createPlan(clientId: string, input: { name: string; year: number; description?: string; scenario?: PlanScenario; baseId?: string; goal?: StretchGoal }): Promise<PlanVersion> {
     const existing = await this.listPlans(clientId);
+    const isTarget = input.scenario === "target";
     const { data, error } = await this.db
       .from("plan_versions")
       .insert({
@@ -236,8 +239,10 @@ export class SupabaseRepository implements Repository {
         name: input.name,
         year: input.year,
         description: input.description ?? "",
-        is_default: !existing.some((p) => p.year === input.year && p.isDefault),
+        is_default: !isTarget && !existing.some((p) => p.year === input.year && p.isDefault),
         updated_by: await this.userLabel(),
+        // Scenario columns are written only for a stretch, so baselines keep working before migration 0011 is applied.
+        ...(isTarget ? { scenario: "target", base_plan_id: input.baseId ?? null, goal: input.goal ?? null } : {}),
       })
       .select("*")
       .single();
@@ -250,7 +255,14 @@ export class SupabaseRepository implements Repository {
   async updatePlan(plan: PlanVersion, changeNote?: string): Promise<void> {
     const { error } = await this.db
       .from("plan_versions")
-      .update({ name: plan.name, description: plan.description, seasonality: plan.seasonality, updated_at: new Date().toISOString(), updated_by: await this.userLabel() })
+      .update({
+        name: plan.name,
+        description: plan.description,
+        seasonality: plan.seasonality,
+        updated_at: new Date().toISOString(),
+        updated_by: await this.userLabel(),
+        ...(plan.scenario === "target" ? { goal: plan.goal } : {}),
+      })
       .eq("id", plan.id);
     if (error) throw new Error(error.message);
     if (changeNote) await this.log(plan, changeNote);

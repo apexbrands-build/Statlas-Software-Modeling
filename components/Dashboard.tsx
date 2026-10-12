@@ -9,6 +9,8 @@ import { MetricTile } from "./MetricTile";
 import { theme } from "@/theme/theme";
 import { useApp } from "@/lib/app-context";
 import { compareSource, COMPARE_LABEL, tileNumbers, useDashboardData, type DashData } from "@/lib/dashboard-data";
+import { readScenarioChoice, writeScenarioChoice } from "@/lib/planning/scenarios";
+import type { PlanScenario } from "@/lib/types";
 import {
   comparisonRange,
   endOfMonth,
@@ -59,7 +61,16 @@ export function Dashboard() {
     () => (mode === "custom" && activeRange ? (customCmp ?? comparisonRange("prev", activeRange)) : null),
     [mode, activeRange, customCmp],
   );
-  const data = useDashboardData(client, settings, activeRange, cmpRange);
+  // Which plan the Plan comparison uses once the year has a stretch scenario; remembered per client in this browser.
+  const [picked, setPicked] = useState<Record<string, PlanScenario>>({});
+  const scenario: PlanScenario = client ? (picked[client.id] ?? readScenarioChoice(client.id)) : "baseline";
+  const chooseScenario = (s: PlanScenario) => {
+    if (!client) return;
+    setPicked((p) => ({ ...p, [client.id]: s }));
+    writeScenarioChoice(client.id, s);
+    if (s === "target") setMode("plan");
+  };
+  const data = useDashboardData(client, settings, activeRange, cmpRange, scenario);
 
   if (!mounted || !client || !settings || !activeRange) return <Skeleton />;
 
@@ -71,6 +82,9 @@ export function Dashboard() {
         mode={mode}
         setMode={setMode}
         hasPlan={data?.hasPlan ?? false}
+        hasStretch={data?.hasStretch ?? false}
+        scenario={data?.planScenario ?? "baseline"}
+        setScenario={chooseScenario}
         cmpRange={cmpRange}
         setCmpRange={setCustomCmp}
       />
@@ -108,10 +122,13 @@ function Controls(props: {
   mode: CompareModeName;
   setMode: (m: CompareModeName) => void;
   hasPlan: boolean;
+  hasStretch: boolean;
+  scenario: PlanScenario;
+  setScenario: (s: PlanScenario) => void;
   cmpRange: Range | null;
   setCmpRange: (r: Range) => void;
 }) {
-  const { range, setRange, mode, setMode, hasPlan, cmpRange, setCmpRange } = props;
+  const { range, setRange, mode, setMode, hasPlan, hasStretch, scenario, setScenario, cmpRange, setCmpRange } = props;
   const sel = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-accent";
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -128,6 +145,15 @@ function Controls(props: {
           <option value="custom">Custom period</option>
         </select>
       </label>
+      {hasStretch && (
+        <label className="flex items-center gap-2 text-sm text-text-muted">
+          Plan
+          <select aria-label="Plan scenario" className={sel} value={scenario} onChange={(e) => setScenario(e.target.value as PlanScenario)}>
+            <option value="baseline">Baseline</option>
+            <option value="target">Stretch</option>
+          </select>
+        </label>
+      )}
       {mode === "custom" && cmpRange && (
         <div className="flex items-center gap-1.5 text-sm text-text-muted">
           <input aria-label="Comparison from" type="date" className={sel} value={cmpRange.from} max={cmpRange.to} onChange={(e) => e.target.value && setCmpRange({ from: e.target.value, to: cmpRange.to })} />

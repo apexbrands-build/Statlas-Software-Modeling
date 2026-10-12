@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDays, addYears, comparisonRange, diffDays, eachDay, min, type CompareModeName, type Range } from "./dates";
 import { aggregate, aggregatePlan, compare, type Comparison, type MetricDef, type PlanTotals, type Totals } from "./metrics";
+import { pickPlan, stretchOf } from "./planning/scenarios";
 import { getRepository } from "./repository";
 import { toMap } from "./series";
-import type { Client, ClientSettings, DailyFact, PlanTargetDay } from "./types";
+import type { Client, ClientSettings, DailyFact, PlanScenario, PlanTargetDay } from "./types";
 
 interface Raw {
   key: string;
@@ -17,6 +18,8 @@ interface Raw {
   customFacts: DailyFact[];
   plan: PlanTargetDay[];
   planName: string | null;
+  hasStretch: boolean;
+  planScenario: PlanScenario;
 }
 
 export interface DashData {
@@ -37,6 +40,10 @@ export interface DashData {
   elapsedLen: number;
   plan: Map<string, PlanTargetDay>;
   planName: string | null;
+  /** The range's year has a stretch plan, so Home can switch to it. */
+  hasStretch: boolean;
+  /** The scenario the plan numbers come from (baseline when there is no stretch). */
+  planScenario: PlanScenario;
   /** False when the client has no plan: no targets, no plan comparison. */
   hasPlan: boolean;
   cur: Totals;
@@ -51,10 +58,11 @@ export function useDashboardData(
   settings: ClientSettings | null,
   range: Range | null,
   customCompare: Range | null,
+  scenario: PlanScenario = "baseline",
 ) {
   const [raw, setRaw] = useState<Raw | null>(null);
 
-  const key = client && range ? `${client.id}|${range.from}|${range.to}|${customCompare?.from ?? ""}|${customCompare?.to ?? ""}` : null;
+  const key = client && range ? `${client.id}|${range.from}|${range.to}|${customCompare?.from ?? ""}|${customCompare?.to ?? ""}|${scenario}` : null;
 
   useEffect(() => {
     if (!client || !range || !key) return;
@@ -67,7 +75,9 @@ export function useDashboardData(
       const prevRange = comparisonRange("prev", elapsed);
       const plans = await repo.listPlans(client.id);
       const year = Number(range.to.slice(0, 4));
-      const plan = plans.find((p) => p.isDefault && p.year === year) ?? plans.find((p) => p.isDefault) ?? plans[0];
+      const hasStretch = Boolean(stretchOf(plans, year));
+      const planScenario: PlanScenario = hasStretch ? scenario : "baseline";
+      const plan = pickPlan(plans, year, planScenario);
       const trendFrom = range.from;
       const [facts, lyFacts, prevFacts, customFacts, planRows] = await Promise.all([
         repo.getFacts(client.id, trendFrom, effTo),
@@ -76,12 +86,12 @@ export function useDashboardData(
         customCompare ? repo.getFacts(client.id, customCompare.from, customCompare.to) : Promise.resolve([]),
         plan ? repo.getPlanTargets(client.id, plan.id, trendFrom, range.to) : Promise.resolve([]),
       ]);
-      if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, customFacts, plan: planRows, planName: plan?.name ?? null });
+      if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, customFacts, plan: planRows, planName: plan?.name ?? null, hasStretch, planScenario });
     })();
     return () => {
       cancel = true;
     };
-  }, [client, range, key, customCompare]);
+  }, [client, range, key, customCompare, scenario]);
 
   return useMemo<DashData | null>(() => {
     if (!raw || !client || !settings || !range || raw.key !== key) return null;
@@ -102,6 +112,8 @@ export function useDashboardData(
       elapsedLen: Math.max(1, diffDays(range.from, raw.effTo) + 1),
       plan: toMap(raw.plan),
       planName: raw.planName,
+      hasStretch: raw.hasStretch,
+      planScenario: raw.planScenario,
       hasPlan: raw.planName !== null,
       cur: aggregate(raw.facts.filter((f) => f.date >= range.from)),
       ly: aggregate(raw.lyFacts.filter((f) => f.date >= addYears(range.from, -1) && f.date <= lyLimit)),

@@ -30,4 +30,8 @@ export interface PlanCtx {
   /** Adds or updates events (saved straight away). Returns an error message or null. */
   saveEvents: (list: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]) => Promise<string | null>;
   removeEvent: (id: string) => Promise<string | null>;
+  /** True when the editor holds changes that are not saved yet. */
+  unsaved: boolean;
+  /** Reloads the open plan from what is saved (after something else changed it), dropping the draft. */
+  reload: () => void;
 }
