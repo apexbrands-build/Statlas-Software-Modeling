@@ -23,7 +23,7 @@ Keep the existing "Apex Data" app untouched until the new one works.
    - App URL: `https://apex-data-beta.vercel.app/shopify`
    - Allowed redirection URL: `https://apex-data-beta.vercel.app/api/shopify/callback`
    - Embedded: **off**
-   - Scopes: `read_orders,read_customers,read_products,read_inventory`
+   - Scopes: `read_orders,read_customers,read_products,read_inventory` (plus `read_markets` once Markets is built, to read the store's market names and countries; it does not give order data, see `docs/superpowers/specs/2026-10-12-markets-design.md`)
    - Webhooks API version `2025-10`. Compliance webhooks (customer data request, customer erasure, shop erasure): one endpoint for all three, `https://apex-data-beta.vercel.app/api/shopify/webhooks`. Also subscribe `app/uninstalled` to the same URL.
 4. Copy the new **Client ID** and **Client secret**. Never paste them in chat.
 

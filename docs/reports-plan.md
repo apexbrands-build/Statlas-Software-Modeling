@@ -3,7 +3,7 @@
 Reporting lives at `/reporting` (library) and `/reporting/<slug>`. The list, categories and status of every report is in `lib/reports/registry.ts`. What Statlas does in each report is in `docs/statlas-findings.md` ("Reports" section). Dated build notes: `docs/changelog.md`.
 
 ## Scope (user-approved 2026-10-01)
-Build all Recommended reports from Statlas **except** Best Creatives, DTC Index, Trend Explorer and Global Creatives (never build those). Also build four LTV reports the user likes: LTV Dashboard, Revenue Over Time, Net Active Customer Detail, New Vs Returning Overview. Reports whose data source is missing get the page and layout, clearly marked "Waiting for data source".
+Build all Recommended reports from Statlas **except** DTC Index, Trend Explorer and Global Creatives (never build those). Best Creatives was released for our own design on 2026-10-12 together with the Creative Demand model (`docs/superpowers/specs/2026-10-12-creative-demand-design.md`). Also build four LTV reports the user likes: LTV Dashboard, Revenue Over Time, Net Active Customer Detail, New Vs Returning Overview. Reports whose data source is missing get the page and layout, clearly marked "Waiting for data source".
 
 ## Status
 | Report | Slug | Status |

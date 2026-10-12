@@ -8,6 +8,7 @@ embedded = false
 
 [access_scopes]
 # Read-only. read_all_orders is added after Shopify approves it (see docs/shopify-submission.md).
+# read_markets (store market names and countries) joins this list when Markets is built; lib/shopify.ts must change in the same release.
 scopes = "read_orders,read_customers,read_products,read_inventory"
 # The app runs its own OAuth authorization-code install (app/api/shopify/install + callback).
 use_legacy_install_flow = true
