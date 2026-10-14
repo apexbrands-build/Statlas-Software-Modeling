@@ -8,7 +8,7 @@ import { MetricModal } from "./MetricModal";
 import { MetricTile } from "./MetricTile";
 import { theme } from "@/theme/theme";
 import { useApp } from "@/lib/app-context";
-import { compareSource, COMPARE_LABEL, defaultCompareMode, tileNumbers, useDashboardData, type DashData } from "@/lib/dashboard-data";
+import { compareSource, COMPARE_LABEL, defaultCompareMode, tileNumbers, tilePace, useDashboardData, type DashData, type Pace } from "@/lib/dashboard-data";
 import { readScenarioChoice, writeScenarioChoice } from "@/lib/planning/scenarios";
 import type { PlanScenario } from "@/lib/types";
 import {
@@ -189,6 +189,10 @@ function Body(props: {
   const cur = data.client.currency;
   const partial = data.effTo < data.range.to;
 
+  /** Two short lines: the whole period's target and the share reached, and where the period ends at the plan's pace. */
+  const paceText = (def: MetricDef, p: Pace | null) =>
+    p ? { target: `Period target ${formatValue(p.fullTarget, def.format, cur)}${p.pct === null ? "" : ` · ${formatValue(p.pct, "percent1", cur)} reached`}`, projected: `Heading to ${formatValue(p.projected, def.format, cur)} (${p.remainingDays} days left)` } : null;
+
   const tile = (def: MetricDef, title?: string) => {
     const n = tileNumbers(def, data, mode);
     return (
@@ -203,6 +207,7 @@ function Body(props: {
         formula={def.formula}
         onInfo={() => setOpen({ def, title })}
         reportHref={homeReportHref(def.key, data.range)}
+        pace={paceText(def, tilePace(def, data, mode))}
       />
     );
   };
@@ -245,6 +250,15 @@ function Body(props: {
                 {cmNums.ref !== null ? `${formatValue(cmNums.ref, "currency0", cur)} ${COMPARE_LABEL[mode].replace("vs ", "")} · ` : ""}
                 {formatDiff(cmNums.diff)}
               </div>
+              {(() => {
+                const t = paceText(METRICS.cm, tilePace(METRICS.cm, data, mode));
+                return t ? (
+                  <div className="tabular mt-1 text-xs text-text-faint">
+                    <div>{t.target}</div>
+                    <div>{t.projected}</div>
+                  </div>
+                ) : null;
+              })()}
             </div>
             {cmReportHref && (
               <Link

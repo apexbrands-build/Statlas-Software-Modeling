@@ -293,6 +293,8 @@ export interface MetricDef {
   source: Source;
   formula: string;
   value: (t: Totals, s: ClientSettings) => number | null;
+  /** A sum over days (revenue, spend, CM, orders): its plan target for a whole period can be reached or projected. Ratios are not. */
+  additive?: boolean;
   /** Plan target for the same period, if the plan covers this metric. */
   target?: (p: PlanTotals, s: ClientSettings) => number | null;
 }
@@ -302,6 +304,7 @@ const def = (d: MetricDef): [string, MetricDef] => [d.key, d];
 export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   def({
     key: "cm",
+    additive: true,
     label: "Contribution Margin",
     format: "currency0",
     direction: "up",
@@ -312,6 +315,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "orderRevenue",
+    additive: true,
     label: "Order Revenue",
     format: "currency0",
     direction: "up",
@@ -322,6 +326,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "adSpend",
+    additive: true,
     label: "Ad Spend",
     format: "currency0",
     direction: "up",
@@ -352,6 +357,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "orders",
+    additive: true,
     label: "Orders",
     format: "number",
     direction: "up",
@@ -362,6 +368,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "returningRevenue",
+    additive: true,
     label: "Returning Revenue",
     format: "currency0",
     direction: "up",
@@ -372,6 +379,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "returningOrders",
+    additive: true,
     label: "Returning Orders",
     format: "number",
     direction: "up",
@@ -402,6 +410,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "newRevenue",
+    additive: true,
     label: "New Revenue",
     format: "currency0",
     direction: "up",
@@ -412,6 +421,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "newOrders",
+    additive: true,
     label: "New Orders",
     format: "number",
     direction: "up",
@@ -633,6 +643,7 @@ export function channelMetricDefs(g: ChannelGroup, incremental = true): MetricDe
   return [
     {
       key: `${g.id}.spend`,
+      additive: true,
       label: `${g.label} Spend`,
       format: "currency0",
       direction: "up",

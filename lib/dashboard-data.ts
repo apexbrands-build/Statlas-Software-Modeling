@@ -153,6 +153,34 @@ export function defaultCompareMode(chosen: CompareModeName | null, hasPlan: bool
   return chosen ?? (hasPlan ? "plan" : "yoy");
 }
 
+/** How far the period so far is from the whole period's plan target, and where it ends if the rest of the plan happens. */
+export interface Pace {
+  /** The plan's target for the whole selected period. */
+  fullTarget: number;
+  /** Actual so far over the full target. */
+  pct: number | null;
+  /** Actual so far plus the plan for the days still to come. */
+  projected: number;
+  /** Plan days after the last day with data. */
+  remainingDays: number;
+}
+
+/**
+ * Month pace for an additive metric in the Plan comparison: null for ratios, other comparisons, a finished period, no actuals yet, or no target.
+ * Home compares actuals only against the plan days that have data, so this is what shows the whole period's target next to it.
+ */
+export function tilePace(def: MetricDef, d: DashData, mode: CompareModeName): Pace | null {
+  if (mode !== "plan" || !def.additive || !def.target || d.cur.days === 0 || d.planTotals.days === 0) return null;
+  const all = [...d.plan.values()];
+  const remainingDays = all.filter((r) => r.date > d.effTo).length;
+  if (remainingDays === 0) return null;
+  const full = def.target(aggregatePlan(all, d.roasOf ?? undefined), d.settings);
+  const toDate = def.target(d.planTotals, d.settings);
+  const actual = def.value(d.cur, d.settings);
+  if (full === null || toDate === null || actual === null || full === 0) return null;
+  return { fullTarget: full, pct: actual / full, projected: actual + (full - toDate), remainingDays };
+}
+
 export const COMPARE_LABEL: Record<CompareModeName, string> = {
   plan: "vs plan",
   yoy: "vs last year",

@@ -21,9 +21,11 @@ export interface TileProps {
   size?: "hero" | "normal";
   /** Link to the report behind this metric (null or missing = no icon). */
   reportHref?: string | null;
+  /** Plan pace for the whole period, two short lines (target and share reached, projection). */
+  pace?: { target: string; projected: string } | null;
 }
 
-export function MetricTile({ label, value, refValue, diff, tone, source, formula, onInfo, reportHref }: TileProps) {
+export function MetricTile({ label, value, refValue, diff, tone, source, formula, onInfo, reportHref, pace }: TileProps) {
   return (
     <div className="group relative rounded-[12px] border border-border bg-surface p-4" title={`${formula}\nSource: ${source}`}>
       <button
@@ -55,6 +57,12 @@ export function MetricTile({ label, value, refValue, diff, tone, source, formula
         <span>{refValue ?? " "}</span>
         <span className="font-medium">{diff ?? ""}</span>
       </div>
+      {pace && (
+        <div className="tabular mt-1.5 border-t border-border/60 pt-1.5 text-[11px] leading-snug text-text-faint">
+          <div>{pace.target}</div>
+          <div>{pace.projected}</div>
+        </div>
+      )}
     </div>
   );
 }
