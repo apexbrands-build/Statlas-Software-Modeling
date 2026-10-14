@@ -4,6 +4,7 @@ import { useState } from "react";
 import { BrandIcon, channelProvider } from "@/components/BrandIcon";
 import { Accordion, Check, Field, inputCls, Modal, NumberInput, Select, Switch } from "./ui";
 import { PLATFORMS, platformOf } from "@/lib/channels";
+import { channelOptions, type OrderChannel } from "@/lib/order-channels";
 import { CHANNEL_KEYS, type ChannelKey, type ClientSettings, type ExtraSettings } from "@/lib/types";
 
 const INDUSTRIES = ["Jewelry & Accessories", "Apparel", "Beauty & Personal Care", "Health & Wellness", "Home & Garden", "Food & Beverage", "Sports & Outdoors", "Electronics", "Pets", "Other"];
@@ -20,7 +21,6 @@ const REVENUE_DEFS: { name: string; description: string; ready: boolean }[] = [
   { name: "Total Sales", description: "Net sales plus shipping and taxes (after returns)", ready: false },
 ];
 
-const SHOPIFY_CHANNELS = ["Online Store", "Draft Orders", "Shop", "Point of Sale", "Gorgias - Live Chat & Helpdesk", "TikTok", "Faire: Sell Wholesale", "Swap", "Facebook & Instagram", "Facebook"];
 const ORGANIC_DEFS = ["Calculated: New Rev - Paid", "Calculated: Total Rev - Paid", "Calculated: New Rev - iPaid", "Calculated: Total Rev - iPaid", "Calculated: Total Rev - Paid - Email/SMS", "Calculated: Total Rev - iPaid - Email/SMS", "GA (medium=organic + Org Shopping)"];
 
 interface Props {
@@ -28,12 +28,14 @@ interface Props {
   currency: string;
   timezone: string;
   initial: ClientSettings;
+  /** Sales channels found on this store's orders (empty until the first sync). */
+  channels: OrderChannel[];
   onSave: (s: ClientSettings) => Promise<void>;
   onRecalculate: (s: ClientSettings) => Promise<void>;
   onClose: () => void;
 }
 
-export function EditStoreDialog({ clientName, currency, timezone, initial, onSave, onRecalculate, onClose }: Props) {
+export function EditStoreDialog({ clientName, currency, timezone, initial, channels, onSave, onRecalculate, onClose }: Props) {
   const [d, setD] = useState<ClientSettings>({ ...initial, multipliers: { ...initial.multipliers }, dtcChannels: [...initial.dtcChannels], excludedOrderTags: [...initial.excludedOrderTags], extra: { ...initial.extra } });
   const [tag, setTag] = useState("");
   const [newPublisher, setNewPublisher] = useState("YouTube");
@@ -265,17 +267,21 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, onSav
 
       <Accordion title="Channels" subtitle="Select channels to include in sales reporting (Shopify)" defaultOpen>
         <div className="space-y-2">
-          {SHOPIFY_CHANNELS.map((c) => {
+          {channelOptions(channels, d.dtcChannels).map(({ channel: c, orders }) => {
             const on = d.dtcChannels.some((x) => x.toLowerCase() === c.toLowerCase());
             return (
               <div key={c} className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
-                <span className="flex items-center gap-3 text-sm"><BrandIcon provider={channelProvider(c)} title={c} size={22} />{c}</span>
+                <span className="flex items-center gap-3 text-sm">
+                  <BrandIcon provider={channelProvider(c)} title={c} size={22} />
+                  {c}
+                  <span className="text-xs text-text-faint">{orders > 0 ? `${orders.toLocaleString("en-US")} ${orders === 1 ? "order" : "orders"}` : "no orders yet"}</span>
+                </span>
                 <Switch label={c} checked={on} onChange={(v) => set("dtcChannels", v ? [...d.dtcChannels, c] : d.dtcChannels.filter((x) => x.toLowerCase() !== c.toLowerCase()))} />
               </div>
             );
           })}
         </div>
-        <p className="text-xs text-text-faint">Changes apply at the next Recalculate (sync).</p>
+        <p className="text-xs text-text-faint">These are the channels found on this store&apos;s orders; new ones appear after a sync. Orders from a channel that is off are left out of every total. Changes apply at the next Recalculate (sync), which re-reads the last 60 days.</p>
       </Accordion>
 
       <Accordion title="Exclude Order Tags" subtitle="Exclude Shopify orders that contain these tags">

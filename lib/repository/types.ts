@@ -1,6 +1,7 @@
 import type { CreativePage, CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
+import type { OrderChannel } from "../order-channels";
 import type { AovData, AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type { MarketingEvent } from "../planning/events";
@@ -19,6 +20,8 @@ export interface Repository {
   saveSettings(settings: ClientSettings): Promise<void>;
   resetSettings(clientId: string): Promise<ClientSettings>;
   getFacts(clientId: string, from: string, to: string): Promise<DailyFact[]>;
+  /** Sales channels found on the client's orders, most orders first (migration 0015); empty in demo data or before the migration is applied. */
+  getOrderChannels(clientId: string): Promise<OrderChannel[]>;
   /** Campaign-level ad rows (Paid Media reports). */
   getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]>;
   /** Product by First Product rows; null when order line items are not available yet (migration 0006 / history reload). */

@@ -3,6 +3,7 @@ import { aggregateAds, aggregateFormats, type CreativePage, type CreativeQuery }
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import { demoAdRows, demoCreativeHistory, demoCreativeMonth } from "../creative/demo";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
+import type { OrderChannel } from "../order-channels";
 import type { AovData } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type {
@@ -368,6 +369,11 @@ export class SeedRepository implements Repository {
     const o = readOverrides(clientId);
     if (!o) return base;
     return { ...base, ...o, clientId, multipliers: { ...base.multipliers, ...(o.multipliers ?? {}) }, extra: { ...base.extra, ...(o.extra ?? {}) } };
+  }
+
+  /** The demo data has no real orders, so the dialog lists only the channels switched on in the settings. */
+  async getOrderChannels(): Promise<OrderChannel[]> {
+    return [];
   }
 
   async saveSettings(settings: ClientSettings): Promise<void> {

@@ -8,6 +8,8 @@ import { ProviderCards, ReplaceKey } from "./ProviderCards";
 import { inputCls, Modal } from "./ui";
 import { useApp } from "@/lib/app-context";
 import { selectIntegrations } from "@/lib/integrations-query";
+import type { OrderChannel } from "@/lib/order-channels";
+import { getRepository } from "@/lib/repository";
 import { needsAttention, PROVIDERS, providerLabel, type ProviderId } from "@/lib/providers";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { dataMode } from "@/lib/supabase/env";
@@ -37,8 +39,28 @@ export function StoreSettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const [channelState, setChannelState] = useState<{ clientId: string; list: OrderChannel[] } | null>(null);
 
   const live = dataMode === "supabase";
+  const clientId = client?.id;
+  const channels = channelState && channelState.clientId === clientId ? channelState.list : [];
+
+  // The channel switches in Edit list the channels found on this store's orders; read them each time the dialog opens.
+  useEffect(() => {
+    if (dialog !== "edit" || !clientId) return;
+    let cancelled = false;
+    getRepository()
+      .getOrderChannels(clientId)
+      .then((list) => {
+        if (!cancelled) setChannelState({ clientId, list });
+      })
+      .catch(() => {
+        if (!cancelled) setChannelState({ clientId, list: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dialog, clientId]);
 
   const load = useCallback(async () => {
     if (!client || !live) return;
@@ -231,6 +253,7 @@ export function StoreSettingsPage() {
           currency={client.currency}
           timezone={client.timezone}
           initial={settings}
+          channels={channels}
           onClose={() => setDialog(null)}
           onSave={async (s: ClientSettings) => saveSettings(s)}
           onRecalculate={async (s: ClientSettings) => {

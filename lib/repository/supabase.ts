@@ -5,6 +5,7 @@ import { isMissingFunction, mapAdRow, mapFormatRow } from "../creative/map-rows"
 import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
+import type { OrderChannel } from "../order-channels";
 import { getBrowserClient } from "../supabase/client";
 import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
@@ -131,6 +132,15 @@ export class SupabaseRepository implements Repository {
         channels,
       };
     });
+  }
+
+  async getOrderChannels(clientId: string): Promise<OrderChannel[]> {
+    const { data, error } = await this.db.rpc("order_channels", { p_client: clientId });
+    if (error) {
+      if (/order_channels|PGRST202|42883/.test(`${error.code} ${error.message}`)) return []; // migration 0015 not applied yet
+      throw new Error(error.message);
+    }
+    return ((data ?? []) as Row[]).map((r) => ({ channel: r.channel as string, orders: n(r.orders) }));
   }
 
   async getFirstProducts(clientId: string, from: string, to: string): Promise<FirstProductRow[] | null> {
