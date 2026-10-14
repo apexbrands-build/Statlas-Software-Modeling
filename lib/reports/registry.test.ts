@@ -21,6 +21,15 @@ describe("report registry", () => {
     for (const slug of ["contribution-margin", "revenue-overview", "new-vs-returning", "aov-histogram", "mer", "pnl", "ads", "first-product"]) expect(status(slug)).toBe("ready");
   });
 
+  it("lists Best Creatives, ready, in the Recommended and Visitor groups, right after Paid Media Overview", () => {
+    const def = getReport("best-creatives")!;
+    expect(def.status).toBe("ready");
+    expect(def.title).toBe("Best Creatives");
+    expect(def.categories).toEqual(["Recommended", "Visitor"]);
+    const slugs = REPORTS.map((r) => r.slug);
+    expect(slugs.indexOf("best-creatives")).toBe(slugs.indexOf("ads") + 1);
+  });
+
   it("marks reports without a page as planned", () => {
     for (const slug of ["facebook-tracker", "google-tracker", "total-net-customer", "variable-costs", "calendar", "ltv-dashboard", "revenue-over-time", "net-active-customers"]) expect(status(slug)).toBe("planned");
   });

@@ -1,6 +1,7 @@
 "use client";
 
 import { AovHistogramReport } from "./AovHistogramReport";
+import { BestCreativesReport } from "./BestCreativesReport";
 import { ContributionMarginReport } from "./ContributionMarginReport";
 import { MetricGoalReport } from "./MetricGoalReport";
 import { NewVsReturningReport } from "./NewVsReturningReport";
@@ -24,6 +25,8 @@ export function ReportRouter({ slug }: { slug: string }) {
       return <MetricGoalReport slug="mer" specs={MER_SPECS} />;
     case "ads":
       return <PaidMediaReport />;
+    case "best-creatives":
+      return <BestCreativesReport />;
     case "first-product":
       return <FirstProductReport />;
     case "pnl":

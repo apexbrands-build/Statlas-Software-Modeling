@@ -21,6 +21,7 @@ export const REPORTS: ReportDef[] = [
   { slug: "contribution-margin", title: "Contribution Margin", description: "Contribution margin analysis from gross sales to contribution margin, by day, week or month", categories: ["Recommended", "Costs", "Revenue"], status: "ready" },
   { slug: "revenue-overview", title: "Revenue Overview", description: "Revenue, refunds and number of orders", categories: ["Revenue"], status: "ready" },
   { slug: "ads", title: "Paid Media Overview", description: "All advertising reports in one place.", categories: ["Recommended", "Visitor"], status: "ready" },
+  { slug: "best-creatives", title: "Best Creatives", description: "Your Meta ads ranked against the account's own average", categories: ["Recommended", "Visitor"], status: "ready" },
   { slug: "facebook-tracker", title: "Facebook Trackers", description: "Day-by-day spend and iROAS pacing per campaign", categories: ["Recommended", "Visitor"], status: "planned" },
   { slug: "google-tracker", title: "Google Trackers", description: "Day-by-day spend and iROAS pacing per campaign", categories: ["Recommended", "Visitor"], status: "planned" },
   { slug: "first-product", title: "Product by First Product", description: "What customers do after a first order containing each product: repeat orders, order value and refunds", categories: ["LTV"], status: "ready" },
