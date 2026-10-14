@@ -1,9 +1,11 @@
 import "server-only";
 
+import type { AdInsightRow, AdRow } from "./meta-ads";
+
 // Meta Marketing API (read-only). One agency System User token covers every client ad account it is assigned to.
 const VERSION = process.env.META_API_VERSION ?? "v23.0";
 
-interface Action {
+export interface Action {
   action_type: string;
   value: string;
   [window: string]: string | undefined;
@@ -47,7 +49,7 @@ export async function fetchAdAccount(id: string) {
 // Prefer the aggregated purchase event so orders are not double counted.
 const PURCHASE_TYPES = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase"];
 
-function pickPurchase(list: Action[] | undefined, windows: string[]): number {
+export function pickPurchase(list: Action[] | undefined, windows: string[]): number {
   if (!list) return 0;
   for (const t of PURCHASE_TYPES) {
     const a = list.find((x) => x.action_type === t);
@@ -108,3 +110,46 @@ export async function fetchCampaignDays(adAccountId: string, since: string, unti
 export function isExistingSegment(segment: string | undefined): boolean {
   return (segment ?? "").toLowerCase().includes("existing");
 }
+
+type GraphFn = <T>(pathOrUrl: string, params?: Record<string, string>) => Promise<T>;
+
+/** Ad-level daily insights (one row per ad and day with spend). Follows every page; a Graph error rejects so the caller decides what to do. */
+export async function fetchAdDays(adAccountId: string, since: string, until: string, windows: string[] = ["7d_click"], graphImpl: GraphFn = graph): Promise<AdInsightRow[]> {
+  const out: AdInsightRow[] = [];
+  let page = await graphImpl<{ data: AdInsightRow[]; paging?: { next?: string } }>(`${adAccountId}/insights`, {
+    level: "ad",
+    time_increment: "1",
+    time_range: JSON.stringify({ since, until }),
+    fields: "ad_id,ad_name,adset_id,campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+    action_attribution_windows: JSON.stringify(windows),
+    limit: "500",
+  });
+  for (;;) {
+    out.push(...page.data);
+    if (!page.paging?.next) break;
+    page = await graphImpl(page.paging.next);
+  }
+  return out;
+}
+
+const AD_FIELDS = "id,name,adset_id,campaign{id,name},effective_status,created_time,creative{object_type,video_id,asset_feed_spec,object_story_spec}";
+
+/** The ads behind the given ids (name, campaign, launch date, status, creative type), looked up 50 ids at a time. */
+export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: GraphFn = graph): Promise<AdRow[]> {
+  const out: AdRow[] = [];
+  for (let i = 0; i < adIds.length; i += 50) {
+    const batch = adIds.slice(i, i + 50);
+    let page = await graphImpl<{ data: AdRow[]; paging?: { next?: string } }>(`${adAccountId}/ads`, {
+      fields: AD_FIELDS,
+      filtering: JSON.stringify([{ field: "id", operator: "IN", value: batch }]),
+      limit: "100",
+    });
+    for (;;) {
+      out.push(...page.data);
+      if (!page.paging?.next) break;
+      page = await graphImpl(page.paging.next);
+    }
+  }
+  return out;
+}
+

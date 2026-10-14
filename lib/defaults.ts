@@ -47,6 +47,7 @@ export function defaultExtra(): ExtraSettings {
     tiktokReferralFeePct: 0,
     tiktokGmvSharePct: 0,
     tiktokGmvCommissionPct: 0,
+    catalogKeywords: "catalog, dpa, daba",
   };
 }
 

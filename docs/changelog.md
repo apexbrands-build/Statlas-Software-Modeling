@@ -2,6 +2,11 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-10-14: Ad-level Meta data (creative stage 1) and the Statlas Best Creatives reference
+- The Meta sync pulls ad-level data into `meta_ads` and `meta_ad_daily` after the campaign step (format, launch date, catalog flag; daily spend, impressions, clicks, purchases, revenue). It never fails the campaign sync. Migration `0012_meta_ads.sql` is written, **not applied**; until it is, the step stops before calling Meta. New setting: catalog campaign keywords (Store Settings, Facebook Settings). Plan: `docs/superpowers/plans/2026-10-12-creative-ad-data.md`.
+- Creative Score bands recalibrated to the dots of the strategist's reference slide, improvements graded; Best Creatives plan reduced to a plain report (no flags). The Statlas Best Creatives screenshot is saved in `Statlas Original UX/Reports/Best Creatives`.
+- Beta readiness audit written: `docs/beta-readiness-audit-2026-10-14.md`.
+
 ## 2026-10-13: AOV moves into the models, a colour Calendar, and the MMM slot in Spend
 - **AOV is not forecast.** The New and Returning AOV lines are gone from Details. New-customer AOV stays in the New Customer model (LTV settings); the Returning model now has its own "AOV of repeat orders" with the same recency toggle (last 30 days by default, 90, 365 or typed), and Create forecast in each model writes the AOV into the plan months. AOV only turns revenue into orders; it never changes returning revenue (`resolveReturningAov` in `lib/planning/models.ts`). The Overview tab still shows both AOV rates as plain inputs.
 - **Calendar** (plan tab and the Calendar page): a month grid where every day is a button that adds an event and every chip opens it; one colour per event group (offers, launches, holidays, comms, BFCM, initiatives) with a legend that highlights a group, month pills with event counts, coloured stat tiles, a badge on days the event model lifts, last year's events shown faint; the add and edit form is a dialog with quick-pick types; the old day list is still there as "List". Helpers in `lib/planning/calendar-grid.ts`.

@@ -4,6 +4,7 @@ import { fetchCampaignDays, isExistingSegment } from "./meta";
 import { metaWindows } from "./meta-windows";
 import { splitCampaignDays } from "./meta-split";
 import { resolveRange } from "./range";
+import { syncMetaAds } from "./run-meta-ads";
 
 
 /** Pulls Meta spend for one connected ad account and rebuilds the Meta channel rows. */
@@ -16,7 +17,7 @@ export async function syncMeta(integrationId: string, body: { from?: string; to?
   try {
     const { from: since, to: until } = resolveRange(body, 30);
     const { data: st } = await admin.from("client_settings").select("extra").eq("client_id", integration.client_id).maybeSingle();
-    const extra = (st?.extra ?? {}) as { fbAttrClick?: string; fbAttrView?: string };
+    const extra = (st?.extra ?? {}) as { fbAttrClick?: string; fbAttrView?: string; catalogKeywords?: string };
     const windows = metaWindows(extra.fbAttrClick, extra.fbAttrView);
     // 1) Total spend per campaign and day (source of truth for spend).
     const campaignDays = await fetchCampaignDays(integration.account_id, since, until, undefined, windows);
@@ -75,13 +76,22 @@ export async function syncMeta(integrationId: string, body: { from?: string; to?
       if (error) throw new Error(error.message);
     }
 
+    // Ad-level step (creative data). Its failure never fails the campaign sync or the connection: it is reported in the run message only.
+    let adNote: string;
+    try {
+      const ad = await syncMetaAds(admin, integration, since, until, windows, extra.catalogKeywords ?? "catalog, dpa, daba");
+      adNote = [`Ad-level: ${ad.ads} ads, ${ad.days} ad-days`, ad.note].filter(Boolean).join(". ");
+    } catch (e) {
+      adNote = `Ad-level step failed: ${e instanceof Error ? e.message : "error"}`;
+    }
+
     const now = new Date().toISOString();
     const { data: cov } = await admin.from("integrations").select("coverage_start,coverage_end").eq("id", integrationId).single();
     const covStart = cov?.coverage_start && cov.coverage_start < since ? cov.coverage_start : since;
     const covEnd = cov?.coverage_end && cov.coverage_end > until ? cov.coverage_end : until;
     await admin.from("integrations").update({ status: "connected", consecutive_failures: 0, last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
     const existingSpend = [...existing.values()].reduce((s, e) => s + e.spend, 0);
-    const runMessage = [note, diagnostics, `Existing-customer spend: ${existingSpend.toFixed(2)}`].filter(Boolean).join(" | ");
+    const runMessage = [note, diagnostics, `Existing-customer spend: ${existingSpend.toFixed(2)}`, adNote].filter(Boolean).join(" | ");
     await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: runMessage }).eq("id", run?.id ?? "");
     return { rows: spendRows.length, note };
   } catch (e) {

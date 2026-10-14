@@ -148,6 +148,8 @@ export interface ExtraSettings {
   tiktokReferralFeePct: number;
   tiktokGmvSharePct: number;
   tiktokGmvCommissionPct: number;
+  /** Meta campaigns whose name contains one of these words (comma separated, any case) are catalog ads: left out of the creative demand model and score. */
+  catalogKeywords: string;
 }
 
 export interface ClientSettings {

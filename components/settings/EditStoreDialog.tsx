@@ -122,6 +122,9 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, onSav
         <Field label="Click Type">
           <Select label="Click Type" value={x.fbClickType} options={["Unique Outbound Clicks", "All Clicks", "Link Clicks"]} onChange={(v) => ex("fbClickType", v)} />
         </Field>
+        <Field label="Catalog campaign keywords" hint='Ads in a Meta campaign whose name contains one of these words (comma separated, any case) are catalog ads. They are left out of the creative score and the creative demand model. Default: "catalog, dpa, daba". Applies from the next Meta sync.'>
+          <input className={inputCls} value={x.catalogKeywords ?? ""} placeholder="catalog, dpa, daba" onChange={(e) => ex("catalogKeywords", e.target.value)} />
+        </Field>
         <Check checked={x.fbExcludeOnsite} onChange={(v) => ex("fbExcludeOnsite", v)} label="Exclude FB Onsite Conversions" hint="Onsite conversions should be excluded if you don't have an Onsite/SHOP channel" />
         <p className="text-xs text-text-faint">Click and view windows apply to Meta purchases from the next Meta sync (re-run the history load to restate older days). Agency standard is 7 Day click, view Disabled. Click type and onsite exclusion are not applied yet.</p>
       </Accordion>
