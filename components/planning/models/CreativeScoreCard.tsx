@@ -12,7 +12,7 @@ const LABEL: Record<MetricKey, { name: string; hint: string }> = {
   concentration: { name: "Top 5 ads' share of spend", hint: "How much of the last 30 days' spend sits in the five biggest ads. Lower means more ads are carrying the account." },
   roasDegradation: { name: "ROAS after a launch", hint: "How a batch of ads' ROAS in its first week compares with the week before the launch, weighted by spend. Higher is better." },
   spendDegradation: { name: "Spend over four weeks", hint: "How ads' weekly spend changes over the last four weeks. Spend that holds or grows scores higher." },
-  evergreenShare: { name: "Spend on ads older than 30 days", hint: "Share of spend on ads launched more than 30 days ago: proven ads still carrying the account." },
+  evergreenShare: { name: "Ads older than 30 days still spending", hint: "Share of the ads that spent in the last 30 days that were launched more than 30 days ago: proven ads still carrying the account." },
 };
 
 const TONE = { Poor: "text-bad", Average: "text-text", Great: "text-good" } as const;
@@ -20,10 +20,15 @@ const TONE = { Poor: "text-bad", Average: "text-text", Great: "text-good" } as c
 /** The Creative Score: overall 0 to 100, the Poor / Average / Great scale and the five metrics behind it. */
 export function CreativeScoreCard({ history, score, metrics, currency }: { history: CreativeHistory | null; score: ReturnType<typeof creativeScore> | null; metrics: Record<MetricKey, number | null> | null; currency: Currency }) {
   if (!history || !score || !metrics || history.scoreAds.length === 0) {
+    const hasHistory = Boolean(history && (history.months.length > 0 || history.ads.length > 0));
     return (
       <div className="rounded-xl border border-border bg-surface p-4">
         <h3 className="text-sm font-semibold">Creative Score</h3>
-        <p className="mt-2 text-sm text-text-muted">No ad history yet. The score appears once this client&apos;s Meta ads have spend: run a Meta history sync in Store Settings. The demand model still works with the Canon defaults.</p>
+        <p className="mt-2 text-sm text-text-muted">
+          {hasHistory
+            ? "No Meta ad spent in the last 30 days, so there is nothing to score yet. The demand model still works from the campaign totals."
+            : "No ad history yet. The score appears once this client's Meta ads have spend: run a Meta history sync in Store Settings. The demand model still works from the campaign totals and the Canon defaults."}
+        </p>
       </div>
     );
   }

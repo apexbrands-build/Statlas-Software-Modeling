@@ -89,16 +89,35 @@ export function catalogShare(months: MonthAgg[], openMonth: string): number {
 }
 
 /**
- * Spend already running into `month`: previous month complete → its actual non-catalog spend (0 if no row);
- * previous month is the open month → the latest 30 days; previous month in the future → the plan's non-catalog Meta target for it.
+ * Spend already running into `month`: previous month complete → its actual non-catalog spend; previous month is the open month → the latest
+ * 30 days; previous month in the future → the plan's non-catalog Meta target for it. Where the ad-level data has nothing for that period
+ * (no history, a month without a row, no recent ad days) the campaign-level Meta spend (`facts`, the source of truth) stands in and the source
+ * says "facts"; only with neither is it 0.
  */
 export function currentSpend(
   month: string,
-  a: { months: MonthAgg[]; openMonth: string; last30NonCatalog: number; planNonCatalog: Record<string, number> },
-): { value: number; source: "actual" | "last30" | "plan" } {
+  a: {
+    months: MonthAgg[];
+    openMonth: string;
+    last30NonCatalog: number;
+    planNonCatalog: Record<string, number>;
+    /** Whether the ad-level history has any daily rows (so `last30NonCatalog` means something). Default true. */
+    hasAdDays?: boolean;
+    /** Campaign-level Meta spend by month (YYYY-MM-01) and over the latest 30 days. */
+    facts?: { byMonth: Record<string, number>; last30: number };
+  },
+): { value: number; source: "actual" | "last30" | "plan" | "facts" } {
   const prev = addMonths(month, -1);
-  if (prev < a.openMonth) return { value: a.months.find((m) => m.month === prev)?.spend ?? 0, source: "actual" };
-  if (prev === a.openMonth) return { value: a.last30NonCatalog, source: "last30" };
+  if (prev < a.openMonth) {
+    const row = a.months.find((m) => m.month === prev);
+    if (row) return { value: row.spend, source: "actual" };
+    const f = a.facts?.byMonth[prev];
+    return f !== undefined ? { value: f, source: "facts" } : { value: 0, source: "actual" };
+  }
+  if (prev === a.openMonth) {
+    if (a.hasAdDays === false && a.facts) return { value: a.facts.last30, source: "facts" };
+    return { value: a.last30NonCatalog, source: "last30" };
+  }
   return { value: a.planNonCatalog[prev] ?? 0, source: "plan" };
 }
 

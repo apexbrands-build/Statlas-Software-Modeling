@@ -6,7 +6,7 @@ import { scoreMetrics } from "@/lib/creative/metrics";
 import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth, type CreativeOverrides } from "@/lib/creative/plan";
 import { creativeScore } from "@/lib/creative/score";
 import type { CreativeHistory } from "@/lib/creative/types";
-import { startOfMonth, todayLocal } from "@/lib/dates";
+import { addDays, startOfMonth, todayLocal } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
 import { DEFAULT_CREATIVE, type CreativeSettings } from "@/lib/planning/models";
 import type { PlanMonth } from "@/lib/planning/types";
@@ -135,14 +135,28 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
     return Object.fromEntries(months.map((m) => [m.month, metaSpendOf(m.inputs) * (1 - share)]));
   }, [data, months, openMonth]);
 
-  const computeFor = (m: PlanMonth, overrides: CreativeOverrides) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, overrides, now });
+  // Campaign-level Meta spend (the source of truth): stands in for current spend where the ad-level data has nothing.
+  const metaFacts = useMemo(() => {
+    const byMonth: Record<string, number> = {};
+    let last30 = 0;
+    const from = addDays(asOf, -29);
+    for (const f of planHistory.facts) {
+      const v = (f.channels.meta_acquisition?.spend ?? 0) + (f.channels.meta_returning?.spend ?? 0);
+      const k = `${f.date.slice(0, 7)}-01`;
+      byMonth[k] = (byMonth[k] ?? 0) + v;
+      if (f.date >= from && f.date <= asOf) last30 += v;
+    }
+    return { byMonth, last30 };
+  }, [planHistory.facts, asOf]);
+
+  const computeFor = (m: PlanMonth, overrides: CreativeOverrides) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides, now });
 
   const selMonth = months.find((m) => m.month === sel) ?? months[0];
   const saved = selMonth.inputs?.creative;
   const monthLocked = selMonth.locked || Boolean(saved?.locked);
   const overrides = draft[sel] ?? saved?.overrides ?? {};
   const block: CreativeMonth | null = !selMonth.inputs ? null : monthLocked && saved ? saved : computeFor(selMonth, overrides);
-  const stale = Boolean(saved && block && !monthLocked && isStale(saved, block.basis.targetSpend));
+  const stale = Boolean(saved && block && !monthLocked && isStale(saved, block.basis.metaSpend));
   const progress = data ? launchProgress(data.ads, events, sel, settings.leadDays) : null;
   const perAd = data ? spendPerNewAd(data.ads, asOf, monthsWithData(data.months)) : null;
   const monthName = MONTHS[Number(sel.slice(5, 7)) - 1];
@@ -161,7 +175,7 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
     let n = 0;
     for (const m of months) {
       const b = blocks[m.month];
-      if (!b || b === m.inputs?.creative) continue;
+      if (!b || b === m.inputs?.creative || m.locked) continue;
       editInputs(m.month, (i) => ({ ...i, creative: b }));
       n += 1;
     }
@@ -194,9 +208,9 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
   const insights = score && metrics ? creativeInsights(score, metrics, block) : [];
   // The year table shows what Save would write (locked months as saved), so it is useful before the first Save.
   const previewMonths = useMemo(() => {
-    const blocks = regenerateCreative(months, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, overrides: draft[m.month] ?? o, now }));
+    const blocks = regenerateCreative(months, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides: draft[m.month] ?? o, now }));
     return months.map((m) => (m.inputs && blocks[m.month] ? { ...m, inputs: { ...m.inputs, creative: blocks[m.month] } } : m));
-  }, [months, data, events, planNonCatalog, draft, now]);
+  }, [months, data, events, planNonCatalog, metaFacts, draft, now]);
   const year = useMemo(() => yearTable({ year: plan.year, months: previewMonths, history: data, facts: planHistory.facts, settings: ctx.settings, lastData: planHistory.lastData }), [plan.year, previewMonths, data, planHistory.facts, planHistory.lastData, ctx.settings]);
   const gap = block ? Math.max(0, block.basis.targetSpend - block.basis.currentSpend * block.basis.carryRate) : 0;
 
@@ -263,12 +277,15 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
                     <Bar label="Images" done={progress?.evergreen.image ?? 0} need={block.split.evergreen.image} />
                   </div>
                 </div>
-                {block.basis.reason === "covered" ? (
+                {overrides.needed !== undefined ? (
+                  <p className="text-xs text-text-muted">You typed {block.needed} new ads for {monthName}; the model on its own gives {block.basis.modelNeeded}. Clear the field to go back to the model.</p>
+                ) : block.basis.reason === "covered" ? (
                   <p className="text-xs text-text-muted">The Meta target ({money(block.basis.targetSpend)}) is already covered by the spend that carries over from last month ({money(block.basis.currentSpend)} × {block.basis.carryRate.toFixed(2)}).</p>
                 ) : (
                   <p className="text-xs text-text-muted">
                     Meta target {money(block.basis.targetSpend)} (without catalog) − {money(block.basis.currentSpend)} still running × {block.basis.carryRate.toFixed(2)} = {money(gap)} to cover with new ads at {money(block.basis.spendPerAd)} each.{" "}
-                    <span title="Carry rate and spend per ad come from this account's own history when it has three months of data; otherwise the Canon defaults (0.725 and $295).">{block.basis.source === "account" ? "From this account." : "Canon defaults in use."}</span>
+                    <span title="Carry rate and spend per ad come from this account's own history when it has three months of data; otherwise the Canon defaults (0.725 and 295, a US-dollar figure).">{block.basis.source === "account" ? "From this account." : "Canon defaults in use."}</span>
+                    {block.basis.currentSource === "facts" && " Current spend is the campaign-level Meta spend: ad-level data is not available for that period."}
                     {perAd?.outsideRange && perAd.source === "account" && ` Spend per new ad is outside the Canon range (${SPEND_PER_AD_RANGE[0]} to ${SPEND_PER_AD_RANGE[1]}).`}
                   </p>
                 )}

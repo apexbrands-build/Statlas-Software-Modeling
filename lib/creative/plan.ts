@@ -25,8 +25,14 @@ export interface CreativeMonth {
   moments: number;
   split: { evergreen: FormatCount; moments: FormatCount };
   basis: {
+    /** The plan month's Meta spend (before leaving out catalog). Staleness compares this one. */
+    metaSpend: number;
     targetSpend: number;
     currentSpend: number;
+    /** Where current spend came from: last month's ad data, the latest 30 days, the plan, or campaign totals when ad data was missing. */
+    currentSource: "actual" | "last30" | "plan" | "facts";
+    /** What the model alone asks for, so a typed `needed` can be shown next to it. */
+    modelNeeded: number;
     carryRate: number;
     spendPerAd: number;
     momentsShare: number;
@@ -51,6 +57,8 @@ export function computeCreativeMonth(a: {
   history: CreativeHistory | null;
   events: MarketingEvent[];
   planNonCatalog: Record<string, number>;
+  /** Campaign-level Meta spend (by month and over the latest 30 days): stands in where the ad-level data has nothing. */
+  metaFacts?: { byMonth: Record<string, number>; last30: number };
   overrides?: CreativeOverrides;
   now: string;
 }): CreativeMonth | null {
@@ -68,7 +76,7 @@ export function computeCreativeMonth(a: {
   const meta = metaSpendOf(a.inputs);
   const targetSpend = meta * (1 - catalogShare(months, openMonth));
   const last30 = (h?.days ?? []).filter((d) => d.date > addDays(asOf, -30) && d.date <= asOf).reduce((s, d) => s + d.spend, 0);
-  const current = currentSpend(month, { months, openMonth, last30NonCatalog: last30, planNonCatalog: a.planNonCatalog });
+  const current = currentSpend(month, { months, openMonth, last30NonCatalog: last30, planNonCatalog: a.planNonCatalog, hasAdDays: (h?.days.length ?? 0) > 0, facts: a.metaFacts });
 
   const carryUsed = o.carryRate ?? carry.value;
   const perAdUsed = o.spendPerAd ?? perAd.value;
@@ -87,8 +95,11 @@ export function computeCreativeMonth(a: {
     moments,
     split: { evergreen: splitFormats(evergreen, vs.share), moments: splitFormats(moments, vs.share) },
     basis: {
+      metaSpend: meta,
       targetSpend,
       currentSpend: current.value,
+      currentSource: current.source,
+      modelNeeded: calc.needed,
       carryRate: carryUsed,
       spendPerAd: perAdUsed,
       momentsShare: share,
@@ -128,11 +139,14 @@ export function lockAll(months: PlanMonth[], locked: boolean): Record<string, Cr
   return out;
 }
 
-/** True when the plan's target spend is more than 1% away from the one the block was computed for (a stretch plan, a spend edit after saving). */
-export function isStale(c: CreativeMonth, targetSpend: number): boolean {
-  const was = c.basis.targetSpend;
-  if (was === targetSpend) return false;
-  return Math.abs(was - targetSpend) / Math.max(Math.abs(was), Math.abs(targetSpend)) > 0.01;
+/**
+ * True when the plan month's Meta spend is more than 1% away from the one the block was computed for (a stretch plan, a spend edit after saving).
+ * The raw Meta spend is compared, not the target without catalog, so a catalog share that moves as months complete does not raise it.
+ */
+export function isStale(c: CreativeMonth, metaSpend: number): boolean {
+  const was = c.basis.metaSpend ?? c.basis.targetSpend;
+  if (was === metaSpend) return false;
+  return Math.abs(was - metaSpend) / Math.max(Math.abs(was), Math.abs(metaSpend)) > 0.01;
 }
 
 /** A Fill from last year or recent actuals replaces a month's inputs: the month keeps its creative block. */
@@ -235,7 +249,7 @@ const PART_LABEL: Record<MetricKey, string> = {
   concentration: "spend concentrated in a few ads",
   roasDegradation: "ROAS holding up after a launch",
   spendDegradation: "spend holding up over four weeks",
-  evergreenShare: "spend on ads older than 30 days",
+  evergreenShare: "ads older than 30 days still spending",
 };
 
 /** Two to five plain sentences about the score and the month: the weakest and strongest part, the low-score warning, the month's need or why it is zero. */
@@ -243,7 +257,8 @@ export function creativeInsights(score: ReturnType<typeof creativeScore>, _metri
   const out: string[] = [];
   const monthLines: string[] = [];
   if (month) {
-    if (month.basis.reason === "no_meta_spend") monthLines.push("This month plans no Meta spend, so no new ads are needed.");
+    if (month.overrides.needed !== undefined) monthLines.push(`You typed ${month.needed} new ads for this month (the model gives ${month.basis.modelNeeded}): ${month.moments} for moments and ${month.evergreen} evergreen.`);
+    else if (month.basis.reason === "no_meta_spend") monthLines.push("This month plans no Meta spend, so no new ads are needed.");
     else if (month.basis.reason === "covered") monthLines.push("The Meta target for this month is already covered by the spend that carries over, so no new ads are needed.");
     else monthLines.push(`${month.needed} new ads needed this month: ${month.moments} for moments and ${month.evergreen} evergreen.`);
   }

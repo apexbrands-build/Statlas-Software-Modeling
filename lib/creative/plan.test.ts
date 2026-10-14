@@ -28,6 +28,42 @@ const history = (over: Partial<CreativeHistory> = {}): CreativeHistory => ({
 const compute = (o: Partial<Parameters<typeof computeCreativeMonth>[0]> = {}) =>
   computeCreativeMonth({ month: "2026-09-01", inputs: inputsFor(), history: history(), events: [], planNonCatalog: {}, now: NOW, ...o });
 
+describe("computeCreativeMonth without usable ad-level spend", () => {
+  const facts = { byMonth: { "2026-08-01": 50000 }, last30: 48000 };
+
+  it("never treats current spend as 0 when there is no ad history: it falls back to the campaign-level Meta spend and says so", () => {
+    const c = compute({ history: null, metaFacts: facts })!;
+    expect(c.basis.currentSpend).toBe(50000);
+    expect(c.basis.currentSource).toBe("facts");
+    expect(c.needed).toBe(Math.ceil((88000 - 50000 * 0.725) / 295 - 1e-9));
+  });
+
+  it("falls back for a month the ad history has no row for, and uses the ad history for a month it has", () => {
+    const noAug = history({ months: history().months.filter((m) => m.month !== "2026-08-01") });
+    expect(compute({ history: noAug, metaFacts: facts })!.basis).toMatchObject({ currentSpend: 50000, currentSource: "facts" });
+    expect(compute({ metaFacts: { byMonth: { "2026-08-01": 1 }, last30: 1 } })!.basis).toMatchObject({ currentSpend: 50000, currentSource: "actual" });
+  });
+
+  it("for the open month with no ad days, uses the last 30 days of campaign spend", () => {
+    const c = compute({ month: "2026-10-01", history: null, metaFacts: facts })!;
+    expect(c.basis).toMatchObject({ currentSpend: 48000, currentSource: "facts" });
+  });
+
+  it("still says 0 when there is no ad history and no campaign spend either", () => {
+    expect(compute({ history: null })!.basis).toMatchObject({ currentSpend: 0, currentSource: "actual" });
+  });
+});
+
+describe("computeCreativeMonth: what the model says and what was typed", () => {
+  it("keeps the model's own need next to a typed one, and the raw Meta spend", () => {
+    const c = compute({ overrides: { needed: 40 } })!;
+    expect(c.needed).toBe(40);
+    expect(c.basis.modelNeeded).toBe(177);
+    expect(c.basis.metaSpend).toBe(88000);
+    expect(compute()!.basis.modelNeeded).toBe(177);
+  });
+});
+
 describe("computeCreativeMonth", () => {
   it("asks for the ads the Meta target needs beyond what carries over: (88,000 - 50,000 x 0.7) / 300 = 177", () => {
     const c = compute()!;
@@ -92,7 +128,7 @@ describe("computeCreativeMonth", () => {
 
 const saved = (over: Partial<CreativeMonth> = {}): CreativeMonth => ({
   needed: 10, evergreen: 8, moments: 2, split: { evergreen: { video: 4, image: 4 }, moments: { video: 1, image: 1 } },
-  basis: { targetSpend: 1000, currentSpend: 0, carryRate: 0.7, spendPerAd: 300, momentsShare: 0.2, videoShare: 0.5, source: "defaults", reason: "ok" },
+  basis: { metaSpend: 1000, targetSpend: 1000, currentSpend: 0, currentSource: "actual", modelNeeded: 10, carryRate: 0.7, spendPerAd: 300, momentsShare: 0.2, videoShare: 0.5, source: "defaults", reason: "ok" },
   overrides: {}, locked: false, computedAt: NOW, ...over,
 });
 const month = (m: string, inputs: PlanMonthInputs | null, locked = false): PlanMonth => ({ month: `${m}-01`, inputs, status: "in_progress", locked });
@@ -131,13 +167,18 @@ describe("lockAll, isStale and keepCreative", () => {
     expect(lockAll([month("2026-01", inputsFor({ creative: saved({ locked: true }) }))], false)["2026-01-01"].locked).toBe(false);
   });
 
-  it("isStale when the plan's target spend moved more than 1% from the one the block was computed for", () => {
-    const c = saved({ basis: { ...saved().basis, targetSpend: 88000 } });
+  it("isStale when the plan's Meta spend moved more than 1% from the one the block was computed for", () => {
+    const c = saved({ basis: { ...saved().basis, metaSpend: 88000 } });
     expect(isStale(c, 88000)).toBe(false);
     expect(isStale(c, 88500)).toBe(false);
     expect(isStale(c, 89000)).toBe(true);
-    expect(isStale(saved({ basis: { ...saved().basis, targetSpend: 0 } }), 0)).toBe(false);
-    expect(isStale(saved({ basis: { ...saved().basis, targetSpend: 0 } }), 100)).toBe(true);
+    expect(isStale(saved({ basis: { ...saved().basis, metaSpend: 0 } }), 0)).toBe(false);
+    expect(isStale(saved({ basis: { ...saved().basis, metaSpend: 0 } }), 100)).toBe(true);
+  });
+
+  it("isStale does not fire just because the catalog share moved while the plan's Meta spend did not", () => {
+    const c = saved({ basis: { ...saved().basis, metaSpend: 88000, targetSpend: 79200 } });
+    expect(isStale(c, 88000)).toBe(false);
   });
 
   it("keepCreative carries the creative block onto freshly filled inputs, and gives null for null", () => {
@@ -236,6 +277,15 @@ describe("creativeInsights", () => {
     const part = { score: 60, parts: { zeroRevenue: 60, concentration: 60, roasDegradation: 60, spendDegradation: 60, evergreenShare: 60 }, mode: "provisional" as const };
     expect(creativeInsights(part, metrics, saved({ basis: { ...saved().basis, reason: "covered" } })).join(" ")).toMatch(/already covered|covers/i);
     expect(creativeInsights(part, metrics, saved({ basis: { ...saved().basis, reason: "no_meta_spend" } })).join(" ")).toMatch(/no Meta spend/i);
+  });
+
+  it("says when the need was typed over the model, with the model's number, instead of describing a calculation that was not used", () => {
+    const part = { score: 60, parts: { zeroRevenue: 60, concentration: 60, roasDegradation: 60, spendDegradation: 60, evergreenShare: 60 }, mode: "provisional" as const };
+    const typed = saved({ needed: 40, overrides: { needed: 40 }, basis: { ...saved().basis, reason: "covered", modelNeeded: 0 } });
+    const text = creativeInsights(part, metrics, typed).join(" ");
+    expect(text).toMatch(/typed 40/i);
+    expect(text).toMatch(/model gives 0/i);
+    expect(text).not.toMatch(/already covered|no new ads are needed/i);
   });
 
   it("explains there is not enough data when no part could be scored", () => {

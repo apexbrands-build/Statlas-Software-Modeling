@@ -13,16 +13,19 @@
    creative_score_ads:  per non-catalog ad that spent in the 30 days to p_to or launched in them: spend and revenue over those 30 days and
                         spend in four 7-day weeks ending p_to (w1 oldest). */
 
+/* No `set search_path` here on purpose: a SQL function with one cannot be inlined, so every caller would re-run it as a black box. With the
+   tables schema-qualified it inlines into the functions below. If the client row is not visible to the caller the timezone subquery gives
+   NULL and the launch date falls back to the first spend day. */
 create or replace function public.creative_launch(p_client uuid)
 returns table (ad_id text, name text, format text, is_catalog boolean, launch_date date)
-language sql stable set search_path to 'public' as $$
+language sql stable as $$
   select d.ad_id,
          max(a.name),
          coalesce(max(a.format), 'other'),
          coalesce(bool_or(a.is_catalog), false),
-         coalesce((max(a.created_at) at time zone (select coalesce(c.timezone, 'UTC') from clients c where c.id = p_client))::date, min(d.date))
-  from meta_ad_daily d
-  left join meta_ads a on a.client_id = d.client_id and a.ad_id = d.ad_id
+         coalesce((max(a.created_at) at time zone (select coalesce(c.timezone, 'UTC') from public.clients c where c.id = p_client))::date, min(d.date))
+  from public.meta_ad_daily d
+  left join public.meta_ads a on a.client_id = d.client_id and a.ad_id = d.ad_id
   where d.client_id = p_client
   group by d.ad_id;
 $$;
