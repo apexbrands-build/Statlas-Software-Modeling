@@ -32,6 +32,8 @@ export function planDayToFact(r: PlanTargetDay): DailyFact {
     emailOrders: 0,
     emailSent: 0,
     channels,
+    // A month planned with spend but no platform split: keep the rest so the P&L's ad spend and CM match the plan.
+    unassignedSpend: Math.max(0, r.spend - Object.values(r.spendByChannel).reduce<number>((a, v) => a + (v ?? 0), 0)),
   };
 }
 

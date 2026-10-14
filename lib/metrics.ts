@@ -35,6 +35,8 @@ export interface Totals {
   emailOrders: number;
   emailSent: number;
   channels: Record<ChannelKey, ChannelDay>;
+  /** Ad spend a plan has but did not split by platform (always 0 for actual days). Counts in total spend, MER and CM. */
+  unassignedSpend: number;
 }
 
 const emptyChannels = (): Record<ChannelKey, ChannelDay> =>
@@ -63,6 +65,7 @@ export function emptyTotals(): Totals {
     emailOrders: 0,
     emailSent: 0,
     channels: emptyChannels(),
+    unassignedSpend: 0,
   };
 }
 
@@ -87,6 +90,7 @@ export function aggregate(facts: DailyFact[]): Totals {
     t.emailFlowRevenue += f.emailFlowRevenue;
     t.emailOrders += f.emailOrders;
     t.emailSent += f.emailSent;
+    t.unassignedSpend += f.unassignedSpend ?? 0;
     for (const k of CHANNEL_KEYS) {
       t.channels[k].spend += f.channels[k].spend;
       t.channels[k].platformRevenue += f.channels[k].platformRevenue;
@@ -172,7 +176,7 @@ export const div = (a: number, b: number): number | null => (b === 0 || !Number.
 
 export const orderRevenue = (t: Totals) => t.newOrderRevenue + t.returningOrderRevenue;
 export const orders = (t: Totals) => t.newOrders + t.returningOrders;
-export const totalSpend = (t: Totals) => CHANNEL_KEYS.reduce((s, k) => s + t.channels[k].spend, 0);
+export const totalSpend = (t: Totals) => CHANNEL_KEYS.reduce((s, k) => s + t.channels[k].spend, 0) + t.unassignedSpend;
 
 export interface CmParts {
   /** Gross - discounts - refunds. Taxes are not included. */

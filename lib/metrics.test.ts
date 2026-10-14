@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addYears, comparisonRange, diffDays } from "./dates";
-import { aggregate, amerSpend, channelGroups, channelMetricDefs, cmParts, compare, METRICS, totalSpend } from "./metrics";
+import { aggregate, amerSpend, channelGroups, channelMetricDefs, cmParts, compare, emptyTotals, METRICS, totalSpend } from "./metrics";
 import { defaultExtra } from "./defaults";
 import { SeedRepository } from "./repository/seed";
 import { splitCampaignDays } from "./sync/meta-split";
@@ -340,5 +340,21 @@ describe("aMER spend and the retention switch", () => {
 
   it("keeps total spend, and so MER, on all spend whatever the switches say", () => {
     expect(totalSpend(t)).toBe(650);
+  });
+});
+
+describe("unassigned spend", () => {
+  it("aggregate sums it and totalSpend counts it with the channels", () => {
+    const f = (n: number, unassigned?: number) => {
+      const day = fact({});
+      return { ...day, ...(unassigned === undefined ? {} : { unassignedSpend: unassigned }), channels: { ...day.channels, meta_acquisition: { ...day.channels.meta_acquisition, spend: n } } };
+    };
+    const t = aggregate([f(100, 40), f(50, 10), f(25)]);
+    expect(t.unassignedSpend).toBe(50);
+    expect(totalSpend(t)).toBe(175 + 50);
+  });
+  it("is 0 for actual days, which never carry it", () => {
+    expect(aggregate([fact({})]).unassignedSpend).toBe(0);
+    expect(emptyTotals().unassignedSpend).toBe(0);
   });
 });

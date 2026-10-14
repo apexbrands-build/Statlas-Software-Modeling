@@ -102,6 +102,8 @@ export interface DailyFact {
   emailOrders: number;
   emailSent: number;
   channels: Record<ChannelKey, ChannelDay>;
+  /** Plan days only: ad spend the plan has not split by platform. Actual days never set it. */
+  unassignedSpend?: number;
 }
 
 /**

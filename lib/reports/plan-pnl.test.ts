@@ -5,7 +5,7 @@ import { aggregate, cmParts, emptyTotals } from "../metrics";
 import { FLAT_SEASONALITY, generateMonth } from "../planning/generate";
 import { blankInputs } from "../planning/types";
 import type { DailyFact } from "../types";
-import { blendColumn, pnlColumns } from "./plan-pnl";
+import { blendColumn, planDayToFact, pnlColumns } from "./plan-pnl";
 import { buildPnl } from "./pnl";
 
 const settings = { ...defaultSettings("c"), otherVariablePct: 5, deliveryCostPerOrder: 1, monthlyFixedCosts: 1000 };
@@ -78,5 +78,49 @@ describe("pnlColumns", () => {
     const planCm = plan.filter((r) => r.date > lastData).reduce((a, r) => a + r.cm, 0);
     const cmRow = buildPnl(c.columns, settings, "simplified", c.fixed).flatMap((x) => x.rows).find((r) => r.key === "cm")!;
     expect(cmRow.values[12]).toBeCloseTo(actualCm + planCm, 3);
+  });
+});
+
+describe("plan P&L when a month has spend but no platform split", () => {
+  const unsplit = generateMonth({
+    planId: "p",
+    clientId: "c",
+    month: "2026-09-01",
+    inputs: { ...blankInputs(), spend: 30000, amer: 2, returningRevenue: 60000, platformPct: {}, rates: { discountPct: 10, shippingPct: 5, taxPct: 20, refundPct: 4, cogsPct: 30, otherVarPct: 8, newAov: 100, returningAov: 120 } },
+    seasonality: FLAT_SEASONALITY,
+    deliveryCostPerOrder: 2,
+    excludeBrandFromAmer: false,
+    excludeMetaReturningFromAmer: false,
+  });
+  const col = blendColumn([], unsplit, settings)!;
+  const get = (key: string) => buildPnl([col], settings).flatMap((x) => x.rows).find((r) => r.key === key)!.values[0]!;
+
+  it("the plan rows really carry spend without a channel split (the situation under test)", () => {
+    expect(unsplit.reduce((a, r) => a + r.spend, 0)).toBeCloseTo(30000, 4);
+    expect(unsplit.every((r) => Object.keys(r.spendByChannel).length === 0)).toBe(true);
+  });
+
+  it("a plan day keeps the unsplit part of its spend as unassigned spend, and none when everything is split", () => {
+    const day = unsplit[0];
+    expect(planDayToFact(day).unassignedSpend).toBeCloseTo(day.spend, 6);
+    expect(planDayToFact({ ...day, spendByChannel: { meta_acquisition: day.spend } }).unassignedSpend).toBeCloseTo(0, 6);
+    expect(planDayToFact({ ...day, spendByChannel: { meta_acquisition: day.spend / 4 } }).unassignedSpend).toBeCloseTo((day.spend * 3) / 4, 6);
+  });
+
+  it("total advertising spend is the plan's spend, not zero", () => {
+    expect(get("totalAds")).toBeCloseTo(-30000, 4);
+  });
+
+  it("the unsplit spend shows under Other, so Search, Social and Other add up to the total", () => {
+    expect(get("otherAds")).toBeCloseTo(-30000, 4);
+    expect(get("search") + get("social") + get("otherAds")).toBeCloseTo(get("totalAds"), 4);
+  });
+
+  it("CM in the P&L equals the sum of the plan's daily CM, so the P column no longer overstates profit", () => {
+    expect(get("cm")).toBeCloseTo(unsplit.reduce((a, r) => a + r.cm, 0), 4);
+  });
+
+  it("MER and acquisition spend count the unsplit spend", () => {
+    expect(get("acqSpend")).toBeCloseTo(30000, 4);
   });
 });

@@ -122,7 +122,7 @@ export function buildPnl(totals: (Totals | null)[], s: ClientSettings, revenueBy
       rows: [
         row("search", "Search", "currency0", (t) => -sp(t, SEARCH)),
         row("social", "Social", "currency0", (t) => -sp(t, SOCIAL)),
-        row("otherAds", "Other", "currency0", (t) => -sp(t, OTHER_ADS)),
+        row("otherAds", "Other", "currency0", (t) => -(sp(t, OTHER_ADS) + t.unassignedSpend)),
         row("totalAds", "Total Advertising Spend", "currency0", (t) => -totalSpend(t), { bold: true }),
       ],
     },
