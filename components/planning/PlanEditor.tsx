@@ -8,10 +8,12 @@ import { formatValue } from "@/lib/format";
 import { aggregate, aggregatePlan, amerSpend } from "@/lib/metrics";
 import { dayMultipliers, DEFAULT_EVENT_SETTINGS, measureEventDays, toDayFacts, type EventSettings, type MarketingEvent } from "@/lib/planning/events";
 import { FLAT_SEASONALITY, generateMonth } from "@/lib/planning/generate";
+import { driftedMonths } from "@/lib/planning/drift";
+import { saveButtonState } from "@/lib/planning/save-state";
 import { dowFromHistory, inputsFromFacts, sourceRange, type FillSource } from "@/lib/planning/history";
 import { blankInputs, ZERO_RATES, type PlanMonth, type PlanMonthInputs } from "@/lib/planning/types";
 import { getRepository } from "@/lib/repository";
-import type { PlanSeasonality, PlanVersion } from "@/lib/types";
+import type { PlanSeasonality, PlanTargetDay, PlanVersion } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
 import { CalendarStep, planCalendarCtx } from "./CalendarStep";
 import { DetailsStep } from "./DetailsStep";
@@ -41,6 +43,8 @@ export function PlanEditor({ planId }: { planId: string }) {
   const [plan, setPlan] = useState<PlanVersion | null | undefined>(undefined);
   const [saved, setSaved] = useState<PlanMonth[] | null>(null);
   const [months, setMonths] = useState<PlanMonth[] | null>(null);
+  /** The daily targets as last saved (what Home and the reports read); null when they could not be loaded. */
+  const [savedTargets, setSavedTargets] = useState<PlanTargetDay[] | null>(null);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [seasonDraft, setSeasonDraft] = useState<PlanSeasonality | null>(null);
   const [seasonDirty, setSeasonDirty] = useState(false);
@@ -66,7 +70,14 @@ export function PlanEditor({ planId }: { planId: string }) {
       setPlan(found);
       if (!found) return;
       const m = await repo.getPlanMonths(planId);
+      let targets: PlanTargetDay[] | null = null;
+      try {
+        targets = await repo.getPlanTargets(found.clientId, planId, `${found.year}-01-01`, `${found.year}-12-31`);
+      } catch {
+        /* without the saved targets the editor simply cannot tell that they are out of date */
+      }
       if (cancel) return;
+      setSavedTargets(targets);
       const byMonth = new Map(m.map((x) => [x.month, x]));
       const all = Array.from({ length: 12 }, (_, i) => byMonth.get(monthKey(found.year, i)) ?? { month: monthKey(found.year, i), inputs: null, status: "in_progress" as const, locked: false });
       setSaved(all);
@@ -242,17 +253,23 @@ export function PlanEditor({ planId }: { planId: string }) {
     setSeasonDirty(true);
   }, []);
 
-  const needsSave = dirty.size > 0 || seasonDirty || eventSettingsDirty || (plan != null && plan.seasonality === null && history.lastData !== "" && months?.some((m) => m.inputs));
+  // Months whose saved targets no longer match what the editor generates (Calendar events added elsewhere, changed cost settings).
+  const drift = useMemo(() => (history.loading || !savedTargets ? [] : driftedMonths(savedTargets, rows)), [history.loading, savedTargets, rows]);
+  const driftOnly = drift.filter((k) => !dirty.has(k));
+
+  const needsSave = dirty.size > 0 || driftOnly.length > 0 || seasonDirty || eventSettingsDirty || (plan != null && plan.seasonality === null && history.lastData !== "" && months?.some((m) => m.inputs));
+
+  const saveState = saveButtonState({ saving, needsSave: Boolean(needsSave), historyLoading: history.loading });
 
   const save = async () => {
-    if (!plan || !months || !settings) return;
+    if (!plan || !months || !settings || history.loading) return;
     setSaving(true);
     setNote(null);
     try {
       const repo = getRepository();
       const persistSeason = seasonDirty || plan.seasonality === null;
       // A new weekday pattern changes every month that has inputs.
-      const keys = seasonDirty ? new Set([...dirty, ...months.filter((m) => m.inputs).map((m) => m.month)]) : dirty;
+      const keys = seasonDirty ? new Set([...dirty, ...drift, ...months.filter((m) => m.inputs).map((m) => m.month)]) : new Set([...dirty, ...drift]);
       const items = months
         .filter((m) => keys.has(m.month))
         .map((month) => ({ month, rows: rows[month.month] ?? [] }));
@@ -273,6 +290,7 @@ export function PlanEditor({ planId }: { planId: string }) {
           /* needs migration 0007; the targets above are saved either way */
         }
       }
+      setSavedTargets((cur) => (cur === null ? cur : [...cur.filter((r) => !items.some((i) => i.month.month.slice(0, 7) === r.date.slice(0, 7))), ...items.flatMap((i) => i.rows)]));
       setPlan(updated);
       setSaved(months);
       setSeasonDraft(seasonality);
@@ -332,13 +350,18 @@ export function PlanEditor({ planId }: { planId: string }) {
             </div>
           ))}
         </dl>
-        <button className={btnPrimary} disabled={saving || !needsSave} onClick={save}>
-          {saving ? "Saving…" : needsSave ? "Save plan" : "Saved"}
+        <button className={btnPrimary} disabled={saveState.disabled} onClick={save}>
+          {saveState.label}
         </button>
       </div>
 
       {note && <p className={`rounded-lg border p-3 text-sm ${note.tone === "ok" ? "border-good/40 bg-good/10 text-good" : "border-bad/40 bg-bad/10 text-bad"}`}>{note.text}</p>}
-      {needsSave && <p className="text-xs text-text-muted">You have unsaved changes. Targets only change after you save.</p>}
+      {driftOnly.length > 0 && (
+        <p className="rounded-lg border border-accent/50 bg-accent/10 p-3 text-sm text-text">
+          The saved targets for {driftOnly.map((k) => MONTHS[Number(k.slice(5, 7)) - 1]).join(", ")} no longer match this plan (Calendar events or store settings changed since the last save). Home and the reports still use the old targets: Save plan to update them.
+        </p>
+      )}
+      {needsSave && driftOnly.length === 0 && <p className="text-xs text-text-muted">You have unsaved changes. Targets only change after you save.</p>}
 
       <div className="flex gap-1 overflow-x-auto border-b border-border" role="tablist">
         {STEPS.map((s, i) => (

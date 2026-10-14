@@ -1,5 +1,5 @@
 import { addDays, todayLocal } from "../dates";
-import { defaultSettings, DEFAULT_MULTIPLIERS } from "../defaults";
+import { defaultSettings } from "../defaults";
 import { getBrowserClient } from "../supabase/client";
 import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
@@ -10,6 +10,7 @@ import { readScenarioFields } from "../planning/scenarios";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth, PlanMonthInputs } from "../planning/types";
+import { settingsFromRow } from "./settings-row";
 import type { Repository } from "./types";
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -51,21 +52,7 @@ export class SupabaseRepository implements Repository {
     const { data } = await this.db.from("client_settings").select("*").eq("client_id", clientId).maybeSingle();
     const base = defaultSettings(clientId);
     if (!data) return base;
-    return {
-      ...base,
-      multipliers: { ...DEFAULT_MULTIPLIERS, ...(data.multipliers as Record<ChannelKey, number>) },
-      otherVariablePct: n(data.other_variable_pct),
-      cogsFallbackPct: n(data.cogs_fallback_pct),
-      cogsFlatRate: Boolean(data.cogs_flat_rate),
-      excludedOrderTags: (data.excluded_order_tags as string[]) ?? [],
-      extra: { ...base.extra, ...((data.extra as Partial<ClientSettings["extra"]>) ?? {}) },
-      deliveryCostPerOrder: n(data.delivery_cost_per_order),
-      monthlyFixedCosts: n(data.monthly_fixed_costs),
-      brandCampaignKeyword: (data.brand_campaign_keyword as string) ?? base.brandCampaignKeyword,
-      dtcChannels: (data.dtc_channels as string[]) ?? base.dtcChannels,
-      excludeBrandFromAmer: Boolean(data.exclude_brand_from_amer),
-      excludeMetaReturningFromAmer: Boolean(data.exclude_meta_returning_from_amer),
-    };
+    return settingsFromRow(clientId, data);
   }
 
   async saveSettings(s: ClientSettings): Promise<void> {
