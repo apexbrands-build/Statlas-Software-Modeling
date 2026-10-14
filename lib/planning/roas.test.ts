@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import { blankInputs, type PlanMonth, type PlanMonthInputs } from "./types";
-import { planRoasTargets, roasChannels, roasOf, roasTarget, suggestedRoas } from "./roas";
-import type { ClientSettings } from "../types";
+import { actualPlatformRoas, planRoasTargets, roasChannels, roasOf, roasTarget, rowMethod, suggestedRoas, withRoas } from "./roas";
+import type { ClientSettings, DailyFact } from "../types";
 
 const settings = (multipliers: ClientSettings["multipliers"]): ClientSettings => ({ ...defaultSettings("c"), multipliers });
 const inputs = (over: Partial<PlanMonthInputs> = {}): PlanMonthInputs => ({ ...blankInputs(), spend: 1000, amer: 2.21, platformPct: { google: 50, meta: 50 }, ...over });
@@ -79,5 +79,50 @@ describe("planRoasTargets and roasOf", () => {
     expect(of("2026-12-02", "meta_acquisition")).toBe(2.2);
     expect(of("2027-01-05", "meta_acquisition")).toBeNull();
     expect(of("2026-11-17", "meta_returning")).toBeNull();
+  });
+});
+
+describe("withRoas", () => {
+  it("sets a typed target for one channel and leaves the others and the rest of the month alone", () => {
+    const i = inputs({ roas: { google_nonbrand: 3 } });
+    const next = withRoas(i, "meta_acquisition", 2.4);
+    expect(next.roas).toEqual({ google_nonbrand: 3, meta_acquisition: 2.4 });
+    expect(next.amer).toBe(i.amer);
+    expect(i.roas).toEqual({ google_nonbrand: 3 });
+  });
+  it("clears the channel (back to Suggested) for null, zero or a negative number, and drops an empty list", () => {
+    expect(withRoas(inputs({ roas: { meta_acquisition: 2, google_nonbrand: 3 } }), "meta_acquisition", null).roas).toEqual({ google_nonbrand: 3 });
+    expect(withRoas(inputs({ roas: { meta_acquisition: 2 } }), "meta_acquisition", 0).roas).toBeUndefined();
+    expect(withRoas(inputs({ roas: { meta_acquisition: 2 } }), "meta_acquisition", -1).roas).toBeUndefined();
+  });
+  it("works on inputs saved before ROAS existed", () => {
+    expect(withRoas(inputs(), "meta_acquisition", 2).roas).toEqual({ meta_acquisition: 2 });
+  });
+});
+
+describe("rowMethod", () => {
+  const ms = (a: Partial<PlanMonthInputs["roas"]> | null, b: Partial<PlanMonthInputs["roas"]> | null) => [month("2026-11", inputs({ roas: a ?? undefined })), month("2026-12", inputs({ roas: b ?? undefined })), month("2027-01", null)];
+  it("is suggested when no month has a typed value, manual when every month with inputs has one, mixed otherwise", () => {
+    expect(rowMethod(ms(null, null), "meta_acquisition")).toBe("suggested");
+    expect(rowMethod(ms({ meta_acquisition: 2 }, { meta_acquisition: 2.5 }), "meta_acquisition")).toBe("manual");
+    expect(rowMethod(ms({ meta_acquisition: 2 }, null), "meta_acquisition")).toBe("mixed");
+  });
+  it("ignores months with no inputs and is suggested when none has inputs", () => {
+    expect(rowMethod([month("2026-11", null)], "meta_acquisition")).toBe("suggested");
+  });
+});
+
+describe("actualPlatformRoas", () => {
+  const fact = (spend: number, rev: number): DailyFact => {
+    const f = { clientId: "c", date: "2026-10-01", channels: { meta_acquisition: { spend, platformRevenue: rev, platformPurchases: 1 } } };
+    return f as unknown as DailyFact;
+  };
+  it("is platform-reported revenue over spend across the facts", () => {
+    expect(actualPlatformRoas([fact(100, 200), fact(100, 160)], "meta_acquisition")).toBeCloseTo(1.8, 10);
+  });
+  it("is null with no spend, and for a channel the facts do not carry", () => {
+    expect(actualPlatformRoas([fact(0, 0)], "meta_acquisition")).toBeNull();
+    expect(actualPlatformRoas([], "meta_acquisition")).toBeNull();
+    expect(actualPlatformRoas([fact(100, 200)], "pinterest")).toBeNull();
   });
 });

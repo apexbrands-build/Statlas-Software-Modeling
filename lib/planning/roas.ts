@@ -1,5 +1,5 @@
 import { RETENTION_CHANNELS } from "../channels";
-import { CHANNEL_KEYS, type ChannelKey, type ClientSettings } from "../types";
+import { CHANNEL_KEYS, type ChannelKey, type ClientSettings, type DailyFact } from "../types";
 import { PLAN_PLATFORMS, type PlanMonth, type PlanMonthInputs } from "./types";
 
 /** Channels that are always listed: the core of every client's media plan. */
@@ -55,4 +55,35 @@ export type RoasOf = (date: string, channel: ChannelKey) => number | null;
 
 export function roasOf(targets: MonthRoasTargets): RoasOf {
   return (date, channel) => targets[date.slice(0, 7)]?.[channel] ?? null;
+}
+
+/** The month's inputs with one channel's typed target set; null, zero or a negative number clears it (back to Suggested). */
+export function withRoas(inputs: PlanMonthInputs, channel: ChannelKey, value: number | null): PlanMonthInputs {
+  const roas = { ...(inputs.roas ?? {}) };
+  if (value !== null && Number.isFinite(value) && value > 0) roas[channel] = value;
+  else delete roas[channel];
+  const { roas: _old, ...rest } = inputs;
+  void _old;
+  return Object.keys(roas).length ? { ...rest, roas } : rest;
+}
+
+/** Whether a channel's row is all suggested, all typed (every month with inputs), or a mix. */
+export function rowMethod(months: PlanMonth[], channel: ChannelKey): "suggested" | "manual" | "mixed" {
+  const open = months.filter((m) => m.inputs);
+  const typed = open.filter((m) => (m.inputs!.roas?.[channel] ?? 0) > 0).length;
+  if (typed === 0) return "suggested";
+  return typed === open.length ? "manual" : "mixed";
+}
+
+/** Platform-reported ROAS a channel actually achieved over some days (revenue over spend); null with no spend. */
+export function actualPlatformRoas(facts: DailyFact[], channel: ChannelKey): number | null {
+  let spend = 0;
+  let revenue = 0;
+  for (const f of facts) {
+    const c = f.channels?.[channel];
+    if (!c) continue;
+    spend += c.spend;
+    revenue += c.platformRevenue;
+  }
+  return spend > 0 ? revenue / spend : null;
 }

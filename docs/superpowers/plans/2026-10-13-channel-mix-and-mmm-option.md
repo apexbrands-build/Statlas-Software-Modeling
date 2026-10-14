@@ -33,7 +33,7 @@ The buttons keep the strategist's labels, but every screen says "first version: 
 - "Expected" revenue for a month = `acqSpend × curveAmer(curve, acqSpend / daysWithData) × seasonIndex(fit, month)`, with `acqSpend` from `amerSpend` (client settings decide whether brand and non-acquisition count). Seasonality is applied so a strong season does not masquerade as a good mix.
 - Default analysis settings: last 36 complete months, November excluded (BFCM days are dropped from the New Customer fit, so November actuals would look inflated), the running month excluded, a month needs at least 25 days with data and spend above 0.
 - No migration: `plan_models.kind` is plain `text` with no check constraint (0007 lines 29 to 38; no later migration touches it). Only the TypeScript `ModelKind` union changes.
-- Incrementality defaults added (spec "incrementality overlay"): `youtube: 0.75`, `tiktok: 0.3`, `snapchat: 0.3` in `DEFAULT_MULTIPLIERS`. Google Brand stays 0.3 (confirmed decision; the Bridge's 0.25 only on the strategist's say-so). ROAS target per platform = month aMER target / factor of its main channel (missing factor = 1).
+- Incrementality defaults added (spec "incrementality overlay"): `youtube: 0.75`, `tiktok: 0.3`, `snapchat: 0.3` in `DEFAULT_MULTIPLIERS`. Google Brand stays 0.3 (confirmed decision; the Bridge's 0.25 only on the strategist's say-so). ROAS target per platform = month aMER target / factor of its main channel (missing factor = 1). **Built 2026-10-14 in `lib/planning/roas.ts` (see `2026-10-14-roas-targets.md`): reuse `suggestedRoas`, `roasTarget` and `planRoasTargets`; do not write a second ROAS-target function in `channel-mix.ts`.**
 - Read-only against every platform; no client messaging.
 
 ## Review Focus

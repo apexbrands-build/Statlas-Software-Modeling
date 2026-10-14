@@ -7,6 +7,7 @@ import { addYears, endOfMonth, todayLocal } from "@/lib/dates";
 import { inputsFromFacts, sourceRange } from "@/lib/planning/history";
 import type { PlanMonthInputs } from "@/lib/planning/types";
 import type { PlanCtx } from "./ctx";
+import { RoasLine } from "./RoasLine";
 import { btn, btnPrimary, inputClass, MONTHS, NumField } from "./ui";
 
 /** Returning revenue per month, next to last year, so it can be overridden with one number. */
@@ -125,6 +126,8 @@ const LINES: LineDef[] = [
   { id: "cogs", label: "COGS", unit: "pct", help: "Cost of goods as % of net sales (from Shopify variant costs, or the client's flat rate).", ...rate("cogsPct") },
   { id: "variable", label: "Variable costs", unit: "pct", help: "Other variable costs (cost of delivery, fees) as % of net sales plus shipping.", ...rate("otherVarPct") },
   { id: "sga", label: "SG&A (fixed costs)", unit: "money", help: "Fixed monthly costs. Only used in the Plan P&L, never in contribution margin. Starts from the client's setting.", get: (i) => i.fixedCosts ?? 0, set: (i, v) => ({ ...i, fixedCosts: v }), actual: (x) => (x ? (x.fixedCosts ?? 0) : null) },
+  // The ROAS line has its own table (channels by month); the entry only places it in the menu.
+  { id: "roas", label: "ROAS targets", unit: "revenue", help: "", get: () => 0, set: (i) => i, actual: () => null },
 ];
 
 type Basis = "last_year" | "recent" | "range";
@@ -152,7 +155,7 @@ export function DetailsStep({ ctx }: { ctx: PlanCtx }) {
           Next
         </button>
       </div>
-      {def.id === "returning" ? <ReturningLine ctx={ctx} /> : <RateLine ctx={ctx} def={def} />}
+      {def.id === "returning" ? <ReturningLine ctx={ctx} /> : def.id === "roas" ? <RoasLine ctx={ctx} /> : <RateLine ctx={ctx} def={def} />}
       <p className="text-xs text-text-faint">Email, SMS and organic revenue lines are not planned yet: strategists usually forecast totals only. Spend, aMER and returning revenue come from the Models.</p>
     </div>
   );
