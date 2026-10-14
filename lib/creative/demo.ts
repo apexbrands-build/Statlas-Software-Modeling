@@ -4,7 +4,7 @@
  */
 import { addDays, diffDays, endOfMonth, startOfMonth } from "../dates";
 import type { AdDayRow, AdInfo } from "./aggregate";
-import { zeroLaunched, type AdFormat, type CreativeDay, type CreativeHistory, type LaunchedAd, type MonthAgg, type ScoreAd } from "./types";
+import { zeroLaunched, type ActiveAd, type AdFormat, type CreativeDay, type CreativeHistory, type LaunchedAd, type MonthAgg, type ScoreAd } from "./types";
 
 interface DemoAd {
   id: string;
@@ -154,6 +154,12 @@ function scoreAds(ads: DemoAd[], asOf: string): ScoreAd[] {
     }));
 }
 
+/** The demo's active ads: the non-catalog ads that are running (spent in the last 30 days or launched in them), some without any spend. */
+function activeAds(ads: DemoAd[], asOf: string): ActiveAd[] {
+  const from = addDays(asOf, -29);
+  return ads.filter((ad) => !ad.isCatalog && ad.launch <= asOf && (ad.launch >= from || sumRange(ad, from, asOf, "spend") > 0)).map((ad) => ({ adId: ad.id, spend30: sumRange(ad, from, asOf, "spend") }));
+}
+
 export function demoCreativeHistory(clientId: string, asOf: string): CreativeHistory {
   const ads = makeAds(clientId, asOf);
   return {
@@ -162,6 +168,7 @@ export function demoCreativeHistory(clientId: string, asOf: string): CreativeHis
     ads: ads.filter((a) => a.launch >= addDays(asOf, -364)).map(launchedAd),
     days: creativeDays(ads, addDays(asOf, -96), asOf),
     scoreAds: scoreAds(ads, asOf),
+    activeAds: activeAds(ads, asOf),
   };
 }
 

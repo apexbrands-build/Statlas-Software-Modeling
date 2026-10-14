@@ -11,7 +11,7 @@ const block = (over: Partial<CreativeMonth> = {}): CreativeMonth => ({
 describe("adPlanResults and readSavedBlocks", () => {
   it("what was saved reads back as the same blocks, with the score snapshot beside them", () => {
     const months = { "2026-10-01": block(), "2026-11-01": block({ needed: 40, locked: true, overrides: { needed: 40 } }) };
-    const saved = adPlanResults({ asOf: "2026-10-13", score: { score: 64, parts: { zeroRevenue: 100, concentration: 0, roasDegradation: 31, spendDegradation: 89, evergreenShare: 100 }, mode: "provisional" }, metrics: { zeroRevenue: 0.1, concentration: 0.5, roasDegradation: -0.1, spendDegradation: -0.04, evergreenShare: 0.5 }, months });
+    const saved = adPlanResults({ asOf: "2026-10-13", score: { score: 64, parts: { zeroSpend: 100, concentration: 0, roasDegradation: 31, spendDegradation: 89, evergreenShare: 100 }, mode: "provisional" }, metrics: { zeroSpend: 0.1, concentration: 0.5, roasDegradation: -0.1, spendDegradation: -0.04, evergreenShare: 0.5 }, months });
     expect(readSavedBlocks(JSON.parse(JSON.stringify(saved)))).toEqual(months);
     expect(saved).toMatchObject({ asOf: "2026-10-13", score: 64, mode: "provisional" });
   });

@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_HISTORY, FIXTURE_ADS, FIXTURE_AS_OF, FIXTURE_DAYS, FIXTURE_HISTORY, FIXTURE_SCORE_ADS, launchedAd, scoreAd } from "./fixtures";
-import { adConcentration, evergreenShare, roasDegradation, scoreMetrics, spendDegradation, undeliveredCount, zeroRevenueRate } from "./metrics";
+import { EMPTY_HISTORY, FIXTURE_ACTIVE_ADS, FIXTURE_ADS, FIXTURE_AS_OF, FIXTURE_DAYS, FIXTURE_HISTORY, FIXTURE_SCORE_ADS, launchedAd, scoreAd } from "./fixtures";
+import { adConcentration, evergreenShare, roasDegradation, scoreMetrics, spendDegradation, zeroSpendRate } from "./metrics";
 
-describe("zero-revenue rate and undelivered", () => {
-  it("3 zero-revenue spenders of 8, 2 undelivered left out", () => {
-    expect(zeroRevenueRate(FIXTURE_SCORE_ADS)).toBe(0.375);
-    expect(undeliveredCount(FIXTURE_SCORE_ADS)).toBe(2);
+describe("zero-spend rate", () => {
+  it("3 of the 10 active ads had no spend in the window", () => {
+    expect(zeroSpendRate(FIXTURE_ACTIVE_ADS)).toBe(0.3);
   });
-  it("no spenders gives null", () => {
-    expect(zeroRevenueRate([scoreAd("x", "2026-09-01", 0, 0)])).toBeNull();
-    expect(zeroRevenueRate([])).toBeNull();
+  it("only spend counts: an ad that spent a little is delivering", () => {
+    expect(zeroSpendRate([{ adId: "x", spend30: 0.01 }, { adId: "y", spend30: 0 }])).toBe(0.5);
+  });
+  it("no active ads gives null, not 0", () => {
+    expect(zeroSpendRate([])).toBeNull();
   });
 });
 
@@ -65,7 +66,7 @@ describe("ROAS degradation", () => {
 describe("scoreMetrics", () => {
   it("fixture history gives all five", () => {
     const m = scoreMetrics(FIXTURE_HISTORY);
-    expect(m.zeroRevenue).toBe(0.375);
+    expect(m.zeroSpend).toBe(0.3);
     expect(m.concentration).toBeCloseTo(1500 / 1600, 10);
     expect(m.evergreenShare).toBe(0.5);
     expect(m.spendDegradation).toBeCloseTo(-40 / 240, 10);
@@ -73,7 +74,7 @@ describe("scoreMetrics", () => {
   });
   it("an empty history makes every metric null", () => {
     expect(scoreMetrics(EMPTY_HISTORY)).toEqual({
-      zeroRevenue: null,
+      zeroSpend: null,
       concentration: null,
       roasDegradation: null,
       spendDegradation: null,

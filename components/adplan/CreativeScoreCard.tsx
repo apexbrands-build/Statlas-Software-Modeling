@@ -5,10 +5,9 @@ import type { creativeScore, MetricKey } from "@/lib/creative/score";
 import { METRIC_KEYS, scoreLabel } from "@/lib/creative/score";
 import type { CreativeHistory } from "@/lib/creative/types";
 import type { Currency } from "@/lib/types";
-import { undeliveredCount } from "@/lib/creative/metrics";
 
 const LABEL: Record<MetricKey, { name: string; hint: string }> = {
-  zeroRevenue: { name: "Ads that spent with no revenue", hint: "Share of ads with spend in the last 30 days that brought no attributed revenue. Lower is better." },
+  zeroSpend: { name: "Active ads with no spend", hint: "Share of the ads running right now that got no spend in the last 30 days: ads without budget behind them. Lower is better." },
   concentration: { name: "Top 5 ads' share of spend", hint: "How much of the last 30 days' spend sits in the five biggest ads. Lower means more ads are carrying the account." },
   roasDegradation: { name: "ROAS after a launch", hint: "How a batch of ads' ROAS in its first week compares with the week before the launch, weighted by spend. Higher is better." },
   spendDegradation: { name: "Spend over four weeks", hint: "How ads' weekly spend changes over the last four weeks. Spend that holds or grows scores higher." },
@@ -41,7 +40,7 @@ export function CreativeScoreCard({ history, score, metrics, currency, loadError
     );
   }
   const label = score.score === null ? null : scoreLabel(score.score);
-  const undelivered = undeliveredCount(history.scoreAds);
+  const idle = history.activeAds.filter((a) => !(a.spend30 > 0)).length;
   const pct = (v: number | null) => (v === null ? "–" : formatValue(v, "percent1", currency));
   return (
     <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
@@ -88,7 +87,11 @@ export function CreativeScoreCard({ history, score, metrics, currency, loadError
           );
         })}
       </ul>
-      {undelivered > 0 && <p className="text-xs text-text-muted">{undelivered} launched ad{undelivered === 1 ? "" : "s"} never delivered.</p>}
+      {history.activeAds.length > 0 && (
+        <p className="text-xs text-text-muted">
+          {idle} of {history.activeAds.length} active ad{history.activeAds.length === 1 ? "" : "s"} had no spend in the last 30 days.
+        </p>
+      )}
     </div>
   );
 }

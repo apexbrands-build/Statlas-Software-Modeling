@@ -6,13 +6,13 @@
  * Once at least PERCENTILE_MIN_CLIENTS portfolio values exist for every metric, each part becomes a percentile.
  */
 
-export type MetricKey = "zeroRevenue" | "concentration" | "roasDegradation" | "spendDegradation" | "evergreenShare";
+export type MetricKey = "zeroSpend" | "concentration" | "roasDegradation" | "spendDegradation" | "evergreenShare";
 
-export const METRIC_KEYS: MetricKey[] = ["zeroRevenue", "concentration", "roasDegradation", "spendDegradation", "evergreenShare"];
+export const METRIC_KEYS: MetricKey[] = ["zeroSpend", "concentration", "roasDegradation", "spendDegradation", "evergreenShare"];
 
 /** Anchors as [value (fraction), score], sorted by value. */
 export const BANDS: Record<MetricKey, [value: number, score: number][]> = {
-  zeroRevenue: [
+  zeroSpend: [
     [0.25, 100],
     [0.37, 90],
     [0.7, 0],
@@ -42,7 +42,7 @@ export const BANDS: Record<MetricKey, [value: number, score: number][]> = {
 
 /** Which way is better when ranking against the portfolio (degradations are graded, so higher is better). */
 export const DIRECTION: Record<MetricKey, "lower" | "higher" | "closerToZero"> = {
-  zeroRevenue: "lower",
+  zeroSpend: "lower",
   concentration: "lower",
   roasDegradation: "higher",
   spendDegradation: "higher",

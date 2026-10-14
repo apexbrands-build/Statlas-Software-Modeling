@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays } from "../dates";
-import { fetchAdDays, fetchAds } from "./meta";
+import { fetchActiveAds, fetchAdDays, fetchAds } from "./meta";
 import { isCatalogCampaign, isRetryableAdError, mapAd, mapAdDay, RetryableAdError, type AdInsightRow, type AdRow } from "./meta-ads";
 
 const BATCH = 500;
@@ -9,6 +9,7 @@ const BATCH = 500;
 export interface AdSyncDeps {
   fetchAdDays: typeof fetchAdDays;
   fetchAds: typeof fetchAds;
+  fetchActiveAds: typeof fetchActiveAds;
 }
 
 const TIMEOUT = "TIMEOUT: ad-level data did not fit in one task";
@@ -21,6 +22,45 @@ export function sevenDayWindows(since: string, until: string): [string, string][
     out.push([from, end < until ? end : until]);
   }
   return out;
+}
+
+/**
+ * Keeps `meta_ads` in line with what Meta runs right now: every ACTIVE ad is saved as a full row (an ad with no spend has no ad-day, so this is the
+ * only way it is known and counted for the Creative Score's zero-spend rate), and saved ads still marked ACTIVE that Meta no longer lists get
+ * their real status looked up. Only touches this ad account's rows.
+ */
+export async function refreshActiveAds(
+  admin: SupabaseClient,
+  integration: { client_id: string; account_id: string },
+  keywords: string,
+  deps: Pick<AdSyncDeps, "fetchActiveAds" | "fetchAds">,
+  opts: { deadline?: number } = {},
+): Promise<{ active: number; refreshed: number }> {
+  const { client_id: clientId, account_id: accountId } = integration;
+  const active = [...new Map((await deps.fetchActiveAds(accountId, undefined, opts)).map((a) => [a.id, a])).values()];
+  await inBatches(
+    active.map((a) => mapAd(a, clientId, keywords, accountId)),
+    opts.deadline,
+    (batch) => admin.from("meta_ads").upsert(batch, { onConflict: "client_id,ad_id" }),
+  );
+
+  const listed = new Set(active.map((a) => a.id));
+  const stale: string[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin.from("meta_ads").select("ad_id").eq("client_id", clientId).eq("account_id", accountId).eq("status", "ACTIVE").range(from, from + 999);
+    if (error) throw new Error(error.message);
+    for (const r of (data ?? []) as { ad_id: string }[]) if (!listed.has(r.ad_id)) stale.push(r.ad_id);
+    if (!data || data.length < 1000) break;
+  }
+  if (stale.length) {
+    const fresh = await deps.fetchAds(accountId, stale, undefined, opts);
+    await inBatches(
+      fresh.map((a) => mapAd(a, clientId, keywords, accountId)),
+      opts.deadline,
+      (batch) => admin.from("meta_ads").upsert(batch, { onConflict: "client_id,ad_id" }),
+    );
+  }
+  return { active: active.length, refreshed: stale.length };
 }
 
 async function inBatches<T>(rows: T[], deadline: number | undefined, write: (batch: T[]) => PromiseLike<{ error: { message: string } | null }>) {
@@ -45,10 +85,10 @@ export async function syncMetaAds(
   until: string,
   windows: string[],
   keywords: string,
-  opts: { deps?: AdSyncDeps; deadline?: number } = {},
+  opts: { deps?: AdSyncDeps; deadline?: number; today?: string } = {},
 ): Promise<{ ads: number; days: number; note?: string }> {
   const { deadline } = opts;
-  const deps = opts.deps ?? { fetchAdDays, fetchAds };
+  const deps = opts.deps ?? { fetchAdDays, fetchAds, fetchActiveAds };
   const { client_id: clientId, account_id: accountId } = integration;
 
   const probe = await admin.from("meta_ads").select("ad_id").limit(1);
@@ -117,6 +157,16 @@ export async function syncMetaAds(
     await inBatches(minimal, deadline, (batch) => admin.from("meta_ads").upsert(batch, { onConflict: "client_id,ad_id", ignoreDuplicates: true }));
   } catch (e) {
     throw e instanceof RetryableAdError ? e : new RetryableAdError(e instanceof Error ? e.message : "Ad-level write failed");
+  }
+
+  // A window that reaches the present also refreshes which ads are running now. It is not part of the window, so a failure is only a note.
+  const today = opts.today ?? new Date().toISOString().slice(0, 10);
+  if (until >= addDays(today, -2)) {
+    try {
+      await refreshActiveAds(admin, integration, keywords, deps, { deadline });
+    } catch (e) {
+      notes.push(`Active ads not refreshed (${e instanceof Error ? e.message : "error"}).`);
+    }
   }
 
   return { ads: adIds.length, days: days.length, ...(notes.length ? { note: notes.join(" ") } : {}) };

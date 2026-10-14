@@ -1,5 +1,5 @@
 /** Database rows of the creative read functions (migration 0013) as the app's shapes. Numbers arrive as strings or null; dates may carry a time. */
-import { AD_FORMATS, type AdFormat, type CreativeDay, type LaunchedAd, type MonthAgg, type ScoreAd } from "./types";
+import { AD_FORMATS, type ActiveAd, type AdFormat, type CreativeDay, type LaunchedAd, type MonthAgg, type ScoreAd } from "./types";
 
 type Row = Record<string, unknown>;
 
@@ -36,4 +36,8 @@ export function mapCreativeDay(r: Row): CreativeDay {
 
 export function mapScoreAd(r: Row): ScoreAd {
   return { adId: String(r.ad_id), launchDate: date(r.launch_date), spend30: num(r.spend_30), revenue30: num(r.revenue_30), weeks: [num(r.w1), num(r.w2), num(r.w3), num(r.w4)] };
+}
+
+export function mapActiveAd(r: Row): ActiveAd {
+  return { adId: String(r.ad_id), spend30: num(r.spend_30) };
 }

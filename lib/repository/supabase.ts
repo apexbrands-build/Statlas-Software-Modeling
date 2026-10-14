@@ -2,7 +2,7 @@ import { addDays, endOfMonth, startOfMonth, todayLocal } from "../dates";
 import { normalizeQuery, type CreativePage, type CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import { isMissingFunction, mapAdRow, mapFormatRow } from "../creative/map-rows";
-import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
+import { mapActiveAd, mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
 import type { OrderChannel } from "../order-channels";
@@ -196,14 +196,16 @@ export class SupabaseRepository implements Repository {
   }
 
   async getCreativeHistory(clientId: string, asOf: string, fromMonth: string): Promise<CreativeHistory | null> {
-    const [months, ads, days, score] = await Promise.all([
+    const [months, ads, days, score, active] = await Promise.all([
       this.creativeRpc("creative_months", { p_client: clientId, p_from: fromMonth, p_to: asOf }, "month"),
       this.creativeRpc("creative_ads", { p_client: clientId, p_from: addDays(asOf, -364), p_to: asOf }, "ad_id"),
       this.creativeRpc("creative_days", { p_client: clientId, p_from: addDays(asOf, -96), p_to: asOf }, "date"),
       this.creativeRpc("creative_score_ads", { p_client: clientId, p_to: asOf }, "ad_id"),
+      this.creativeRpc("creative_active_ads", { p_client: clientId, p_to: asOf }, "ad_id"),
     ]);
     if (!months || !ads || !days || !score) return null;
-    return { asOf, months: months.map(mapMonthAgg), ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay), scoreAds: score.map(mapScoreAd) };
+    // Migration 0017 not applied yet: the rest of the history still loads, the zero-spend metric just has nothing to count.
+    return { asOf, months: months.map(mapMonthAgg), ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay), scoreAds: score.map(mapScoreAd), activeAds: (active ?? []).map(mapActiveAd) };
   }
 
   async getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null> {

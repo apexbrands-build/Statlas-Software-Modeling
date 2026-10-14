@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { syncMetaAds } = await import("./run-meta-ads");
+const { syncMetaAds, refreshActiveAds } = await import("./run-meta-ads");
 const { isRetryableAdError } = await import("./meta-ads");
 
 interface Rec {
@@ -9,6 +9,7 @@ interface Rec {
   op: string;
   rows?: Record<string, unknown>[];
   opts?: Record<string, unknown>;
+  range?: [number, number];
   filters: [string, string, unknown][];
 }
 
@@ -26,6 +27,7 @@ function fakeAdmin(o: { missingTables?: boolean; failInsertAt?: number; rpcError
     const b: Record<string, unknown> = {
       select: () => ((rec.op = "select"), b),
       limit: () => b,
+      range: (a: number, z: number) => ((rec.range = [a, z]), b),
       delete: () => ((rec.op = "delete"), b),
       eq: (c: string, v: unknown) => (rec.filters.push(["eq", c, v]), b),
       gte: (c: string, v: unknown) => (rec.filters.push(["gte", c, v]), b),
@@ -56,7 +58,11 @@ function fakeAdmin(o: { missingTables?: boolean; failInsertAt?: number; rpcError
         return Promise.resolve({ error: null });
       },
       then: (resolve: (v: unknown) => unknown) => {
-        if (rec.op === "select") return Promise.resolve({ data: [], error: o.missingTables ? { message: 'relation "meta_ads" does not exist' } : null }).then(resolve);
+        if (rec.op === "select") {
+          const rows = [...tables[table].values()].filter((r) => rec.filters.every(([, col, v]) => r[col] === v));
+          const page = rec.range ? rows.slice(rec.range[0], rec.range[1] + 1) : rows;
+          return Promise.resolve({ data: page, error: o.missingTables ? { message: 'relation "meta_ads" does not exist' } : null }).then(resolve);
+        }
         if (rec.op === "delete") {
           for (const [k, r] of tables[table]) {
             const ok = rec.filters.every(([kind, col, v]) => (kind === "eq" ? r[col] === v : kind === "gte" ? String(r[col]) >= String(v) : String(r[col]) <= String(v)));
@@ -292,5 +298,63 @@ describe("syncMetaAds: failures that must make the runner retry", () => {
     expect(isRetryableAdError(err)).toBe(true);
     expect(err.message).toMatch(/connection reset/);
     expect(tables.meta_ad_daily.size).toBe(500);
+  });
+});
+
+describe("active ads: the ones Meta runs right now are stored even without spend", () => {
+  const active = (id: string) => ({ ...adRow(id), effective_status: "ACTIVE" });
+  const paused = (id: string) => ({ ...adRow(id), effective_status: "PAUSED" });
+  const stored = (id: string, status: string) => ({ client_id: "c1", account_id: "act_1", ad_id: id, name: id, status });
+
+  it("upserts every active ad as a full row, so an ad that never spent is counted", async () => {
+    const { admin, tables } = fakeAdmin();
+    const r = await refreshActiveAds(admin, integration, "catalog, dpa", { fetchActiveAds: async () => [active("quiet"), active("busy")] as never, fetchAds: adsFor as never });
+    expect([...tables.meta_ads.keys()].sort()).toEqual(["c1|busy", "c1|quiet"]);
+    expect(tables.meta_ads.get("c1|quiet")).toMatchObject({ status: "ACTIVE", account_id: "act_1", format: "video" });
+    expect(r).toEqual({ active: 2, refreshed: 0 });
+  });
+
+  it("looks up the saved ads still marked ACTIVE that Meta no longer lists, and saves their new status", async () => {
+    const { admin, tables } = fakeAdmin();
+    tables.meta_ads.set("c1|old", stored("old", "ACTIVE"));
+    tables.meta_ads.set("c1|still", stored("still", "ACTIVE"));
+    tables.meta_ads.set("c1|long-gone", stored("long-gone", "PAUSED"));
+    const asked: string[][] = [];
+    const r = await refreshActiveAds(admin, integration, "catalog", {
+      fetchActiveAds: async () => [active("still")] as never,
+      fetchAds: (async (_a: string, ids: string[]) => (asked.push(ids), ids.map(paused))) as never,
+    });
+    expect(asked).toEqual([["old"]]);
+    expect(tables.meta_ads.get("c1|old")).toMatchObject({ status: "PAUSED" });
+    expect(tables.meta_ads.get("c1|long-gone")).toMatchObject({ status: "PAUSED" });
+    expect(r).toEqual({ active: 1, refreshed: 1 });
+  });
+
+  it("leaves another account's ads alone", async () => {
+    const { admin, tables } = fakeAdmin();
+    tables.meta_ads.set("c1|other", { ...stored("other", "ACTIVE"), account_id: "act_2" });
+    const asked: string[][] = [];
+    await refreshActiveAds(admin, integration, "catalog", { fetchActiveAds: async () => [] as never, fetchAds: (async (_a: string, ids: string[]) => (asked.push(ids), [])) as never });
+    expect(asked).toEqual([]);
+  });
+
+  it("runs at the end of a sync that reaches the present, and not for a past window", async () => {
+    const calls: string[] = [];
+    const deps = { fetchAdDays: paged([dayRow("a1", "2026-09-07")]), fetchAds: adsFor, fetchActiveAds: async () => (calls.push("active"), [active("quiet")]) };
+    const past = fakeAdmin();
+    await syncMetaAds(past.admin, integration, "2026-09-01", "2026-09-07", ["7d_click"], "catalog", { deps: deps as never, today: "2026-10-14" });
+    expect(calls).toEqual([]);
+    const now = fakeAdmin();
+    await syncMetaAds(now.admin, integration, "2026-10-08", "2026-10-13", ["7d_click"], "catalog", { deps: deps as never, today: "2026-10-14" });
+    expect(calls).toEqual(["active"]);
+    expect(now.tables.meta_ads.has("c1|quiet")).toBe(true);
+  });
+
+  it("a failure refreshing the active ads is a note: the ad-days are still saved", async () => {
+    const { admin, tables } = fakeAdmin();
+    const deps = { fetchAdDays: paged([dayRow("a1", "2026-10-12")]), fetchAds: adsFor, fetchActiveAds: async () => { throw new Error("Meta: Permissions error"); } };
+    const r = await syncMetaAds(admin, integration, "2026-10-08", "2026-10-13", ["7d_click"], "catalog", { deps: deps as never, today: "2026-10-14" });
+    expect(tables.meta_ad_daily.size).toBe(1);
+    expect(r.note).toMatch(/Active ads not refreshed.*Permissions error/);
   });
 });
