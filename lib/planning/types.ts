@@ -66,6 +66,8 @@ export interface PlanMonthInputs {
   fixedCosts?: number;
   /** Fixed daily values (a locked day keeps them; the rest of the month absorbs the difference). */
   overrides?: Record<string, DayOverride>;
+  /** Platform ROAS targets the strategist typed for this month, per channel. Absent = the suggested value (aMER / incrementality factor). */
+  roas?: Partial<Record<ChannelKey, number>>;
   source?: "manual" | "last_year" | "recent" | "actuals";
 }
 

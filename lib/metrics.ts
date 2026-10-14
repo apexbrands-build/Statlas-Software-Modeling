@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { CHANNEL_KEYS } from "./types";
 import { CORE_CHANNELS, PLATFORMS, RETENTION_CHANNELS } from "./channels";
+import type { RoasOf } from "./planning/roas";
 
 /* ------------------------------------------------------------------ */
 /* Aggregation                                                         */
@@ -109,6 +110,8 @@ export interface PlanTotals {
   retentionSpend: number;
   cm: number;
   spendByChannel: Partial<Record<ChannelKey, number>>;
+  /** Per channel with a ROAS target: planned spend and the platform revenue that spend is expected to bring at the target. Empty unless aggregatePlan got a `roasOf`. */
+  platformRoasPlan: Partial<Record<ChannelKey, { spend: number; expectedRevenue: number }>>;
   /** Optional P&L lines; null when the plan does not forecast them. */
   grossSales: number | null;
   discounts: number | null;
@@ -116,7 +119,7 @@ export interface PlanTotals {
   refunds: number | null;
 }
 
-export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
+export function aggregatePlan(rows: PlanTargetDay[], roasOf?: RoasOf): PlanTotals {
   const p: PlanTotals = {
     days: 0,
     orderRevenue: 0,
@@ -129,6 +132,7 @@ export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
     retentionSpend: 0,
     cm: 0,
     spendByChannel: {},
+    platformRoasPlan: {},
     grossSales: null,
     discounts: null,
     shipping: null,
@@ -146,7 +150,13 @@ export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
     for (const k of ["grossSales", "discounts", "shipping", "refunds"] as const) if (r[k] !== undefined) p[k] = (p[k] ?? 0) + (r[k] as number);
     for (const k of CHANNEL_KEYS) {
       const v = r.spendByChannel[k];
-      if (v !== undefined) p.spendByChannel[k] = (p.spendByChannel[k] ?? 0) + v;
+      if (v === undefined) continue;
+      p.spendByChannel[k] = (p.spendByChannel[k] ?? 0) + v;
+      const target = v > 0 ? roasOf?.(r.date, k) : null;
+      if (target != null) {
+        const cur = p.platformRoasPlan[k] ?? { spend: 0, expectedRevenue: 0 };
+        p.platformRoasPlan[k] = { spend: cur.spend + v, expectedRevenue: cur.expectedRevenue + v * target };
+      }
     }
     p.brandSpend += r.spendByChannel.google_brand ?? 0;
     for (const k of RETENTION_CHANNELS) p.retentionSpend += r.spendByChannel[k] ?? 0;
@@ -235,6 +245,26 @@ export function amerSpend(t: Totals, s: ClientSettings): number {
   if (s.excludeBrandFromAmer) sp -= t.channels.google_brand.spend;
   if (s.excludeMetaReturningFromAmer) for (const k of RETENTION_CHANNELS) sp -= t.channels[k].spend;
   return sp;
+}
+
+/**
+ * ROAS target of a channel group over a plan period: the platform revenue the planned spend is expected to bring at each month's target, over the
+ * planned spend (so months weigh by their spend). Incremental mode applies each channel's factor. Null when a spending channel has no target
+ * (returning channels), when there is no target at all, or no spend.
+ */
+export function groupRoasTarget(p: PlanTotals, s: ClientSettings, channels: ChannelKey[], incremental: boolean): number | null {
+  let spend = 0;
+  let revenue = 0;
+  for (const k of channels) {
+    const t = p.platformRoasPlan[k];
+    if (!t) {
+      if ((p.spendByChannel[k] ?? 0) > 0) return null;
+      continue;
+    }
+    spend += t.spend;
+    revenue += t.expectedRevenue * (incremental ? factor(s, k) : 1);
+  }
+  return div(revenue, spend);
 }
 
 /** The plan's acquisition spend: the same rule as `amerSpend`, so an aMER target and an aMER actual divide by the same kind of spend. */
@@ -649,6 +679,7 @@ export function channelMetricDefs(g: ChannelGroup, incremental = true): MetricDe
         const x = groupStats(t, st, g.channels, incremental);
         return div(x.iRevenue, x.spend);
       },
+      target: (p, st) => groupRoasTarget(p, st, g.channels, incremental),
     },
   ];
 }
