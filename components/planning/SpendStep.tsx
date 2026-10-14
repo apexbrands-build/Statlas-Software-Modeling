@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { addDays, addYears, dayOfWeek, endOfMonth } from "@/lib/dates";
+import { addDays, addYears, dayOfWeek, endOfMonth, todayLocal } from "@/lib/dates";
 import { eventDays, TYPE_LABEL } from "@/lib/planning/events";
 import { formatValue } from "@/lib/format";
 import { rebalance } from "@/lib/planning/alloc";
+import { dailySpendColumns, defaultSpendMonth } from "@/lib/planning/spend-columns";
 import { PLAN_PLATFORMS, type DayOverride, type PlanMonthInputs } from "@/lib/planning/types";
 import { CHANNEL_LABELS, type ChannelKey } from "@/lib/types";
 import { aggregate, aggregatePlan, planAmerSpend, totalSpend } from "@/lib/metrics";
@@ -19,8 +20,7 @@ const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
 /** Step 2: one month in detail: platform split, brand / non-acquisition share, weekday pattern and the daily table. */
 export function SpendStep({ ctx }: { ctx: PlanCtx }) {
   const { months, client, settings, rows, seasonality, setSeasonality, editInputs, fill, history, historySeasonality, events, eventMults } = ctx;
-  const firstWithInputs = months.find((m) => m.inputs) ?? months[0];
-  const [month, setMonth] = useState(firstWithInputs.month);
+  const [month, setMonth] = useState(() => defaultSpendMonth(months, todayLocal()));
   const [msg, setMsg] = useState<string | null>(null);
   const m = months.find((x) => x.month === month) ?? months[0];
   const money = (v: number | null, f: "currency0" | "currency2" | "ratio2" | "percent1" = "currency0") => formatValue(v, f, client.currency);
@@ -29,6 +29,7 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
   const totals = aggregatePlan(dayRows);
   const acqOf = (r: (typeof dayRows)[number]) => planAmerSpend(aggregatePlan([r]), settings);
   const keys = PLAN_PLATFORMS.map((p) => p.key);
+  const spendCols = dailySpendColumns(dayRows);
 
   // Last year, day by day (364 days earlier keeps the weekday) and for the month.
   const factByDate = new Map(history.facts.map((f) => [f.date, f]));
@@ -220,12 +221,17 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
             <h3 className="text-sm font-semibold">Daily plan for {MONTHS[Number(m.month.slice(5, 7)) - 1]}</h3>
             <p className="text-xs text-text-muted">Type over any daily value to fix that day (🔒). The rest of the month absorbs the difference so the month total stays the same. Days with marketing events (Calendar tab) run hotter and the other days are compressed; the lifts come from the Event Effect Model.</p>
             <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-              <table className="w-full min-w-[980px] border-collapse text-sm">
+              <table className="w-full border-collapse text-sm" style={{ minWidth: 980 + spendCols.length * 90 }}>
                 <thead>
                   <tr className="border-b border-border text-xs text-text-muted">
                     <th className="px-3 py-2 text-left">Day</th>
                     <th className="px-2 py-2 text-left">Events</th>
                     <th className="px-2 py-2 text-right">Spend</th>
+                    {spendCols.map((c) => (
+                      <th key={c.key} className="px-2 py-2 text-right font-normal">
+                        {c.label}
+                      </th>
+                    ))}
                     <th className="px-2 py-2 text-right">aMER</th>
                     <th className="px-2 py-2 text-right">New revenue</th>
                     <th className="px-2 py-2 text-right">Returning</th>
@@ -237,6 +243,11 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
                     <td className="px-3 py-1">Month total</td>
                     <td />
                     <td className="px-2 py-1 text-right tabular">{money(totals.spend)}</td>
+                    {spendCols.map((c) => (
+                      <td key={c.key} className="px-2 py-1 text-right tabular">
+                        {money(totals.spendByChannel[c.key] ?? 0)}
+                      </td>
+                    ))}
                     <td className="px-2 py-1 text-right tabular">{planAmerSpend(totals, settings) ? money(totals.newRevenue / planAmerSpend(totals, settings), "ratio2") : "–"}</td>
                     <td className="px-2 py-1 text-right tabular">{money(totals.newRevenue)}</td>
                     <td className="px-2 py-1 text-right tabular">{money(totals.returningRevenue)}</td>
@@ -264,6 +275,11 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
                         <td className="px-2 py-1 text-right">
                           <NumField value={r.spend} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { spend: Math.max(0, v) })} />
                         </td>
+                        {spendCols.map((c) => (
+                          <td key={c.key} className="px-2 py-1 text-right tabular text-text-muted">
+                            {money(r.spendByChannel[c.key] ?? 0)}
+                          </td>
+                        ))}
                         <td className="px-2 py-1 text-right tabular text-text-muted">{acqOf(r) ? (r.newRevenue / acqOf(r)).toFixed(2) : "–"}</td>
                         <td className="px-2 py-1 text-right">
                           <NumField value={r.newRevenue} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { newRevenue: Math.max(0, v) })} />
