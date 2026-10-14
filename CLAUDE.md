@@ -42,6 +42,8 @@ Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in 
 
 **ROAS targets (2026-10-14):** platform ROAS target = month aMER ÷ the channel's incrementality factor (strategist's formula). Details line "ROAS targets" (Suggested or typed per month, stored in the plan month inputs), ROAS panel in the Spend step, targets on Home's channel ROAS/iROAS tiles. `lib/planning/roas.ts`; plan `docs/superpowers/plans/2026-10-14-roas-targets.md`. Home now opens on Plan, month to date. Migration 0012 (ad-level Meta tables) is applied.
 
+**Creative Demand and Score (2026-10-14):** fourth model in the plan's Models tab (new ads needed per month, Creative Score); `lib/creative/`, screen `components/planning/models/CreativeModel.tsx`, details in `docs/planning-layer.md`. Migration 0013 (read functions over the ad tables) is written and NOT applied: apply it with the strategist's go, then run a Meta history sync and the live check.
+
 **Connector registry (2026-10-12):** `lib/providers.ts` (browser metadata) + `lib/sync/registry.ts` (sync per provider) + `lib/job-plan.ts` (job logic); max 10 parallel jobs; "Needs attention" badge after 2 failed daily syncs. Migration 0009 must be applied before deploying. How to add a connector: `docs/connector-setup.md`.
 
 **Direction (2026-10-11):** roll out to the 30+ clients. Next builds: connector foundation, then Klaviyo (email + SMS), Postscript, Omnisend, GA4, then the other ad platforms on demand. Parked ideas (TikTok Shop and cost-only channels, creative intelligence layer): `docs/future-vision.md`.
