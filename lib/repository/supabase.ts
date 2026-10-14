@@ -129,6 +129,12 @@ export class SupabaseRepository implements Repository {
         emailFlowRevenue: n(r.email_flow_revenue),
         emailOrders: n(r.email_orders),
         emailSent: n(r.email_sent),
+        // Present once the SMS sync adds these columns; until then they read as 0.
+        smsRevenue: n(r.sms_revenue),
+        smsCampaignRevenue: n(r.sms_campaign_revenue),
+        smsFlowRevenue: n(r.sms_flow_revenue),
+        smsOrders: n(r.sms_orders),
+        smsSent: n(r.sms_sent),
         channels,
       };
     });

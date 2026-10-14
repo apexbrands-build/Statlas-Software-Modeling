@@ -350,8 +350,11 @@ function Body(props: {
       <Section title="Email">
         <Grid cols={5}>{row(["emailRevenue", "emailOrders", "emailCampaignRevenue", "emailFlowRevenue", "emailRevPer1k"])}</Grid>
       </Section>
+      <Section title="SMS">
+        <Grid cols={5}>{row(["smsRevenue", "smsOrders", "smsCampaignRevenue", "smsFlowRevenue", "smsRevPer1k"])}</Grid>
+      </Section>
       <Section title="Organic">
-        <Grid cols={4}>{row(["organicRevenue", "organicOrders", "organicAov", "organicPctOfPaid"])}</Grid>
+        <Grid cols={4}>{row(["organicRevenue", "organicOrders", "organicAov", "organicPctOfRevenue"])}</Grid>
       </Section>
     </>
   );

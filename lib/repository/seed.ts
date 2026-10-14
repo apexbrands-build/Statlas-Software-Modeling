@@ -66,6 +66,8 @@ interface Profile {
   taxRate: number;
   emailShare: number;
   emailListSize: number;
+  smsShare: number;
+  smsListSize: number;
   mix: Partial<Record<ChannelKey, number>>;
   platformRoas: Partial<Record<ChannelKey, number>>;
   settings: Omit<ClientSettings, "clientId">;
@@ -113,6 +115,8 @@ const PROFILES: Profile[] = [
     taxRate: 0.1,
     emailShare: 0.22,
     emailListSize: 120_000,
+    smsShare: 0.06,
+    smsListSize: 40_000,
     mix: { google_nonbrand: 0.17, google_brand: 0.05, meta_acquisition: 0.65, meta_returning: 0.11, pinterest: 0.02 },
     platformRoas: { google_nonbrand: 2.6, google_brand: 9, meta_acquisition: 1.6, meta_returning: 3, pinterest: 4 },
     settings: baseSettings({ monthlyFixedCosts: 9000 }),
@@ -130,6 +134,8 @@ const PROFILES: Profile[] = [
     taxRate: 0.06,
     emailShare: 0.31,
     emailListSize: 260_000,
+    smsShare: 0.09,
+    smsListSize: 90_000,
     mix: { google_nonbrand: 0.22, google_brand: 0.08, meta_acquisition: 0.6, meta_returning: 0.1, pinterest: 0 },
     platformRoas: { google_nonbrand: 2.9, google_brand: 8, meta_acquisition: 1.7, meta_returning: 3.4, pinterest: 3 },
     settings: baseSettings({ otherVariablePct: 8, deliveryCostPerOrder: 2, multipliers: { ...DEFAULT_MULTIPLIERS, meta_acquisition: 1.1 } }),
@@ -147,6 +153,8 @@ const PROFILES: Profile[] = [
     taxRate: 0.07,
     emailShare: 0.14,
     emailListSize: 70_000,
+    smsShare: 0.04,
+    smsListSize: 18_000,
     mix: { google_nonbrand: 0.28, google_brand: 0.06, meta_acquisition: 0.55, meta_returning: 0.09, pinterest: 0.02 },
     platformRoas: { google_nonbrand: 2.8, google_brand: 7, meta_acquisition: 1.5, meta_returning: 3, pinterest: 3.5 },
     settings: baseSettings({ otherVariablePct: 4, deliveryCostPerOrder: 3, monthlyFixedCosts: 22000, dtcChannels: ["Online Store"] }),
@@ -241,6 +249,9 @@ function buildFact(p: Profile, date: string): DailyFact {
   const emailSent = campaignDay ? p.emailListSize * noise(k("sent"), 0.15) : p.emailListSize * 0.03;
   const emailRevenue = orderRev * p.emailShare * noise(k("email"), 0.18);
   const campaignShare = campaignDay ? 0.6 : 0.3;
+  const smsSent = campaignDay ? p.smsListSize * noise(k("ssent"), 0.15) : 0;
+  const smsRevenue = orderRev * p.smsShare * noise(k("sms"), 0.2);
+  const smsCampaignShare = campaignDay ? 0.65 : 0.25;
 
   return {
     clientId: id,
@@ -262,6 +273,11 @@ function buildFact(p: Profile, date: string): DailyFact {
     emailFlowRevenue: emailRevenue * (1 - campaignShare),
     emailOrders: Math.round(emailRevenue / (p.aov * 1.05)),
     emailSent,
+    smsRevenue,
+    smsCampaignRevenue: smsRevenue * smsCampaignShare,
+    smsFlowRevenue: smsRevenue * (1 - smsCampaignShare),
+    smsOrders: Math.round(smsRevenue / (p.aov * 0.95)),
+    smsSent,
     channels,
   };
 }

@@ -73,12 +73,13 @@ export function inputsFromFacts(facts: DailyFact[], monthsCount: number, setting
   }
   const base = t.grossSales - t.discounts;
   const cm = cmParts(t, settings);
-  // Where the revenue came from: email and organic as a share of order revenue (organic = order revenue - paid incremental - email, the dashboard's
-  // definition). No email revenue means no email data, not 0%; there is no SMS source yet.
+  // Where the revenue came from: email and organic as a share of order revenue (organic = order revenue - paid incremental - email - SMS, the dashboard's
+  // definition). No email or SMS revenue means no data for that line, not 0%.
   const orderRev = orderRevenue(t);
   const mix: PlanMonthInputs["mix"] = {};
   if (orderRev > 0) {
     if (t.emailRevenue > 0) mix.emailPct = round2((t.emailRevenue / orderRev) * 100);
+    if (t.smsRevenue > 0) mix.smsPct = round2((t.smsRevenue / orderRev) * 100);
     mix.organicPct = round2(((METRICS.organicRevenue.value(t, settings) ?? 0) / orderRev) * 100);
   }
   return {

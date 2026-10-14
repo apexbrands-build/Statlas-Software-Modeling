@@ -35,6 +35,11 @@ export interface Totals {
   emailFlowRevenue: number;
   emailOrders: number;
   emailSent: number;
+  smsRevenue: number;
+  smsCampaignRevenue: number;
+  smsFlowRevenue: number;
+  smsOrders: number;
+  smsSent: number;
   channels: Record<ChannelKey, ChannelDay>;
   /** Ad spend a plan has but did not split by platform (always 0 for actual days). Counts in total spend, MER and CM. */
   unassignedSpend: number;
@@ -65,6 +70,11 @@ export function emptyTotals(): Totals {
     emailFlowRevenue: 0,
     emailOrders: 0,
     emailSent: 0,
+    smsRevenue: 0,
+    smsCampaignRevenue: 0,
+    smsFlowRevenue: 0,
+    smsOrders: 0,
+    smsSent: 0,
     channels: emptyChannels(),
     unassignedSpend: 0,
   };
@@ -91,6 +101,11 @@ export function aggregate(facts: DailyFact[]): Totals {
     t.emailFlowRevenue += f.emailFlowRevenue;
     t.emailOrders += f.emailOrders;
     t.emailSent += f.emailSent;
+    t.smsRevenue += f.smsRevenue ?? 0;
+    t.smsCampaignRevenue += f.smsCampaignRevenue ?? 0;
+    t.smsFlowRevenue += f.smsFlowRevenue ?? 0;
+    t.smsOrders += f.smsOrders ?? 0;
+    t.smsSent += f.smsSent ?? 0;
     t.unassignedSpend += f.unassignedSpend ?? 0;
     for (const k of CHANNEL_KEYS) {
       t.channels[k].spend += f.channels[k].spend;
@@ -602,14 +617,61 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     value: (t) => div(t.emailRevenue, t.emailSent / 1000),
   }),
   def({
+    key: "smsRevenue",
+    additive: true,
+    label: "SMS Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "SMS platform",
+    formula: "SMS-attributed revenue (campaigns + flows)",
+    value: (t) => t.smsRevenue,
+    target: (p) => p.mixRevenue.sms ?? null,
+  }),
+  def({
+    key: "smsOrders",
+    label: "SMS Orders",
+    format: "number",
+    direction: "up",
+    source: "SMS platform",
+    formula: "SMS-attributed orders",
+    value: (t) => t.smsOrders,
+  }),
+  def({
+    key: "smsCampaignRevenue",
+    label: "SMS Campaign Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "SMS platform",
+    formula: "SMS campaign-attributed revenue",
+    value: (t) => t.smsCampaignRevenue,
+  }),
+  def({
+    key: "smsFlowRevenue",
+    label: "SMS Flow Revenue",
+    format: "currency0",
+    direction: "up",
+    source: "SMS platform",
+    formula: "SMS automation (flow) attributed revenue",
+    value: (t) => t.smsFlowRevenue,
+  }),
+  def({
+    key: "smsRevPer1k",
+    label: "SMS Revenue / 1K Sent",
+    format: "currency2",
+    direction: "up",
+    source: "SMS platform",
+    formula: "SMS revenue ÷ (messages sent ÷ 1,000)",
+    value: (t) => div(t.smsRevenue, t.smsSent / 1000),
+  }),
+  def({
     key: "organicRevenue",
     additive: true,
     label: "Organic Revenue",
     format: "currency0",
     direction: "up",
     source: "Derived",
-    formula: "Order Revenue − Paid iRevenue − Email Revenue (floored at 0)",
-    value: (t, s) => Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue),
+    formula: "Order Revenue − Paid iRevenue − Email Revenue − SMS Revenue (floored at 0)",
+    value: (t, s) => Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue - t.smsRevenue),
     target: (p) => p.mixRevenue.organic ?? null,
   }),
   def({
@@ -618,8 +680,8 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     format: "number",
     direction: "up",
     source: "Derived",
-    formula: "Orders − Paid iOrders − Email orders (floored at 0)",
-    value: (t, s) => Math.max(0, orders(t) - paidStats(t, s).iOrders - t.emailOrders),
+    formula: "Orders − Paid iOrders − Email orders − SMS orders (floored at 0)",
+    value: (t, s) => Math.max(0, orders(t) - paidStats(t, s).iOrders - t.emailOrders - t.smsOrders),
   }),
   def({
     key: "organicAov",
@@ -629,22 +691,20 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     source: "Derived",
     formula: "Organic revenue ÷ organic orders",
     value: (t, s) => {
-      const rev = Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue);
-      const ord = Math.max(0, orders(t) - paidStats(t, s).iOrders - t.emailOrders);
+      const rev = Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue - t.smsRevenue);
+      const ord = Math.max(0, orders(t) - paidStats(t, s).iOrders - t.emailOrders - t.smsOrders);
       return div(rev, ord);
     },
   }),
   def({
-    key: "organicPctOfPaid",
-    label: "Organic % of Paid",
+    key: "organicPctOfRevenue",
+    label: "Organic % of Revenue",
     format: "percent1",
     direction: "up",
     source: "Derived",
-    formula: "Organic revenue ÷ Paid iRevenue",
-    value: (t, s) => {
-      const p = paidStats(t, s);
-      return div(Math.max(0, orderRevenue(t) - p.iRevenue - t.emailRevenue), p.iRevenue);
-    },
+    formula: "Organic revenue ÷ Order Revenue",
+    value: (t, s) => div(Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue - t.smsRevenue), orderRevenue(t)),
+    target: (p) => (p.mixRevenue.organic !== undefined && p.orderRevenue > 0 ? p.mixRevenue.organic / p.orderRevenue : null),
   }),
 ]);
 

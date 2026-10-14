@@ -101,6 +101,12 @@ export interface DailyFact {
   emailFlowRevenue: number;
   emailOrders: number;
   emailSent: number;
+  /** SMS (Postscript, Klaviyo SMS) attribution, same shape as email. Optional: absent until a client has an SMS source, and then counts as 0. */
+  smsRevenue?: number;
+  smsCampaignRevenue?: number;
+  smsFlowRevenue?: number;
+  smsOrders?: number;
+  smsSent?: number;
   channels: Record<ChannelKey, ChannelDay>;
   /** Plan days only: ad spend the plan has not split by platform. Actual days never set it. */
   unassignedSpend?: number;
@@ -253,4 +259,4 @@ export interface CampaignDay {
   platformPurchases: number;
 }
 
-export type Source = "Shopify" | "Platform-reported" | "Klaviyo" | "Derived" | "Settings";
+export type Source = "Shopify" | "Platform-reported" | "Klaviyo" | "SMS platform" | "Derived" | "Settings";
