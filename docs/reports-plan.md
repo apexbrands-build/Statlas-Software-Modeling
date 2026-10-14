@@ -12,6 +12,7 @@ Build all Recommended reports from Statlas **except** DTC Index, Trend Explorer 
 | Marketing Efficiency Report | `mer` | Built (Goal columns appear when a plan exists) |
 | P&L | `pnl` | Built (#s As: Whole / Thousands / % of revenue; Revenue By: Simplified / New vs Returning / Paid vs Organic; Compare A/P/F: P and F live now, see docs/planning-layer.md) |
 | Paid Media Overview | `ads` | Built (columns are our design; Statlas's table never loaded) |
+| Best Creatives | `best-creatives` | Built 2026-10-14 (our design): the client's Meta ads for a range, ranked against the account's own average. Metric chips (Spend, Est. CM, Revenue, ROAS by default; Purchases, CPA, CTR, CPM, share of spend), rank by, filters (format, catalog, live, campaign contains), a trend column (spend against the previous 7 days: +%, New, Stopped), Load more in pages of 50, format cards. Est. CM = ad revenue x the store's margin before ads - spend. Data: ad-level Meta tables (migration 0012) through the functions of migration 0014 (written, not applied). The Meta ROAS tile on Home links here. |
 | Facebook / Google Trackers | `facebook-tracker`, `google-tracker` | Paused: needs per-campaign daily targets from the plan layer |
 | Contribution Margin | `contribution-margin` | Built 2026-10-12 (daily rollups; CM equals the Home tile) |
 | Revenue Overview | `revenue-overview` | Built 2026-10-12 (added to the approved scope) |

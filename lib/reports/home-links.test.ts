@@ -16,6 +16,15 @@ describe("home report links", () => {
     expect(homeReportHref("orders")).toBe("/reporting/new-vs-returning");
   });
 
+  it("links Meta's ROAS tile (merged or split rows) to Best Creatives, carries Home's range, and leaves Meta spend and Meta Returning without a link", () => {
+    expect(homeReportHref("meta.iroas")).toBe("/reporting/best-creatives");
+    expect(homeReportHref("meta_acquisition.iroas")).toBe("/reporting/best-creatives");
+    expect(homeReportHref("meta_acquisition.iroas", { from: "2026-10-01", to: "2026-10-13" })).toBe("/reporting/best-creatives?from=2026-10-01&to=2026-10-13");
+    expect(homeReportHref("meta_returning.iroas")).toBeNull();
+    expect(homeReportHref("meta_acquisition.spend")).toBeNull();
+    expect(homeReportHref("meta.spend")).toBeNull();
+  });
+
   it("shows no link until the report is ready, and none for unmapped metrics", () => {
     expect(homeReportHref("emailRevenue")).toBeNull();
     expect(homeReportHref("organicRevenue")).toBeNull();

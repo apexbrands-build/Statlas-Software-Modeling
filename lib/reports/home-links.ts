@@ -14,6 +14,9 @@ export const HOME_REPORT_LINKS: Record<string, string> = {
   emailCampaignRevenue: "email-metrics",
   emailFlowRevenue: "email-metrics",
   emailRevPer1k: "email-metrics",
+  // Meta ROAS / iROAS tile (merged row and the split acquisition row): the ad-by-ad view behind it.
+  "meta.iroas": "best-creatives",
+  "meta_acquisition.iroas": "best-creatives",
 };
 
 /** Link for a Home tile, carrying Home's date range, or null when the metric has no ready report. */
