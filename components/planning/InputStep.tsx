@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { dayOfWeek } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
-import { aggregatePlan } from "@/lib/metrics";
+import { aggregatePlan, planAmerSpend } from "@/lib/metrics";
 import { TYPE_LABEL } from "@/lib/planning/events";
 import { PLAN_PLATFORMS } from "@/lib/planning/types";
 import type { ChannelKey } from "@/lib/types";
@@ -12,12 +12,14 @@ import { btn, inputClass, MONTHS, WEEKDAYS } from "./ui";
 
 /** The final daily rows (what Home and the reports compare against) with events and every P&L line. Read-only; CSV copy and download. */
 export function InputStep({ ctx }: { ctx: PlanCtx }) {
-  const { months, rows, client, events } = ctx;
+  const { months, rows, client, events, settings } = ctx;
   const [pl, setPl] = useState(true);
   const [month, setMonth] = useState((months.find((m) => m.inputs) ?? months[0]).month);
   const [copied, setCopied] = useState(false);
   const day = rows[month] ?? [];
   const t = aggregatePlan(day);
+  const acqOf = (r: (typeof day)[number]) => planAmerSpend(aggregatePlan([r]), settings);
+  const tAcq = planAmerSpend(t, settings);
   const f = (v: number | null, fmt: "currency0" | "ratio2" | "percent1" = "currency0") => formatValue(v, fmt, client.currency);
   const channels: { key: ChannelKey; label: string }[] = PLAN_PLATFORMS.flatMap((p) => [
     { key: p.main, label: `${p.label}` },
@@ -37,7 +39,7 @@ export function InputStep({ ctx }: { ctx: PlanCtx }) {
   const csv = () => {
     const head = ["Date", "Events", "Total revenue", "Spend", "MER", "aMER", "New revenue", "Returning revenue", "CM", ...PL_COLS.map((c) => c.label), ...channels.map((c) => `${c.label} spend`)];
     const q = (x: string) => `"${x.replace(/"/g, '""')}"`;
-    const body = day.map((r) => [r.date, q(eventsOn(r.date).join("; ")), r.orderRevenue, r.spend, r.spend ? r.orderRevenue / r.spend : "", r.spend ? r.newRevenue / r.spend : "", r.newRevenue, r.returningRevenue, r.cm, ...PL_COLS.map((c) => c.get(r)), ...channels.map((c) => r.spendByChannel[c.key] ?? 0)].join(","));
+    const body = day.map((r) => [r.date, q(eventsOn(r.date).join("; ")), r.orderRevenue, r.spend, r.spend ? r.orderRevenue / r.spend : "", acqOf(r) ? r.newRevenue / acqOf(r) : "", r.newRevenue, r.returningRevenue, r.cm, ...PL_COLS.map((c) => c.get(r)), ...channels.map((c) => r.spendByChannel[c.key] ?? 0)].join(","));
     return [head.join(","), ...body].join("\n");
   };
   const download = () => {
@@ -101,7 +103,7 @@ export function InputStep({ ctx }: { ctx: PlanCtx }) {
                 <Num v={f(t.orderRevenue)} />
                 <Num v={f(t.spend)} />
                 <Num v={t.spend ? f(t.orderRevenue / t.spend, "ratio2") : "–"} />
-                <Num v={t.spend ? f(t.newRevenue / t.spend, "ratio2") : "–"} />
+                <Num v={tAcq ? f(t.newRevenue / tAcq, "ratio2") : "–"} />
                 <Num v={f(t.newRevenue)} />
                 <Num v={f(t.returningRevenue)} />
                 <Num v={f(t.cm)} />
@@ -138,7 +140,7 @@ export function InputStep({ ctx }: { ctx: PlanCtx }) {
                   <Num v={f(r.orderRevenue)} />
                   <Num v={f(r.spend)} />
                   <Num v={r.spend ? f(r.orderRevenue / r.spend, "ratio2") : "–"} />
-                  <Num v={r.spend ? f(r.newRevenue / r.spend, "ratio2") : "–"} />
+                  <Num v={acqOf(r) ? f(r.newRevenue / acqOf(r), "ratio2") : "–"} />
                   <Num v={f(r.newRevenue)} />
                   <Num v={f(r.returningRevenue)} />
                   <Num v={f(r.cm)} />

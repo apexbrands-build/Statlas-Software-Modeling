@@ -1,5 +1,4 @@
-import { RETENTION_CHANNELS } from "../channels";
-import { aggregate, amerSpend, cmParts, div, orderRevenue, totalSpend } from "../metrics";
+import { aggregate, aggregatePlan, amerSpend, cmParts, div, orderRevenue, planAmerSpend, totalSpend } from "../metrics";
 import type { ClientSettings, DailyFact, PlanTargetDay, StretchGoal } from "../types";
 import type { Curve } from "./new-customer";
 import type { StretchFlag } from "./stretch";
@@ -32,16 +31,6 @@ function emptyMonth(year: number, i: number): MonthFigures {
   return { month: `${monthKey(year, i)}-01`, hasData: false, spend: 0, acqSpend: 0, amer: null, newRevenue: 0, returningRevenue: 0, totalRevenue: 0, cm: 0, opex: 0, ebitda: 0 };
 }
 
-function planAcqSpend(rows: PlanTargetDay[], s: ClientSettings): number {
-  let sp = 0;
-  for (const r of rows) {
-    sp += r.spend;
-    if (s.excludeBrandFromAmer) sp -= r.spendByChannel.google_brand ?? 0;
-    if (s.excludeMetaReturningFromAmer) for (const k of RETENTION_CHANNELS) sp -= r.spendByChannel[k] ?? 0;
-  }
-  return sp;
-}
-
 /** Twelve months (January first) of a plan's figures, from its daily rows and its month inputs. */
 export function planFigures(rows: PlanTargetDay[], months: PlanMonth[], year: number, s: ClientSettings): MonthFigures[] {
   return Array.from({ length: 12 }, (_, i) => {
@@ -52,7 +41,7 @@ export function planFigures(rows: PlanTargetDay[], months: PlanMonth[], year: nu
     const newRevenue = sum((r) => r.newRevenue);
     const returningRevenue = sum((r) => r.returningRevenue);
     const cm = sum((r) => r.cm);
-    const acqSpend = planAcqSpend(mrows, s);
+    const acqSpend = planAmerSpend(aggregatePlan(mrows), s);
     const opex = months.find((m) => m.month.startsWith(key))?.inputs?.fixedCosts ?? s.monthlyFixedCosts;
     return { month: `${key}-01`, hasData: true, spend: sum((r) => r.spend), acqSpend, amer: div(newRevenue, acqSpend), newRevenue, returningRevenue, totalRevenue: newRevenue + returningRevenue, cm, opex, ebitda: cm - opex };
   });

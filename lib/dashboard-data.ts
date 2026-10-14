@@ -132,7 +132,7 @@ export interface TileNumbers extends Comparison {
 export function tileNumbers(def: MetricDef, d: DashData, mode: CompareModeName): TileNumbers {
   const actual = d.cur.days > 0 ? def.value(d.cur, d.settings) : null;
   let ref: number | null = null;
-  if (mode === "plan") ref = def.target && d.planTotals.days > 0 ? def.target(d.planTotals) : null;
+  if (mode === "plan") ref = def.target && d.planTotals.days > 0 ? def.target(d.planTotals, d.settings) : null;
   else if (mode === "yoy") ref = d.ly.days > 0 ? def.value(d.ly, d.settings) : null;
   else if (mode === "custom") ref = d.custom.days > 0 ? def.value(d.custom, d.settings) : null;
   else ref = d.prev.days > 0 ? def.value(d.prev, d.settings) : null;

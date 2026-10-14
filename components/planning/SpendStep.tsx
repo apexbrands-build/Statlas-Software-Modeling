@@ -6,7 +6,7 @@ import { eventDays, TYPE_LABEL } from "@/lib/planning/events";
 import { formatValue } from "@/lib/format";
 import { rebalance } from "@/lib/planning/alloc";
 import { PLAN_PLATFORMS, type DayOverride } from "@/lib/planning/types";
-import { aggregate, aggregatePlan, totalSpend } from "@/lib/metrics";
+import { aggregate, aggregatePlan, planAmerSpend, totalSpend } from "@/lib/metrics";
 import { Legend, LineChart } from "./models/charts";
 import type { PlanCtx } from "./ctx";
 import { FillMenu } from "./FillMenu";
@@ -16,7 +16,7 @@ const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
 
 /** Step 2: one month in detail: platform split, brand / non-acquisition share, weekday pattern and the daily table. */
 export function SpendStep({ ctx }: { ctx: PlanCtx }) {
-  const { months, client, rows, seasonality, setSeasonality, editInputs, fill, history, historySeasonality, events, eventMults } = ctx;
+  const { months, client, settings, rows, seasonality, setSeasonality, editInputs, fill, history, historySeasonality, events, eventMults } = ctx;
   const firstWithInputs = months.find((m) => m.inputs) ?? months[0];
   const [month, setMonth] = useState(firstWithInputs.month);
   const [msg, setMsg] = useState<string | null>(null);
@@ -25,6 +25,7 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
   const inputs = m.inputs;
   const dayRows = rows[m.month] ?? [];
   const totals = aggregatePlan(dayRows);
+  const acqOf = (r: (typeof dayRows)[number]) => planAmerSpend(aggregatePlan([r]), settings);
   const keys = PLAN_PLATFORMS.map((p) => p.key);
 
   // Last year, day by day (364 days earlier keeps the weekday) and for the month.
@@ -232,7 +233,7 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
                     <td className="px-3 py-1">Month total</td>
                     <td />
                     <td className="px-2 py-1 text-right tabular">{money(totals.spend)}</td>
-                    <td className="px-2 py-1 text-right tabular">{totals.spend ? money(totals.newRevenue / totals.spend, "ratio2") : "–"}</td>
+                    <td className="px-2 py-1 text-right tabular">{planAmerSpend(totals, settings) ? money(totals.newRevenue / planAmerSpend(totals, settings), "ratio2") : "–"}</td>
                     <td className="px-2 py-1 text-right tabular">{money(totals.newRevenue)}</td>
                     <td className="px-2 py-1 text-right tabular">{money(totals.returningRevenue)}</td>
                     <td className="px-2 py-1 text-right tabular">{money(totals.orderRevenue)}</td>
@@ -259,7 +260,7 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
                         <td className="px-2 py-1 text-right">
                           <NumField value={r.spend} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { spend: Math.max(0, v) })} />
                         </td>
-                        <td className="px-2 py-1 text-right tabular text-text-muted">{r.spend ? (r.newRevenue / r.spend).toFixed(2) : "–"}</td>
+                        <td className="px-2 py-1 text-right tabular text-text-muted">{acqOf(r) ? (r.newRevenue / acqOf(r)).toFixed(2) : "–"}</td>
                         <td className="px-2 py-1 text-right">
                           <NumField value={r.newRevenue} disabled={m.locked} className="w-24" onCommit={(v) => setOverride(r.date, { newRevenue: Math.max(0, v) })} />
                         </td>

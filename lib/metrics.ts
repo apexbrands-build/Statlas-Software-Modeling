@@ -103,6 +103,10 @@ export interface PlanTotals {
   orders: number;
   newOrders: number;
   spend: number;
+  /** Planned Google Brand spend, kept apart so aMER can leave it out like the actuals do. */
+  brandSpend: number;
+  /** Planned retention (returning-audience) spend of every platform, likewise. */
+  retentionSpend: number;
   cm: number;
   spendByChannel: Partial<Record<ChannelKey, number>>;
   /** Optional P&L lines; null when the plan does not forecast them. */
@@ -121,6 +125,8 @@ export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
     orders: 0,
     newOrders: 0,
     spend: 0,
+    brandSpend: 0,
+    retentionSpend: 0,
     cm: 0,
     spendByChannel: {},
     grossSales: null,
@@ -142,6 +148,8 @@ export function aggregatePlan(rows: PlanTargetDay[]): PlanTotals {
       const v = r.spendByChannel[k];
       if (v !== undefined) p.spendByChannel[k] = (p.spendByChannel[k] ?? 0) + v;
     }
+    p.brandSpend += r.spendByChannel.google_brand ?? 0;
+    for (const k of RETENTION_CHANNELS) p.retentionSpend += r.spendByChannel[k] ?? 0;
   }
   return p;
 }
@@ -229,6 +237,11 @@ export function amerSpend(t: Totals, s: ClientSettings): number {
   return sp;
 }
 
+/** The plan's acquisition spend: the same rule as `amerSpend`, so an aMER target and an aMER actual divide by the same kind of spend. */
+export function planAmerSpend(p: PlanTotals, s: ClientSettings): number {
+  return p.spend - (s.excludeBrandFromAmer ? p.brandSpend : 0) - (s.excludeMetaReturningFromAmer ? p.retentionSpend : 0);
+}
+
 /* ------------------------------------------------------------------ */
 /* Metric registry                                                     */
 /* ------------------------------------------------------------------ */
@@ -245,7 +258,7 @@ export interface MetricDef {
   formula: string;
   value: (t: Totals, s: ClientSettings) => number | null;
   /** Plan target for the same period, if the plan covers this metric. */
-  target?: (p: PlanTotals) => number | null;
+  target?: (p: PlanTotals, s: ClientSettings) => number | null;
 }
 
 const def = (d: MetricDef): [string, MetricDef] => [d.key, d];
@@ -399,7 +412,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     source: "Derived",
     formula: "New Order Revenue ÷ acquisition ad spend (total spend unless excluded in settings)",
     value: (t, s) => div(t.newOrderRevenue, amerSpend(t, s)),
-    target: (p) => div(p.newRevenue, p.spend),
+    target: (p, s) => div(p.newRevenue, planAmerSpend(p, s)),
   }),
   def({
     key: "paidIRevenue",

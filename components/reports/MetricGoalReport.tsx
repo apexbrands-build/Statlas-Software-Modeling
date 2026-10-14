@@ -38,7 +38,7 @@ export function MetricGoalReport({ slug, specs, defaultGroup = "daily" }: { slug
       const cells: Cell[] = visible.flatMap((s) => {
         const actual = s.value(tot, data.settings);
         if (!(showGoals && s.goal)) return [{ text: formatValue(actual, s.format, cur) }];
-        const goal = plan.days > 0 ? s.goal(plan) : null;
+        const goal = plan.days > 0 ? s.goal(plan, data.settings) : null;
         const c = compare(actual, goal, s.direction);
         return [
           { text: formatValue(actual, s.format, cur), tone: c.tone },
