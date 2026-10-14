@@ -1,6 +1,8 @@
 export type ChannelKey =
   | "google_nonbrand"
   | "google_brand"
+  | "google_nonbrand_returning"
+  | "google_brand_returning"
   | "meta_acquisition"
   | "meta_returning"
   | "pinterest"
@@ -19,6 +21,8 @@ export type ChannelKey =
 export const CHANNEL_KEYS: ChannelKey[] = [
   "google_nonbrand",
   "google_brand",
+  "google_nonbrand_returning",
+  "google_brand_returning",
   "meta_acquisition",
   "meta_returning",
   "pinterest",
@@ -38,6 +42,8 @@ export const CHANNEL_KEYS: ChannelKey[] = [
 export const CHANNEL_LABELS: Record<ChannelKey, string> = {
   google_nonbrand: "Google",
   google_brand: "Google Brand",
+  google_nonbrand_returning: "Google Returning",
+  google_brand_returning: "Google Brand Returning",
   meta_acquisition: "Meta",
   meta_returning: "Meta Returning",
   pinterest: "Pinterest",
@@ -133,6 +139,9 @@ export interface ExtraSettings {
   pinterestAttribution: string;
   /** A campaign name containing this tag (as its own word, e.g. "NB") is never brand. */
   nonBrandTag: string;
+  /** Tags in a Google campaign name that mark its audience (own words, any case): RTN = existing customers, ACQ = new. Empty switches the tag off. */
+  acqTag: string;
+  rtnTag: string;
   dontSeparateBrand: boolean;
   dontSeparateRetention: boolean;
   dontSeparateReactivation: boolean;

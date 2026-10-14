@@ -16,7 +16,7 @@ const planSpend = (p: PlanTotals, keys: ChannelKey[]) => keys.reduce((s, k) => s
 const sum = (t: Totals, keys: ChannelKey[], f: "spend" | "platformRevenue") => keys.reduce((s, k) => s + t.channels[k][f], 0);
 
 const META: ChannelKey[] = ["meta_acquisition", "meta_returning"];
-const GOOGLE: ChannelKey[] = ["google_nonbrand", "google_brand"];
+const GOOGLE: ChannelKey[] = ["google_nonbrand", "google_brand", "google_nonbrand_returning", "google_brand_returning"];
 
 /** Metrics of the Marketing Efficiency Report, in display order. */
 export const MER_SPECS: MetricSpec[] = [

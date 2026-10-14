@@ -7,6 +7,8 @@ export const DAILY_SPEND_LABELS: Record<ChannelKey, string> = {
   meta_returning: "Meta returning",
   google_nonbrand: "Google non-brand",
   google_brand: "Google brand",
+  google_nonbrand_returning: "Google returning",
+  google_brand_returning: "Google brand returning",
   pinterest: "Pinterest",
   pinterest_returning: "Pinterest returning",
   youtube: "YouTube",

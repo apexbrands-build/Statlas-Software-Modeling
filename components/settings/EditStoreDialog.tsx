@@ -218,6 +218,12 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, chann
         <Field label="Non-brand tag" hint='A campaign with this tag as its own word in the name (e.g. "AB | NB | Sales") is never counted as brand, even if it also contains the brand keyword.'>
           <input className={inputCls} value={x.nonBrandTag} onChange={(e) => ex("nonBrandTag", e.target.value)} />
         </Field>
+        <Field label="Returning-customer tag" hint='A Google campaign with this tag as its own word in the name (e.g. "US | RTN | Search | Brand") is counted as returning customers: Google Returning and Google Brand Returning, kept out of new-customer paid revenue. Leave empty to switch it off.'>
+          <input className={inputCls} value={x.rtnTag} onChange={(e) => ex("rtnTag", e.target.value)} />
+        </Field>
+        <Field label="New-customer tag" hint='A campaign with this tag (e.g. "ACQ") is new customers. Untagged campaigns count as new too, so this only matters when a name carries both tags.'>
+          <input className={inputCls} value={x.acqTag} onChange={(e) => ex("acqTag", e.target.value)} />
+        </Field>
         <Check checked={x.dontSeparateBrand} onChange={(v) => ex("dontSeparateBrand", v)} label={'Don\'t Separate "Brand" Campaigns from Search'} hint="Checking this will make all paid search spend count as Acquisition (saved, not applied yet)" />
         <Check checked={x.dontSeparateRetention} onChange={(v) => ex("dontSeparateRetention", v)} label={'Don\'t Separate Campaigns with "Retention" from Acquisition'} hint="Saved, not applied yet" />
         <Check checked={x.dontSeparateReactivation} onChange={(v) => ex("dontSeparateReactivation", v)} label={'Don\'t Separate Campaigns with "Reactivation" (also: Reengagement) from Acquisition'} hint="Saved, not applied yet" />

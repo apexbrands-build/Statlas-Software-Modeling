@@ -1,6 +1,7 @@
 import { PLATFORMS } from "../channels";
 import { addDays, diffDays, startOfWeek } from "../dates";
 import { div, factor } from "../metrics";
+import { googleChannel } from "../sync/google-split";
 import { CHANNEL_LABELS, type CampaignDay, type ChannelKey, type ClientSettings } from "../types";
 
 export type PmGroup = "campaign" | "platform" | "type" | "day" | "week" | "month";
@@ -29,7 +30,8 @@ const platformId = (p: string) => (p === "google_ads" ? "google" : p);
 export function channelOf(c: Pick<CampaignDay, "platform" | "category" | "audience">): ChannelKey {
   const plat = PLATFORMS.find((p) => p.id === platformId(c.platform));
   if (!plat) return "meta_acquisition";
-  const nonAcq = plat.id === "google" ? c.category === "brand" : c.audience === "returning" || c.category === "retention";
+  if (plat.id === "google") return googleChannel(c.category === "brand", c.audience);
+  const nonAcq = c.audience === "returning" || c.category === "retention";
   return nonAcq ? plat.nonAcquisition : plat.acquisition;
 }
 

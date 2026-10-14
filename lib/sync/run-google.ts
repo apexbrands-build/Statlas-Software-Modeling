@@ -1,7 +1,7 @@
 import "server-only";
 import { adsSearch } from "@/lib/google";
 import { getAdminClient } from "@/lib/supabase/server";
-import { isBrandCampaign, mergeGoogleRows } from "./google-split";
+import { channelTotals, classifyGoogleDays, mergeGoogleRows } from "./google-split";
 import { resolveRange } from "./range";
 
 
@@ -15,7 +15,9 @@ export async function syncGoogle(integrationId: string, body: { from?: string; t
   try {
     const { data: settings } = await admin.from("client_settings").select("brand_campaign_keyword,extra").eq("client_id", integration.client_id).maybeSingle();
     const keyword = (settings?.brand_campaign_keyword as string | undefined) ?? "brand";
-    const nonBrandTag = ((settings?.extra as { nonBrandTag?: string } | null)?.nonBrandTag ?? "NB") as string;
+    const extra = (settings?.extra ?? {}) as { nonBrandTag?: string; acqTag?: string; rtnTag?: string };
+    const nonBrandTag = extra.nonBrandTag ?? "NB";
+    const rules = { keyword, nonBrandTag, acqTag: extra.acqTag ?? "ACQ", rtnTag: extra.rtnTag ?? "RTN" };
 
     const { from: since, to: until } = resolveRange(body, 30);
     const range = `segments.date BETWEEN '${since}' AND '${until}'`;
@@ -31,7 +33,7 @@ export async function syncGoogle(integrationId: string, body: { from?: string; t
     } catch (e) {
       note = `Purchase conversions unavailable: ${e instanceof Error ? e.message : "error"}`;
     }
-    const campaignDays = mergeGoogleRows(costRows, purchaseRows);
+    const campaignDays = classifyGoogleDays(mergeGoogleRows(costRows, purchaseRows), rules);
 
     const spendRows = campaignDays.map((c) => ({
       client_id: integration.client_id,
@@ -39,8 +41,8 @@ export async function syncGoogle(integrationId: string, body: { from?: string; t
       platform: "google_ads",
       campaign_id: c.campaignId,
       campaign_name: c.campaignName,
-      category: isBrandCampaign(c.campaignName, keyword, nonBrandTag) ? "brand" : "acquisition",
-      audience_type: "unknown",
+      category: c.category,
+      audience_type: c.audience,
       spend: c.spend,
       platform_revenue: c.revenue,
       platform_purchases: c.purchases,
@@ -51,33 +53,21 @@ export async function syncGoogle(integrationId: string, body: { from?: string; t
       if (error) throw new Error(error.message);
     }
 
-    const agg = new Map<string, { spend: number; rev: number; pur: number }>();
-    for (const r of spendRows) {
-      const channel = r.category === "brand" ? "google_brand" : "google_nonbrand";
-      const k = `${r.date}|${channel}`;
-      const a = agg.get(k) ?? { spend: 0, rev: 0, pur: 0 };
-      a.spend += r.spend;
-      a.rev += r.platform_revenue;
-      a.pur += r.platform_purchases;
-      agg.set(k, a);
-    }
-    await admin.from("daily_channel_facts").delete().eq("client_id", integration.client_id).in("channel", ["google_nonbrand", "google_brand"]).gte("date", since).lte("date", until);
-    const channelRows = [...agg.entries()].map(([k, v]) => {
-      const [date, channel] = k.split("|");
-      return { client_id: integration.client_id, date, channel, spend: v.spend, platform_revenue: v.rev, platform_purchases: v.pur, updated_at: new Date().toISOString() };
-    });
+    await admin.from("daily_channel_facts").delete().eq("client_id", integration.client_id).in("channel", ["google_nonbrand", "google_brand", "google_nonbrand_returning", "google_brand_returning"]).gte("date", since).lte("date", until);
+    const channelRows = channelTotals(campaignDays).map((r) => ({ client_id: integration.client_id, date: r.date, channel: r.channel, spend: r.spend, platform_revenue: r.platformRevenue, platform_purchases: r.platformPurchases, updated_at: new Date().toISOString() }));
     for (let i = 0; i < channelRows.length; i += 500) {
       const { error } = await admin.from("daily_channel_facts").insert(channelRows.slice(i, i + 500));
       if (error) throw new Error(error.message);
     }
 
     const brandSpend = spendRows.filter((r) => r.category === "brand").reduce((s, r) => s + r.spend, 0);
+    const returningSpend = spendRows.filter((r) => r.audience_type === "returning").reduce((s, r) => s + r.spend, 0);
     const now = new Date().toISOString();
     const { data: cov } = await admin.from("integrations").select("coverage_start,coverage_end").eq("id", integrationId).single();
     const covStart = cov?.coverage_start && cov.coverage_start < since ? cov.coverage_start : since;
     const covEnd = cov?.coverage_end && cov.coverage_end > until ? cov.coverage_end : until;
     await admin.from("integrations").update({ status: "connected", consecutive_failures: 0, last_synced_at: now, last_error: note ?? null, coverage_start: covStart, coverage_end: covEnd }).eq("id", integrationId);
-    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: [note, `Brand spend (name contains "${keyword}", not tagged ${nonBrandTag || "–"}): ${brandSpend.toFixed(2)}`].filter(Boolean).join(" | ") }).eq("id", run?.id ?? "");
+    await admin.from("sync_runs").update({ status: "ok", finished_at: now, rows_written: spendRows.length, message: [note, `Brand spend (name contains "${keyword}", not tagged ${nonBrandTag || "–"}): ${brandSpend.toFixed(2)}`, `Returning spend (tagged ${rules.rtnTag || "–"}): ${returningSpend.toFixed(2)}`].filter(Boolean).join(" | ") }).eq("id", run?.id ?? "");
     return { rows: spendRows.length, note };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";

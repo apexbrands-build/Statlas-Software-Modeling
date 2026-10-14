@@ -36,11 +36,11 @@ export interface PnlSection {
   rows: PnlRow[];
 }
 
-const SEARCH: ChannelKey[] = ["google_nonbrand", "google_brand", "bing", "bing_returning"];
+const SEARCH: ChannelKey[] = ["google_nonbrand", "google_brand", "google_nonbrand_returning", "google_brand_returning", "bing", "bing_returning"];
 const SOCIAL: ChannelKey[] = ["meta_acquisition", "meta_returning", "pinterest", "pinterest_returning", "tiktok", "tiktok_returning", "snapchat", "snapchat_returning"];
 const OTHER_ADS: ChannelKey[] = ["youtube", "youtube_returning", "applovin", "applovin_returning"];
 const META: ChannelKey[] = ["meta_acquisition", "meta_returning"];
-const GOOGLE: ChannelKey[] = ["google_nonbrand", "google_brand"];
+const GOOGLE: ChannelKey[] = ["google_nonbrand", "google_brand", "google_nonbrand_returning", "google_brand_returning"];
 const PINTEREST: ChannelKey[] = ["pinterest", "pinterest_returning"];
 
 const sp = (t: Totals, keys: ChannelKey[]) => keys.reduce((s, k) => s + t.channels[k].spend, 0);

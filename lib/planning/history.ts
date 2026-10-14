@@ -1,7 +1,9 @@
 import { addDays, addYears, dayOfWeek, endOfMonth, startOfMonth } from "../dates";
 import { aggregate, amerSpend, cmParts, div, METRICS, orderRevenue } from "../metrics";
-import type { ClientSettings, DailyFact, PlanSeasonality } from "../types";
+import type { ChannelKey, ClientSettings, DailyFact, PlanSeasonality } from "../types";
 import { PLAN_PLATFORMS, type PlanMonthInputs } from "./types";
+
+const GOOGLE_RETURNING: Partial<Record<ChannelKey, ChannelKey>> = { google_nonbrand: "google_nonbrand_returning", google_brand: "google_brand_returning" };
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -60,7 +62,9 @@ export function inputsFromFacts(facts: DailyFact[], monthsCount: number, setting
   const t = aggregate(facts);
   if (t.days === 0) return null;
   const g = 1 + growthPct / 100;
-  const platformSpend = PLAN_PLATFORMS.map((p) => ({ p, main: t.channels[p.main].spend, alt: t.channels[p.alt].spend }));
+  // The plan has no returning Google line: campaigns tagged for returning customers count with the Google line they would otherwise belong to.
+  const spendOf = (k: ChannelKey) => t.channels[k].spend + (GOOGLE_RETURNING[k] ? t.channels[GOOGLE_RETURNING[k]!].spend : 0);
+  const platformSpend = PLAN_PLATFORMS.map((p) => ({ p, main: spendOf(p.main), alt: spendOf(p.alt) }));
   const total = platformSpend.reduce((a, x) => a + x.main + x.alt, 0);
   const platformPct: Record<string, number> = {};
   const altPct: Record<string, number> = {};

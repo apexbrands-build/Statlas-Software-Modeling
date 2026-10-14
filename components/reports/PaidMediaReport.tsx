@@ -117,7 +117,7 @@ export function PaidMediaReport() {
             Platform
             <select aria-label="Platform" className={selectClass} value={platform} onChange={(e) => setPlatform(e.target.value)}>
               <option value="all">All</option>
-              {PLATFORMS.map((p) => (
+              {PLATFORMS.filter((p) => !p.returningOnly).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
                 </option>

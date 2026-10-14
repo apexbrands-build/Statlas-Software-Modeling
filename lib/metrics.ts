@@ -8,7 +8,7 @@ import type {
   Source,
 } from "./types";
 import { CHANNEL_KEYS } from "./types";
-import { CORE_CHANNELS, PLATFORMS, RETENTION_CHANNELS } from "./channels";
+import { BRAND_CHANNELS, CORE_CHANNELS, PLATFORMS, RETENTION_CHANNELS } from "./channels";
 import { MIX_KEYS, type MixKey, type MixOf } from "./planning/mix";
 import type { RoasOf } from "./planning/roas";
 
@@ -279,9 +279,9 @@ export function paidStats(t: Totals, s: ClientSettings) {
  * total spend, and so MER, always keep all of it.
  */
 export function amerSpend(t: Totals, s: ClientSettings): number {
+  const left = new Set<ChannelKey>([...(s.excludeBrandFromAmer ? BRAND_CHANNELS : []), ...(s.excludeMetaReturningFromAmer ? RETENTION_CHANNELS : [])]);
   let sp = totalSpend(t);
-  if (s.excludeBrandFromAmer) sp -= t.channels.google_brand.spend;
-  if (s.excludeMetaReturningFromAmer) for (const k of RETENTION_CHANNELS) sp -= t.channels[k].spend;
+  for (const k of left) sp -= t.channels[k].spend;
   return sp;
 }
 
@@ -510,7 +510,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     direction: "up",
     source: "Platform-reported",
     formula: "Σ platform-reported revenue × incrementality multiplier on the acquisition channels only (Meta acquisition, Google non-brand and each platform's acquisition channel); brand search and returning audiences are left out",
-    value: (t, s) => groupStats(t, s, PLATFORMS.map((p) => p.acquisition)).iRevenue,
+    value: (t, s) => groupStats(t, s, PLATFORMS.filter((p) => !p.returningOnly).map((p) => p.acquisition)).iRevenue,
   }),
   def({
     key: "paidShareOfRevenue",
@@ -528,7 +528,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     direction: "up",
     source: "Derived",
     formula: "New paid iRevenue ÷ new customer order revenue",
-    value: (t, s) => div(groupStats(t, s, PLATFORMS.map((p) => p.acquisition)).iRevenue, t.newOrderRevenue),
+    value: (t, s) => div(groupStats(t, s, PLATFORMS.filter((p) => !p.returningOnly).map((p) => p.acquisition)).iRevenue, t.newOrderRevenue),
   }),
   def({
     key: "paidIOrders",
@@ -725,6 +725,7 @@ export interface ChannelGroup {
 export function channelGroups(breakout: boolean, acquisitionOnly = false): ChannelGroup[] {
   const out: ChannelGroup[] = [];
   for (const p of PLATFORMS) {
+    if (acquisitionOnly && p.returningOnly) continue;
     if (acquisitionOnly) {
       out.push({ id: p.acquisition, label: p.label, channels: [p.acquisition] });
     } else if (breakout) {
