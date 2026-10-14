@@ -8,13 +8,12 @@ import { MetricModal } from "./MetricModal";
 import { MetricTile } from "./MetricTile";
 import { theme } from "@/theme/theme";
 import { useApp } from "@/lib/app-context";
-import { compareSource, COMPARE_LABEL, tileNumbers, useDashboardData, type DashData } from "@/lib/dashboard-data";
+import { compareSource, COMPARE_LABEL, defaultCompareMode, tileNumbers, useDashboardData, type DashData } from "@/lib/dashboard-data";
 import { readScenarioChoice, writeScenarioChoice } from "@/lib/planning/scenarios";
 import type { PlanScenario } from "@/lib/types";
 import {
   comparisonRange,
-  endOfMonth,
-  startOfMonth,
+  defaultHomeRange,
   todayLocal,
   type CompareModeName,
   type Range,
@@ -47,19 +46,20 @@ export function Dashboard() {
   const today = useMemo(() => (mounted ? todayLocal() : null), [mounted]);
 
   const [range, setRange] = useState<Range | null>(null);
-  const [mode, setMode] = useState<CompareModeName>("yoy");
+  // null until the strategist picks one: then Home opens on Plan when there is a plan (see defaultCompareMode).
+  const [chosenMode, setMode] = useState<CompareModeName | null>(null);
   const [customCmp, setCustomCmp] = useState<Range | null>(null);
   const [breakout, setBreakout] = useState(true);
   const [roasMode, setRoasMode] = useState<"iroas" | "roas" | "iroas_acq" | "roas_acq" | null>(null);
   const [chartType, setChartType] = useState<"sales" | "cm" | "mer">("sales");
   const [open, setOpen] = useState<Open | null>(null);
 
-  // Default: the current month (set once the page is running in the browser).
-  const activeRange = useMemo(() => range ?? (today ? { from: startOfMonth(today), to: endOfMonth(today) } : null), [range, today]);
+  // Default: the month so far (set once the page is running in the browser).
+  const activeRange = useMemo(() => range ?? (today ? defaultHomeRange(today) : null), [range, today]);
   // Custom comparison period defaults to the period right before the selected range.
   const cmpRange = useMemo(
-    () => (mode === "custom" && activeRange ? (customCmp ?? comparisonRange("prev", activeRange)) : null),
-    [mode, activeRange, customCmp],
+    () => (chosenMode === "custom" && activeRange ? (customCmp ?? comparisonRange("prev", activeRange)) : null),
+    [chosenMode, activeRange, customCmp],
   );
   // Which plan the Plan comparison uses once the year has a stretch scenario; remembered per client in this browser.
   const [picked, setPicked] = useState<Record<string, PlanScenario>>({});
@@ -77,6 +77,7 @@ export function Dashboard() {
   const sameView = Boolean(last && client && activeRange && last.client.id === client.id && last.range.from === activeRange.from && last.range.to === activeRange.to);
   const data = fresh ?? (sameView ? last : null);
   const refreshing = !fresh && data !== null;
+  const mode = defaultCompareMode(chosenMode, data?.hasPlan ?? false);
 
   if (!mounted || !client || !settings || !activeRange) return <Skeleton />;
 

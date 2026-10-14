@@ -139,6 +139,11 @@ export function tileNumbers(def: MetricDef, d: DashData, mode: CompareModeName):
   return { actual, ref, ...compare(actual, ref, def.direction) };
 }
 
+/** Home opens on Plan when the client has one (each day against its target), else on last year; a choice made on the page always wins. */
+export function defaultCompareMode(chosen: CompareModeName | null, hasPlan: boolean): CompareModeName {
+  return chosen ?? (hasPlan ? "plan" : "yoy");
+}
+
 export const COMPARE_LABEL: Record<CompareModeName, string> = {
   plan: "vs plan",
   yoy: "vs last year",

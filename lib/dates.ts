@@ -127,3 +127,13 @@ export function usDate(d: string): string {
   const [y, m, day] = d.split("-").map(Number);
   return `${m}/${day}/${y}`;
 }
+
+/** Home's opening range: the month so far (1st to yesterday, the last day with data), or all of last month on the 1st. */
+export function defaultHomeRange(today: string): Range {
+  const from = startOfMonth(today);
+  if (today === from) {
+    const prev = addMonths(today, -1);
+    return { from: startOfMonth(prev), to: endOfMonth(prev) };
+  }
+  return { from, to: addDays(today, -1) };
+}

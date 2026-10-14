@@ -34,7 +34,11 @@ const ago = (i: number, unit: string) => (i === 0 ? `This ${unit}` : i === 1 ? `
 export function buildGroups(today: string): Group[] {
   const year = Number(today.slice(0, 4));
 
-  const days: Option[] = [7, 14, 30, 60, 90].map((n) => ({ label: `Last ${n} days`, range: { from: addDays(today, -n), to: addDays(today, -1) } }));
+  const yesterday = addDays(today, -1);
+  const days: Option[] = [
+    { label: "Yesterday", range: { from: yesterday, to: yesterday } },
+    ...[7, 14, 30, 60, 90].map((n) => ({ label: `Last ${n} days`, range: { from: addDays(today, -n), to: yesterday } })),
+  ];
 
   const weeks: Option[] = Array.from({ length: 7 }, (_, i) => {
     const start = addDays(startOfWeek(today), -7 * i);
@@ -44,6 +48,7 @@ export function buildGroups(today: string): Group[] {
   // Single months: This month, Next month, Last month, 2 months ago ... 6 months ago
   const monthOf = (m: string): Range => ({ from: startOfMonth(m), to: endOfMonth(m) });
   const singleMonths: Option[] = [
+    { label: "Month to date", range: { from: startOfMonth(today), to: today === startOfMonth(today) ? today : yesterday } },
     { label: "This month", range: monthOf(today) },
     { label: "Next month", range: monthOf(addMonths(today, 1)) },
     ...Array.from({ length: 6 }, (_, i) => ({ label: ago(i + 1, "month"), range: monthOf(addMonths(today, -(i + 1))) })),
