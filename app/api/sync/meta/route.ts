@@ -16,7 +16,8 @@ export async function POST(request: Request) {
   if (!integration || integration.provider !== "meta") return NextResponse.json({ error: "Connection not found" }, { status: 404 });
 
   try {
-    const result = await syncMeta(integration.id, body);
+    // The task is cut at maxDuration: stop reading ad-level pages a little earlier and say so instead of dying half way.
+    const result = await syncMeta(integration.id, body, { deadline: Date.now() + 45_000 });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Sync failed" }, { status: 500 });

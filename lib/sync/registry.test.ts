@@ -53,7 +53,7 @@ describe("sync registry", () => {
   it("calls the Meta and Google syncs with the range and has no finalize for them", async () => {
     await SYNCS.meta!.sync("i2", range, { kind: "recent", deadline: 1, firstChunk: false });
     await SYNCS.google_ads!.sync("i3", range, { kind: "history", deadline: 1, firstChunk: true });
-    expect(mocks.syncMeta).toHaveBeenCalledWith("i2", range);
+    expect(mocks.syncMeta).toHaveBeenCalledWith("i2", range, { deadline: 1 });
     expect(mocks.syncGoogle).toHaveBeenCalledWith("i3", range);
     expect(SYNCS.meta!.finalize).toBeUndefined();
     expect(SYNCS.google_ads!.finalize).toBeUndefined();

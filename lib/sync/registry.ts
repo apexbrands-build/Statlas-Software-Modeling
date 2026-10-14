@@ -47,8 +47,8 @@ export const SYNCS: Partial<Record<ProviderId, ProviderSync>> = {
   },
   meta: {
     chunkDays: 60,
-    async sync(integrationId, range) {
-      await syncMeta(integrationId, range);
+    async sync(integrationId, range, ctx) {
+      await syncMeta(integrationId, range, { deadline: ctx.deadline });
     },
   },
   google_ads: {

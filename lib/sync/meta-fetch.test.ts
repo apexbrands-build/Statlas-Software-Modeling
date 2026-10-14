@@ -48,6 +48,57 @@ describe("fetchAdDays", () => {
   });
 });
 
+describe("fetchAdDays: pages, memory and the clock", () => {
+  it("hands each page to onPage and keeps nothing itself, so a big account is never held in memory twice", async () => {
+    const { graph } = pages([
+      { data: [{ ad_id: "a1", date_start: "2026-09-01" }], paging: { next: "https://graph.test/p2" } },
+      { data: [{ ad_id: "a2", date_start: "2026-09-01" }] },
+    ]);
+    const seen: string[][] = [];
+    const rows = await fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { onPage: (r) => seen.push(r.map((x) => x.ad_id)) });
+    expect(seen).toEqual([["a1"], ["a2"]]);
+    expect(rows).toEqual([]);
+  });
+
+  it("stops with a TIMEOUT before asking for another page once the deadline has passed", async () => {
+    const { graph, calls } = pages([{ data: [{ ad_id: "a1", date_start: "2026-09-01" }], paging: { next: "https://graph.test/p2" } }, { data: [] }]);
+    await expect(fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { deadline: Date.now() - 1 })).rejects.toThrow(/^TIMEOUT/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("stops between pages when the deadline passes while reading", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const deadline = Date.now() + 1000;
+    let n = 0;
+    const graph = (async () => {
+      n += 1;
+      vi.setSystemTime(deadline + 1);
+      return { data: [{ ad_id: "a1", date_start: "2026-09-01" }], paging: { next: "https://graph.test/p2" } };
+    }) as never;
+    await expect(fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { deadline })).rejects.toThrow(/^TIMEOUT/);
+    vi.useRealTimers();
+    expect(n).toBe(1);
+  });
+});
+
+describe("fetchAds: deleted and archived ads, and the clock", () => {
+  it("asks for every effective status, including archived and deleted ads, so old ads still get their launch date and format", async () => {
+    const { graph, calls } = pages([{ data: [] }]);
+    await fetchAds("act_1", ["a1"], graph);
+    const filtering = JSON.parse(calls[0].params!.filtering) as { field: string; operator: string; value: string[] }[];
+    const status = filtering.find((f) => f.field === "effective_status")!;
+    expect(status.operator).toBe("IN");
+    expect(status.value).toEqual(expect.arrayContaining(["ACTIVE", "PAUSED", "ARCHIVED", "DELETED"]));
+    expect(filtering.find((f) => f.field === "id")!.value).toEqual(["a1"]);
+  });
+
+  it("stops with a TIMEOUT before the next batch once the deadline has passed", async () => {
+    const { graph, calls } = pages([{ data: [] }]);
+    await expect(fetchAds("act_1", ["a1"], graph, { deadline: Date.now() - 1 })).rejects.toThrow(/^TIMEOUT/);
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe("fetchAds", () => {
   const ids = (n: number) => Array.from({ length: n }, (_, i) => `ad${i}`);
 

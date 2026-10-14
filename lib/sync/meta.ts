@@ -113,9 +113,24 @@ export function isExistingSegment(segment: string | undefined): boolean {
 
 type GraphFn = <T>(pathOrUrl: string, params?: Record<string, string>) => Promise<T>;
 
-/** Ad-level daily insights (one row per ad and day with spend). Follows every page; a Graph error rejects so the caller decides what to do. */
-export async function fetchAdDays(adAccountId: string, since: string, until: string, windows: string[] = ["7d_click"], graphImpl: GraphFn = graph): Promise<AdInsightRow[]> {
+const timedOut = (deadline: number | undefined) => deadline !== undefined && Date.now() > deadline;
+const TIMEOUT_MESSAGE = "TIMEOUT: ad-level data did not fit in one task";
+
+/**
+ * Ad-level daily insights (one row per ad and day with spend). Follows every page; a Graph error rejects so the caller decides what to do.
+ * With `onPage` each page is handed over and not kept (the raw rows carry long action lists); without it all rows are returned.
+ * Past `deadline` it stops with a TIMEOUT before asking for the next page.
+ */
+export async function fetchAdDays(
+  adAccountId: string,
+  since: string,
+  until: string,
+  windows: string[] = ["7d_click"],
+  graphImpl: GraphFn = graph,
+  opts: { deadline?: number; onPage?: (rows: AdInsightRow[]) => void } = {},
+): Promise<AdInsightRow[]> {
   const out: AdInsightRow[] = [];
+  if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
   let page = await graphImpl<{ data: AdInsightRow[]; paging?: { next?: string } }>(`${adAccountId}/insights`, {
     level: "ad",
     time_increment: "1",
@@ -125,8 +140,10 @@ export async function fetchAdDays(adAccountId: string, since: string, until: str
     limit: "500",
   });
   for (;;) {
-    out.push(...page.data);
+    if (opts.onPage) opts.onPage(page.data);
+    else out.push(...page.data);
     if (!page.paging?.next) break;
+    if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
     page = await graphImpl(page.paging.next);
   }
   return out;
@@ -134,19 +151,27 @@ export async function fetchAdDays(adAccountId: string, since: string, until: str
 
 const AD_FIELDS = "id,name,adset_id,campaign{id,name},effective_status,created_time,creative{object_type,video_id,asset_feed_spec,object_story_spec}";
 
-/** The ads behind the given ids (name, campaign, launch date, status, creative type), looked up 50 ids at a time. */
-export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: GraphFn = graph): Promise<AdRow[]> {
+/** Without a status filter the ads edge leaves out archived and deleted ads, whose launch date and format stage 2 needs for history. */
+const ALL_STATUSES = ["ACTIVE", "PAUSED", "DELETED", "ARCHIVED", "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED", "PENDING_BILLING_INFO", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "WITH_ISSUES"];
+
+/** The ads behind the given ids (name, campaign, launch date, status, creative type), looked up 50 ids at a time. Past `deadline` it stops with a TIMEOUT. */
+export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: GraphFn = graph, opts: { deadline?: number } = {}): Promise<AdRow[]> {
   const out: AdRow[] = [];
   for (let i = 0; i < adIds.length; i += 50) {
     const batch = adIds.slice(i, i + 50);
+    if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
     let page = await graphImpl<{ data: AdRow[]; paging?: { next?: string } }>(`${adAccountId}/ads`, {
       fields: AD_FIELDS,
-      filtering: JSON.stringify([{ field: "id", operator: "IN", value: batch }]),
+      filtering: JSON.stringify([
+        { field: "id", operator: "IN", value: batch },
+        { field: "effective_status", operator: "IN", value: ALL_STATUSES },
+      ]),
       limit: "100",
     });
     for (;;) {
       out.push(...page.data);
       if (!page.paging?.next) break;
+      if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
       page = await graphImpl(page.paging.next);
     }
   }

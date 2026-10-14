@@ -61,9 +61,10 @@ export function isCatalogCampaign(name: string | null | undefined, keywords: str
 const num = (v: string | undefined) => Number(v ?? 0) || 0;
 
 /** A `meta_ad_daily` row. Purchases and revenue use the same purchase-type preference and attribution windows as the campaign sync. */
-export function mapAdDay(r: AdInsightRow, windows: string[], clientId: string) {
+export function mapAdDay(r: AdInsightRow, windows: string[], clientId: string, accountId: string) {
   return {
     client_id: clientId,
+    account_id: accountId,
     ad_id: r.ad_id,
     date: r.date_start,
     spend: num(r.spend),
@@ -75,9 +76,10 @@ export function mapAdDay(r: AdInsightRow, windows: string[], clientId: string) {
 }
 
 /** A `meta_ads` row. */
-export function mapAd(ad: AdRow, clientId: string, keywords: string) {
+export function mapAd(ad: AdRow, clientId: string, keywords: string, accountId: string) {
   return {
     client_id: clientId,
+    account_id: accountId,
     ad_id: ad.id,
     name: ad.name ?? null,
     campaign_id: ad.campaign?.id ?? null,
@@ -89,4 +91,17 @@ export function mapAd(ad: AdRow, clientId: string, keywords: string) {
     status: ad.effective_status ?? null,
     updated_at: new Date().toISOString(),
   };
+}
+
+/** A failure of the ad-level step that must fail the chunk so the job runner retries it (smaller), instead of leaving a silent gap. */
+export class RetryableAdError extends Error {}
+
+const RETRYABLE = /^TIMEOUT|reduce the amount of data|request limit reached|too many calls|rate limit|\(#(?:4|17|32|613|80000|80003|80004)\)/i;
+
+/**
+ * True when the ad step should fail the chunk: it ran out of time, Meta rate-limited it or said the pull was too large, or a write failed
+ * after the window was cleared. Anything else (for example a missing permission on one account) stays a note in the run message.
+ */
+export function isRetryableAdError(e: unknown): boolean {
+  return e instanceof RetryableAdError || (e instanceof Error && RETRYABLE.test(e.message));
 }

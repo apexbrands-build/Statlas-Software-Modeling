@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { adFormat, isCatalogCampaign, mapAd, mapAdDay } = await import("./meta-ads");
+const { adFormat, isCatalogCampaign, isRetryableAdError, mapAd, mapAdDay, RetryableAdError } = await import("./meta-ads");
 
 describe("adFormat", () => {
   it("calls a video creative a video, from the object type, a video id, a video block or a feed of videos", () => {
@@ -65,24 +65,41 @@ describe("mapAdDay", () => {
     action_values: [{ action_type: "omni_purchase", value: "300", "7d_click": "200", "1d_view": "100" }],
   };
   it("turns the Graph row into a table row with numbers", () => {
-    expect(mapAdDay(row, ["7d_click"], "c1")).toEqual({ client_id: "c1", ad_id: "a1", date: "2026-09-01", spend: 12.5, impressions: 1000, clicks: 25, purchases: 2, revenue: 200 });
+    expect(mapAdDay(row, ["7d_click"], "c1", "act_9")).toEqual({ client_id: "c1", account_id: "act_9", ad_id: "a1", date: "2026-09-01", spend: 12.5, impressions: 1000, clicks: 25, purchases: 2, revenue: 200 });
   });
   it("sums the requested attribution windows", () => {
-    const r = mapAdDay(row, ["7d_click", "1d_view"], "c1");
+    const r = mapAdDay(row, ["7d_click", "1d_view"], "c1", "act_9");
     expect([r.purchases, r.revenue]).toEqual([3, 300]);
   });
   it("gives 0 purchases and revenue when the ad has no actions, and 0 for missing numbers", () => {
-    expect(mapAdDay({ ad_id: "a2", date_start: "2026-09-02" }, ["7d_click"], "c1")).toEqual({ client_id: "c1", ad_id: "a2", date: "2026-09-02", spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 });
+    expect(mapAdDay({ ad_id: "a2", date_start: "2026-09-02" }, ["7d_click"], "c1", "act_9")).toEqual({ client_id: "c1", account_id: "act_9", ad_id: "a2", date: "2026-09-02", spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 });
   });
 });
 
 describe("mapAd", () => {
   const ad = { id: "a1", name: "UGC 01", adset_id: "s1", campaign: { id: "c9", name: "Spring DPA" }, effective_status: "ACTIVE", created_time: "2026-08-20T10:00:00+0000", creative: { video_id: "v" } };
   it("maps the ad with its format, launch time, status and catalog flag", () => {
-    expect(mapAd(ad, "c1", "catalog, dpa")).toMatchObject({ client_id: "c1", ad_id: "a1", name: "UGC 01", campaign_id: "c9", campaign_name: "Spring DPA", adset_id: "s1", created_at: "2026-08-20T10:00:00+0000", format: "video", is_catalog: true, status: "ACTIVE" });
+    expect(mapAd(ad, "c1", "catalog, dpa", "act_9")).toMatchObject({ client_id: "c1", account_id: "act_9", ad_id: "a1", name: "UGC 01", campaign_id: "c9", campaign_name: "Spring DPA", adset_id: "s1", created_at: "2026-08-20T10:00:00+0000", format: "video", is_catalog: true, status: "ACTIVE" });
   });
   it("stores format other when the creative is missing, and keeps going without a campaign", () => {
-    const m = mapAd({ id: "a2", effective_status: "PAUSED" }, "c1", "dpa");
+    const m = mapAd({ id: "a2", effective_status: "PAUSED" }, "c1", "dpa", "act_9");
     expect(m).toMatchObject({ ad_id: "a2", format: "other", is_catalog: false, status: "PAUSED", campaign_name: null, created_at: null, name: null });
+  });
+});
+
+describe("isRetryableAdError", () => {
+  it("is true for a timeout, Meta's rate limits and its too-much-data error", () => {
+    for (const m of ["TIMEOUT: ad-level data did not fit", "Meta: (#17) User request limit reached", "Meta: (#4) Application request limit reached", "Meta: (#80004) There have been too many calls to this ad-account", "Meta: (#613) Calls to this api have exceeded the rate limit", "Meta: Please reduce the amount of data you're asking for, then retry your request"]) {
+      expect(isRetryableAdError(new Error(m)), m).toBe(true);
+    }
+  });
+  it("is true for a RetryableAdError whatever its message", () => {
+    expect(isRetryableAdError(new RetryableAdError("connection reset"))).toBe(true);
+  });
+  it("is false for permission errors, unknown errors and values that are not errors", () => {
+    expect(isRetryableAdError(new Error("Meta: (#200) Requires ads_read permission"))).toBe(false);
+    expect(isRetryableAdError(new Error("Meta: (#100) Invalid parameter"))).toBe(false);
+    expect(isRetryableAdError("TIMEOUT")).toBe(false);
+    expect(isRetryableAdError(null)).toBe(false);
   });
 });

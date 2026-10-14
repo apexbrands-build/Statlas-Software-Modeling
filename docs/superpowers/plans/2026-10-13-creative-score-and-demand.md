@@ -117,7 +117,7 @@
 **Files:** Create `supabase/migrations/00NN_creative_demand.sql`, `lib/creative/rows.ts`, `lib/creative/rows.test.ts`, `lib/creative/demo.ts`, `lib/creative/demo.test.ts`. Modify `lib/repository/types.ts`, `lib/repository/supabase.ts`, `lib/repository/seed.ts`.
 
 **Interfaces:**
-- SQL (all `language sql stable`, run as the caller like `aov_stats` in `0010_aov_histogram.sql`, catalog ads excluded unless a column says catalog, launch date = `(created_at at time zone clients.timezone)::date`, `grant execute … to authenticated`):
+- SQL (all `language sql stable`, run as the caller like `aov_stats` in `0010_aov_histogram.sql`, catalog ads excluded unless a column says catalog, launch date = `(coalesce(created_at, first spend day in meta_ad_daily) at time zone clients.timezone)::date` (stage 1 stores a minimal row with `created_at` null for an ad Meta could not describe, and the sync now asks for archived and deleted ads too, but some old ads may still come back empty), `grant execute … to authenticated`):
   - `creative_ads(p_client uuid, p_from date, p_to date)` → one row per ad launched in the range: `ad_id, name, format, is_catalog, launch_date, spend_7d, spend_30d, revenue_30d, spend_total, revenue_total` (catalog ads included and flagged here so the month list can show them greyed).
   - `creative_months(p_client uuid, p_from date, p_to date)` → per month: `month, spend, catalog_spend, carried_spend, launched_video, launched_image, launched_carousel, launched_other`.
   - `creative_days(p_client uuid, p_from date, p_to date)` → per day: `date, spend, revenue, catalog_spend, launched_video, launched_image, launched_carousel, launched_other`.

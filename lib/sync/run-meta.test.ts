@@ -40,16 +40,32 @@ beforeEach(() => {
 
 describe("syncMeta with the ad-level step", () => {
   it("keeps the campaign sync, the connection status and the run result when the ad-level step fails, and says so in the run message", async () => {
-    state.adStep.mockRejectedValue(new Error("Meta: (#17) User request limit reached"));
+    state.adStep.mockRejectedValue(new Error("Meta: (#200) Requires ads_read permission"));
     const r = await syncMeta("i1", { from: "2026-09-01", to: "2026-09-07" });
     expect(r.rows).toBeGreaterThan(0);
     const status = state.updates.filter((u) => u.table === "integrations").map((u) => u.values.status);
     expect(status).toEqual(["connected"]);
     const run = state.updates.filter((u) => u.table === "sync_runs").at(-1)!.values;
     expect(run.status).toBe("ok");
-    expect(lastRunMessage()).toContain("Ad-level step failed: Meta: (#17) User request limit reached");
+    expect(lastRunMessage()).toContain("Ad-level step failed: Meta: (#200) Requires ads_read permission");
     const integration = state.updates.find((u) => u.table === "integrations")!.values;
     expect(String(integration.last_error ?? "")).not.toContain("Ad-level");
+  });
+
+  it("fails the chunk when the ad-level step times out or hits Meta's rate limit, so the runner retries a smaller piece instead of leaving a gap", async () => {
+    const { RetryableAdError } = await import("./meta-ads");
+    for (const err of [new Error("TIMEOUT: ad-level data did not fit in one task"), new Error("Meta: (#17) User request limit reached"), new RetryableAdError("connection reset")]) {
+      state.updates = [];
+      state.adStep.mockRejectedValue(err);
+      await expect(syncMeta("i1", { from: "2026-09-01", to: "2026-09-07" })).rejects.toThrow(err.message);
+      expect(state.updates.filter((u) => u.table === "sync_runs").at(-1)!.values.status).toBe("error");
+    }
+  });
+
+  it("passes the deadline to the ad-level step", async () => {
+    state.adStep.mockResolvedValue({ ads: 0, days: 0 });
+    await syncMeta("i1", { from: "2026-09-01", to: "2026-09-07" }, { deadline: 12345 });
+    expect(state.adStep.mock.calls[0][6]).toEqual({ deadline: 12345 });
   });
 
   it("reports how many ads and ad-days were stored", async () => {

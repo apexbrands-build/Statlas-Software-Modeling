@@ -4,11 +4,12 @@ import { fetchCampaignDays, isExistingSegment } from "./meta";
 import { metaWindows } from "./meta-windows";
 import { splitCampaignDays } from "./meta-split";
 import { resolveRange } from "./range";
+import { isRetryableAdError } from "./meta-ads";
 import { syncMetaAds } from "./run-meta-ads";
 
 
 /** Pulls Meta spend for one connected ad account and rebuilds the Meta channel rows. */
-export async function syncMeta(integrationId: string, body: { from?: string; to?: string; days?: number }): Promise<{ rows: number; note?: string }> {
+export async function syncMeta(integrationId: string, body: { from?: string; to?: string; days?: number }, opts: { deadline?: number } = {}): Promise<{ rows: number; note?: string }> {
   const admin = getAdminClient();
   const { data: integration } = await admin.from("integrations").select("id,client_id,provider,account_id").eq("id", integrationId).single();
   if (!integration || integration.provider !== "meta") throw new Error("Not a Meta connection");
@@ -76,12 +77,15 @@ export async function syncMeta(integrationId: string, body: { from?: string; to?
       if (error) throw new Error(error.message);
     }
 
-    // Ad-level step (creative data). Its failure never fails the campaign sync or the connection: it is reported in the run message only.
+    // Ad-level step (creative data). Most failures (a missing permission, say) never fail the campaign sync or the connection: they go in the run
+    // message. Running out of time, a rate limit or a half-written window do fail the chunk, so the job runner redoes it in smaller pieces
+    // (the campaign step above is safe to repeat) instead of leaving a gap nobody would see.
     let adNote: string;
     try {
-      const ad = await syncMetaAds(admin, integration, since, until, windows, extra.catalogKeywords ?? "catalog, dpa, daba");
+      const ad = await syncMetaAds(admin, integration, since, until, windows, extra.catalogKeywords ?? "catalog, dpa, daba", { deadline: opts.deadline });
       adNote = [`Ad-level: ${ad.ads} ads, ${ad.days} ad-days`, ad.note].filter(Boolean).join(". ");
     } catch (e) {
+      if (isRetryableAdError(e)) throw e;
       adNote = `Ad-level step failed: ${e instanceof Error ? e.message : "error"}`;
     }
 
