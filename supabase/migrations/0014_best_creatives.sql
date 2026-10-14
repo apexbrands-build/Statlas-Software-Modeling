@@ -68,7 +68,8 @@ begin
            coalesce(a.format, 'other') as format,
            coalesce(a.is_catalog, false) as is_catalog,
            a.status,
-           coalesce((a.created_at at time zone coalesce(v_tz, 'UTC'))::date, g.first_spend) as launched,
+           -- Null when Meta did not describe the ad: its first spend day inside the range is not a launch date, and would make "New" depend on the range.
+           (a.created_at at time zone coalesce(v_tz, 'UTC'))::date as launched,
            g.first_spend, g.last_spend, g.active_days,
            g.spend, g.revenue, g.purchases, g.impressions, g.clicks,
            g.cur_spend, g.cur_revenue, g.prev_spend, g.prev_revenue
