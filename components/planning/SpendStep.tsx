@@ -99,8 +99,17 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
         <>
           <div className="grid gap-5 lg:grid-cols-2">
             <section className="space-y-2 rounded-xl border border-border bg-surface p-4">
-              <h3 className="text-sm font-semibold">Platform allocation</h3>
-              <p className="text-xs text-text-muted">Share of the month&apos;s spend per platform. Lock a platform to keep its share when you move the others.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="mr-auto text-sm font-semibold">Platform allocation</h3>
+                {/* Placeholders for the Marketing Mix Model (planned: docs/superpowers/plans/2026-10-13-channel-mix-and-mmm-option.md). Disabled until a model result exists. */}
+                <button className={btn} disabled title="Available once the Marketing Mix Model is built: it will suggest the split from the client's own history and you will apply it here.">
+                  Use Marketing Mix Model
+                </button>
+                <button className={btn} disabled title="Available once the Marketing Mix Model is built: model strength, allocation analysis and outputs.">
+                  See MMM data
+                </button>
+              </div>
+              <p className="text-xs text-text-muted">Share of the month&apos;s spend per platform. Lock a platform to keep its share when you move the others. The Marketing Mix Model suggestion will plug in here.</p>
               {PLAN_PLATFORMS.map((p) => {
                 const v = inputs.platformPct[p.key] ?? 0;
                 const locked = inputs.lockedPlatforms?.includes(p.key) ?? false;

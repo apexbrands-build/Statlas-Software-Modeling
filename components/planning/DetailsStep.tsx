@@ -124,8 +124,6 @@ const LINES: LineDef[] = [
   { id: "returns", label: "Returns", unit: "pct", help: "Refunds as % of gross sales after discounts.", ...rate("refundPct") },
   { id: "cogs", label: "COGS", unit: "pct", help: "Cost of goods as % of net sales (from Shopify variant costs, or the client's flat rate).", ...rate("cogsPct") },
   { id: "variable", label: "Variable costs", unit: "pct", help: "Other variable costs (cost of delivery, fees) as % of net sales plus shipping.", ...rate("otherVarPct") },
-  { id: "newAov", label: "New customer AOV", unit: "money", help: "Average order value of first orders. It rarely moves, so it is not forecast.", ...rate("newAov") },
-  { id: "retAov", label: "Returning customer AOV", unit: "money", help: "Average order value of repeat orders.", ...rate("returningAov") },
   { id: "sga", label: "SG&A (fixed costs)", unit: "money", help: "Fixed monthly costs. Only used in the Plan P&L, never in contribution margin. Starts from the client's setting.", get: (i) => i.fixedCosts ?? 0, set: (i, v) => ({ ...i, fixedCosts: v }), actual: (x) => (x ? (x.fixedCosts ?? 0) : null) },
 ];
 

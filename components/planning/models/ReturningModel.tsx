@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import { addYears, endOfMonth } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
 import { aggregate } from "@/lib/metrics";
-import type { ReturningResults } from "@/lib/planning/models";
+import { recentReturningAov, resolveReturningAov, SOURCE_LABELS, type ReturningResults, type Source } from "@/lib/planning/models";
 import { forecastReturning } from "@/lib/planning/returning";
-import { btn, btnPrimary, inputClass, MONTHS } from "../ui";
+import { btn, btnPrimary, inputClass, MONTHS, NumField } from "../ui";
 import { LineChart, Legend } from "./charts";
 import type { ModelCtx } from "./ModelsStep";
 
@@ -105,7 +105,7 @@ export function ReturningModel({ mc }: { mc: ModelCtx }) {
         m.month,
         (i) => {
           const model = Math.round(r.total);
-          return { ...i, returningModel: model, returningRevenue: i.returningOverride != null ? i.returningOverride : model };
+          return { ...i, returningModel: model, returningRevenue: i.returningOverride != null ? i.returningOverride : model, rates: aov > 0 ? { ...i.rates, returningAov: Math.round(aov * 100) / 100 } : i.rates };
         },
         true,
       );
@@ -124,7 +124,7 @@ export function ReturningModel({ mc }: { mc: ModelCtx }) {
     setNote(
       err
         ? { tone: "bad", text: err }
-        : { tone: "ok", text: `Forecast created: returning revenue was filled into Details for ${applied} month${applied === 1 ? "" : "s"}${skipped ? ` (${skipped} locked skipped)` : ""}. Overrides you typed there are kept. Press Save plan to update the daily targets.` },
+        : { tone: "ok", text: `Forecast created: returning revenue and the repeat-order AOV (${money(aov)}) were filled into the plan for ${applied} month${applied === 1 ? "" : "s"}${skipped ? ` (${skipped} locked skipped)` : ""}. Overrides you typed there are kept. Press Save plan to update the daily targets.` },
     );
   };
 
@@ -133,15 +133,13 @@ export function ReturningModel({ mc }: { mc: ModelCtx }) {
     const first = Number(facts[0]?.date.slice(0, 4) ?? year);
     return Array.from({ length: Math.min(4, year - Math.max(first, year - 3) + 1) }, (_, i) => Math.max(first, year - 3) + i);
   }, [facts, year]);
-  const avgAov = useMemo(() => {
-    const t = aggregate(facts.filter((f) => f.date > addYears(lastData, -1)));
-    return t.returningOrders > 0 ? t.returningOrderRevenue / t.returningOrders : 0;
-  }, [facts, lastData]);
+  // AOV of repeat orders: the last 30 days unless the strategist picks another window or types one. It only turns revenue into orders.
+  const aov = resolveReturningAov(S, facts, lastData, recentReturningAov(facts, lastData, 365) ?? 0);
   const cellFor = (y: number, mi: number) => {
     const k = `${y}-${String(mi + 1).padStart(2, "0")}-01`;
     if (y === year && result) {
       const r = modelByMonth.get(k);
-      if (r && r.kind === "forecast") return { rev: r.total, orders: avgAov > 0 ? r.total / avgAov : 0, forecast: true };
+      if (r && r.kind === "forecast") return { rev: r.total, orders: aov > 0 ? r.total / aov : 0, forecast: true };
     }
     const a = monthly.get(k);
     return a ? { rev: a.rev, orders: a.orders, forecast: false } : null;
@@ -257,6 +255,20 @@ export function ReturningModel({ mc }: { mc: ModelCtx }) {
               </select>
             </label>
             {calText && <p className="text-xs text-accent">{calText}</p>}
+            <div className="space-y-1 border-t border-border pt-2">
+              <label className="flex flex-wrap items-center gap-2">
+                AOV of repeat orders
+                <select className={inputClass} value={S.aovSource ?? "last30"} onChange={(e) => setRetSettings((s) => ({ ...s, aovSource: e.target.value as Source, aov: e.target.value === "manual" && !(s.aov && s.aov > 0) ? Math.round(aov * 100) / 100 : s.aov }))} aria-label="AOV source">
+                  {(["last30", "last90", "last365", "manual"] as Source[]).map((src) => (
+                    <option key={src} value={src}>
+                      {SOURCE_LABELS[src]}
+                    </option>
+                  ))}
+                </select>
+                {S.aovSource === "manual" ? <NumField value={S.aov ?? 0} decimals={2} className="w-20" onCommit={(v) => setRetSettings((s) => ({ ...s, aov: Math.max(0, v) }))} /> : <span className="tabular text-text-muted">{money(aov)}</span>}
+              </label>
+              <p className="text-xs text-text-faint">Last 30 days by default. It only turns the forecast revenue into orders; it does not change returning revenue. Switch the window, or type a value, when a launch changes what repeat customers spend, then press Create forecast.</p>
+            </div>
             <p className="text-xs text-text-faint">Use Actualize a couple of months after a change (e.g. a subscription launch) so the forecast follows how customers really behave now.</p>
           </div>
         </div>

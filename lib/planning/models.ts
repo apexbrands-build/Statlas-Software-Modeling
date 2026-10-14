@@ -63,6 +63,10 @@ export interface ReturningSettings {
   /** Actualize: months of recent data the forecast is calibrated on (0 = off). */
   calibrationMonths: number;
   seasonality: boolean;
+  /** Where the AOV of repeat orders comes from: a recent window (default last 30 days) or typed. It only turns revenue into orders; it never changes returning revenue. */
+  aovSource?: Source;
+  /** The typed AOV, used when `aovSource` is "manual" and as the fallback when a window has no returning orders. */
+  aov?: number;
 }
 
 export interface ReturningResults {
@@ -82,7 +86,7 @@ export interface SavedModel<S, R> {
   updatedBy: string | null;
 }
 
-export const DEFAULT_RETURNING: ReturningSettings = { window: 12, calibrationMonths: 0, seasonality: true };
+export const DEFAULT_RETURNING: ReturningSettings = { window: 12, calibrationMonths: 0, seasonality: true, aovSource: "last30" };
 export const DEFAULT_NEW_CUSTOMER: Omit<NewCustomerSettings, "months"> = { fitKind: "revenue", actualizeFrom: null, recentWeight: 3 };
 
 /** One cohort acquisition month's totals (migration 0007). */
@@ -107,6 +111,26 @@ export function recentNewAov(facts: DailyFact[], asOf: string, days: number): nu
     orders += f.newOrders;
   }
   return orders > 0 ? rev / orders : null;
+}
+
+/** AOV of returning customers' orders over the `days` up to `asOf`. */
+export function recentReturningAov(facts: DailyFact[], asOf: string, days: number): number | null {
+  const from = addDays(asOf, -(days - 1));
+  let rev = 0;
+  let orders = 0;
+  for (const f of facts) {
+    if (f.date < from || f.date > asOf) continue;
+    rev += f.returningOrderRevenue;
+    orders += f.returningOrders;
+  }
+  return orders > 0 ? rev / orders : null;
+}
+
+/** The returning AOV the model uses: the typed value when Manual, else the chosen recent window (default 30 days), else the typed value or `fallback`. */
+export function resolveReturningAov(s: Pick<ReturningSettings, "aovSource" | "aov">, facts: DailyFact[], asOf: string, fallback = 0): number {
+  const typed = s.aov && s.aov > 0 ? s.aov : fallback;
+  if (s.aovSource === "manual") return typed;
+  return recentReturningAov(facts, asOf, SOURCE_DAYS[s.aovSource ?? "last30"] ?? 30) ?? typed;
 }
 
 /**
