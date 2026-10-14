@@ -3,19 +3,14 @@
 import { useMemo, useState } from "react";
 import { addDays, dayOfWeek, eachDay, endOfMonth } from "@/lib/dates";
 import { aggregate, amerSpend } from "@/lib/metrics";
+import { monthEventCounts } from "@/lib/planning/calendar-grid";
 import { CSV_TEMPLATE, EVENT_TYPES, eventDays, GROUP_LABELS, parseEventCsv, suggestEvents, toDayFacts, TYPE_LABEL, typeGroup, type DayMultipliers, type EventGroup, type MarketingEvent } from "@/lib/planning/events";
 import type { ClientSettings, DailyFact } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
+import { CalendarGrid } from "./CalendarGrid";
+import { GROUP_STYLE, QUICK_TYPES } from "./calendar-colors";
 import { btn, btnPrimary, inputClass, Modal, MONTHS, WEEKDAYS } from "./ui";
 
-const GROUP_COLOR: Record<EventGroup, string> = {
-  offer: "bg-orange-500/20 text-orange-300",
-  launch: "bg-sky-500/20 text-sky-300",
-  holiday: "bg-pink-500/20 text-pink-300",
-  comms: "bg-emerald-500/20 text-emerald-300",
-  bfcm: "bg-yellow-500/20 text-yellow-300",
-  initiative: "bg-violet-500/20 text-violet-300",
-};
 
 type Draft = Omit<MarketingEvent, "id" | "clientId"> & { id?: string };
 
@@ -71,7 +66,7 @@ function TypeSelect({ value, onChange, className = inputClass }: { value: string
 function Chip({ e, onClick, faint }: { e: Pick<MarketingEvent, "type" | "name">; onClick?: () => void; faint?: boolean }) {
   const label = e.name && e.name !== TYPE_LABEL[e.type] ? `${e.name}` : TYPE_LABEL[e.type];
   return (
-    <button type="button" onClick={onClick} disabled={!onClick} title={TYPE_LABEL[e.type]} className={`rounded-full px-2 py-0.5 text-xs ${faint ? "bg-surface-raised text-text-faint" : GROUP_COLOR[typeGroup(e.type)]} ${onClick ? "hover:opacity-80" : ""}`}>
+    <button type="button" onClick={onClick} disabled={!onClick} title={TYPE_LABEL[e.type]} className={`rounded-full px-2 py-0.5 text-xs ${faint ? "bg-surface-raised text-text-faint" : GROUP_STYLE[typeGroup(e.type)].chip} ${onClick ? "hover:opacity-80" : ""}`}>
       <span className="opacity-70">{TYPE_LABEL[e.type] !== label ? `${TYPE_LABEL[e.type]}: ` : ""}</span>
       {label}
     </button>
@@ -133,11 +128,15 @@ function EventForm({ draft, onChange, onSave, onCancel, onDelete, busy }: { draf
   );
 }
 
-/** Marketing calendar: events per day, last year's events for reference, CSV import and suggestions from the data. */
+const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** Marketing calendar: a colour-coded month grid (click a day to add, click an event to edit), last year's events for reference, CSV import and suggestions from the data. */
 export function CalendarStep({ ctx }: { ctx: CalendarCtx }) {
   const { year, events, eventMults, saveEvents, removeEvent } = ctx;
   const today = new Date().toISOString().slice(0, 10);
   const [month, setMonth] = useState(() => (today.slice(0, 4) === String(year) ? `${today.slice(0, 7)}-01` : `${year}-01-01`));
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [focus, setFocus] = useState<EventGroup | null>(null);
   const [onlyEvents, setOnlyEvents] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -151,8 +150,13 @@ export function CalendarStep({ ctx }: { ctx: CalendarCtx }) {
     for (const e of events) for (const d of eventDays(e)) m.set(d, [...(m.get(d) ?? []), e]);
     return m;
   }, [events]);
+  const counts = useMemo(() => monthEventCounts(events, year), [events, year]);
+  const monthIndex = Number(month.slice(5, 7)) - 1;
   const monthCount = new Set(days.flatMap((d) => (byDate.get(d) ?? []).map((e) => e.id))).size;
   const lyCount = new Set(days.flatMap((d) => (byDate.get(addDays(d, -364)) ?? []).map((e) => e.id))).size;
+  const eventDayCount = days.filter((d) => byDate.has(d)).length;
+  const lastYearOf = (d: string) => byDate.get(addDays(d, -364)) ?? [];
+  const goMonth = (i: number) => setMonth(`${year}-${String(((i + 12) % 12) + 1).padStart(2, "0")}-01`);
 
   const save = async () => {
     if (!draft) return;
@@ -174,75 +178,144 @@ export function CalendarStep({ ctx }: { ctx: CalendarCtx }) {
     else setDraft(null);
   };
 
+  const tile = "rounded-xl border px-4 py-2";
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <select className={inputClass} value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
-          {MONTHS.map((m, i) => (
-            <option key={m} value={`${year}-${String(i + 1).padStart(2, "0")}-01`}>
-              {m} {year}
-            </option>
-          ))}
-        </select>
-        <span className="text-sm text-text-muted">
-          {monthCount} event{monthCount === 1 ? "" : "s"} this month · {lyCount} last year
-        </span>
-        <label className="flex items-center gap-1.5 text-sm text-text-muted">
-          <input type="checkbox" checked={onlyEvents} onChange={(e) => setOnlyEvents(e.target.checked)} /> Only days with events
-        </label>
-        <div className="ml-auto flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button className={btn} aria-label="Previous month" onClick={() => goMonth(monthIndex - 1)}>
+          ‹
+        </button>
+        <h3 className="min-w-44 text-center text-lg font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
+          {MONTH_FULL[monthIndex]} {year}
+        </h3>
+        <button className={btn} aria-label="Next month" onClick={() => goMonth(monthIndex + 1)}>
+          ›
+        </button>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <div role="group" aria-label="View" className="flex overflow-hidden rounded-lg border border-border text-sm">
+            {(["grid", "list"] as const).map((v) => (
+              <button key={v} aria-pressed={view === v} onClick={() => setView(v)} className={`px-3 py-1.5 capitalize ${view === v ? "bg-accent font-medium text-black" : "text-text-muted hover:text-text"}`}>
+                {v}
+              </button>
+            ))}
+          </div>
           <button className={btn} onClick={() => setShowSuggest((v) => !v)}>
             Suggest events from data
           </button>
           <button className={btn} onClick={() => setShowImport(true)}>
             Import CSV
           </button>
+          <button className={btnPrimary} onClick={() => setDraft(blank(month <= today && today.startsWith(month.slice(0, 7)) ? today : month))}>
+            + Add event
+          </button>
         </div>
       </div>
+
+      <div role="tablist" aria-label="Month" className="flex flex-wrap gap-1.5">
+        {MONTHS.map((m, i) => (
+          <button key={m} role="tab" aria-selected={i === monthIndex} onClick={() => goMonth(i)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition ${i === monthIndex ? "border-accent bg-accent font-semibold text-black" : counts[i] > 0 ? "border-accent/40 bg-accent/10 text-text hover:border-accent" : "border-border text-text-muted hover:text-text"}`}>
+            {m}
+            {counts[i] > 0 && <span className={`rounded-full px-1.5 text-[10px] font-bold ${i === monthIndex ? "bg-black/20 text-black" : "bg-accent/80 text-black"}`}>{counts[i]}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className={`${tile} border-accent/50 bg-accent/10`}>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">Events this month</p>
+          <p className="text-2xl font-semibold tabular text-accent">{monthCount}</p>
+        </div>
+        <div className={`${tile} border-orange-400/40 bg-orange-500/10`}>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">Days with an event</p>
+          <p className="text-2xl font-semibold tabular text-orange-300">{eventDayCount}</p>
+        </div>
+        <div className={`${tile} border-border bg-surface`}>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">Same month last year</p>
+          <p className="text-2xl font-semibold tabular text-text-muted">{lyCount}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2" aria-label="Legend">
+        <span className="text-xs text-text-muted">Show:</span>
+        {(Object.keys(GROUP_LABELS) as EventGroup[]).map((g) => (
+          <button key={g} aria-pressed={focus === g} onClick={() => setFocus((f) => (f === g ? null : g))} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${focus === g ? "border-text bg-surface-raised text-text" : "border-border text-text-muted hover:text-text"}`}>
+            <span className={`h-2.5 w-2.5 rounded-full ${GROUP_STYLE[g].dot}`} />
+            {GROUP_LABELS[g]}
+          </button>
+        ))}
+        {focus && (
+          <button className="text-xs text-text-muted underline" onClick={() => setFocus(null)}>
+            Show all
+          </button>
+        )}
+      </div>
+
       <p className="max-w-4xl text-xs text-text-muted">
-        Register what is planned (and what already happened, so the Event Effect Model can learn from it). Every event with an effect makes its days run hotter in the plan and compresses the other days; the month totals stay what the models say. Press an event to edit it, or a day&apos;s + to add one.
+        Register what is planned (and what already happened, so the Event Effect Model can learn from it). Click a day to add an event, or an event to edit it. Every event with an effect makes its days run hotter in the plan and compresses the other days; the month totals stay what the models say.
       </p>
       {msg && <p className={`rounded-lg border p-3 text-sm ${msg.tone === "ok" ? "border-good/40 bg-good/10 text-good" : "border-bad/40 bg-bad/10 text-bad"}`}>{msg.text}</p>}
 
       {showSuggest && <Suggestions ctx={ctx} onAdd={(d) => setDraft(d)} onClose={() => setShowSuggest(false)} />}
 
-      {draft && !draft.id && <EventForm draft={draft} onChange={setDraft} onSave={save} onCancel={() => setDraft(null)} busy={busy} />}
-
-      <div className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border bg-surface">
-        {days
-          .filter((d) => !onlyEvents || byDate.has(d) || byDate.has(addDays(d, -364)))
-          .map((d) => {
-            const evs = byDate.get(d) ?? [];
-            const ly = byDate.get(addDays(d, -364)) ?? [];
-            const mult = eventMults[d];
-            const editing = draft?.id && evs.some((e) => e.id === draft.id);
-            return (
-              <div key={d} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-3 py-2">
-                <div className="w-24 shrink-0 text-sm">
-                  <span className="font-medium">{WEEKDAYS[dayOfWeek(d)]}</span> <span className="text-text-muted">{d.slice(8)}</span>
-                </div>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                  {evs.map((e) => (
-                    <Chip key={e.id} e={e} onClick={() => setDraft({ ...e })} />
-                  ))}
-                  {ly.map((e) => (
-                    <Chip key={`ly${e.id}`} e={e} faint />
-                  ))}
-                  {ly.length > 0 && <span className="text-[10px] text-text-faint">last year</span>}
-                </div>
-                {mult && <span className="text-[11px] text-text-muted tabular">spend ×{mult.spend.toFixed(2)} · returning ×{mult.returning.toFixed(2)} · aMER ×{mult.amer.toFixed(2)}</span>}
-                <button className="rounded border border-border px-2 text-sm text-text-muted hover:text-text" aria-label={`Add event on ${d}`} onClick={() => setDraft(blank(d))}>
-                  +
-                </button>
-                {editing && draft && (
-                  <div className="w-full">
-                    <EventForm draft={draft} onChange={setDraft} onSave={save} onCancel={() => setDraft(null)} onDelete={del} busy={busy} />
+      {view === "grid" ? (
+        <CalendarGrid month={month} weekStart={ctx.settings.extra.weekStartDay} byDate={byDate} lastYear={lastYearOf} eventMults={eventMults} today={today} focus={focus} onAdd={(d) => setDraft(blank(d))} onEdit={(e) => setDraft({ ...e })} />
+      ) : (
+        <>
+          <label className="flex items-center gap-1.5 text-sm text-text-muted">
+            <input type="checkbox" checked={onlyEvents} onChange={(e) => setOnlyEvents(e.target.checked)} /> Only days with events
+          </label>
+          <div className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border bg-surface">
+            {days
+              .filter((d) => !onlyEvents || byDate.has(d) || byDate.has(addDays(d, -364)))
+              .map((d) => {
+                const evs = byDate.get(d) ?? [];
+                const ly = lastYearOf(d);
+                const mult = eventMults[d];
+                const g = evs[0] ? typeGroup(evs[0].type) : null;
+                return (
+                  <div key={d} className={`flex flex-wrap items-start gap-x-4 gap-y-1 border-l-4 px-3 py-2 ${g ? `${GROUP_STYLE[g].cell} ${GROUP_STYLE[g].dot.replace("bg-", "border-l-")}` : "border-l-transparent"}`}>
+                    <div className="w-24 shrink-0 text-sm">
+                      <span className="font-medium">{WEEKDAYS[dayOfWeek(d)]}</span> <span className="text-text-muted">{d.slice(8)}</span>
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                      {evs.map((e) => (
+                        <Chip key={e.id} e={e} onClick={() => setDraft({ ...e })} />
+                      ))}
+                      {ly.map((e) => (
+                        <Chip key={`ly${e.id}`} e={e} faint />
+                      ))}
+                      {ly.length > 0 && <span className="text-[10px] text-text-faint">last year</span>}
+                    </div>
+                    {mult && <span className="text-[11px] text-text-muted tabular">spend ×{mult.spend.toFixed(2)} · returning ×{mult.returning.toFixed(2)} · aMER ×{mult.amer.toFixed(2)}</span>}
+                    <button className="rounded border border-border px-2 text-sm text-text-muted hover:border-accent hover:text-accent" aria-label={`Add event on ${d}`} onClick={() => setDraft(blank(d))}>
+                      +
+                    </button>
                   </div>
-                )}
-              </div>
-            );
-          })}
-      </div>
+                );
+              })}
+          </div>
+        </>
+      )}
+
+      {draft && (
+        <Modal title={draft.id ? "Edit event" : `Add event · ${draft.date}`} onClose={() => setDraft(null)} wide>
+          {!draft.id && (
+            <div className="mb-3 flex flex-wrap gap-1.5" aria-label="Quick types">
+              {QUICK_TYPES.map((t) => {
+                const g = typeGroup(t);
+                const on = draft.type === t;
+                return (
+                  <button key={t} type="button" aria-pressed={on} onClick={() => setDraft({ ...draft, type: t })} className={`rounded-full px-3 py-1 text-xs font-medium transition ${on ? `${GROUP_STYLE[g].chip} ring-2` : "border border-border text-text-muted hover:text-text"}`}>
+                    <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${GROUP_STYLE[g].dot}`} />
+                    {TYPE_LABEL[t]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <EventForm draft={draft} onChange={setDraft} onSave={save} onCancel={() => setDraft(null)} onDelete={draft.id ? del : undefined} busy={busy} />
+        </Modal>
+      )}
 
       {showImport && <ImportModal ctx={ctx} onClose={() => setShowImport(false)} onDone={(t) => setMsg({ tone: "ok", text: t })} />}
     </div>
