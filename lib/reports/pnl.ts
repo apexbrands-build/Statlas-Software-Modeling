@@ -21,7 +21,15 @@ export const REVENUE_BY_LABELS: Record<RevenueBy, string> = {
 };
 
 /** Totals that carry their own cost settings (plan and forecast columns). */
-export type PnlTotals = Totals & { cmSettings?: ClientSettings };
+export type PnlTotals = Totals & {
+  cmSettings?: ClientSettings;
+  /** Organic revenue the plan sets directly (planned share of order revenue); without it organic is what the dashboard's definition leaves. */
+  organicRevenue?: number;
+  /** Planned spend per channel that has no ROAS target (the returning audiences): kept out of the planned ROAS and CPA, which only the targeted spend explains. */
+  untargetedSpend?: Partial<Record<ChannelKey, number>>;
+};
+
+const organicOf = (t: Totals, s: ClientSettings) => (t as PnlTotals).organicRevenue ?? METRICS.organicRevenue.value(t, s);
 
 export interface PnlSection {
   title: string;
@@ -38,6 +46,8 @@ const PINTEREST: ChannelKey[] = ["pinterest", "pinterest_returning"];
 const sp = (t: Totals, keys: ChannelKey[]) => keys.reduce((s, k) => s + t.channels[k].spend, 0);
 const rv = (t: Totals, keys: ChannelKey[]) => keys.reduce((s, k) => s + t.channels[k].platformRevenue, 0);
 const pu = (t: Totals, keys: ChannelKey[]) => keys.reduce((s, k) => s + t.channels[k].platformPurchases, 0);
+/** Spend that platform revenue and conversions can be set against: all of it, less planned spend that has no ROAS target. */
+const spReported = (t: Totals, keys: ChannelKey[]) => sp(t, keys) - keys.reduce((s, k) => s + ((t as PnlTotals).untargetedSpend?.[k] ?? 0), 0);
 
 /** Months (0-11) of `year` that have at least one day of data. */
 export function pnlTotals(facts: DailyFact[], year: number): (Totals | null)[] {
@@ -77,7 +87,7 @@ function revenueRows(row: RowFn, opRev: (t: Totals) => number, s: ClientSettings
   return [
     row("paidRevenue", "Paid Revenue (incremental)", "currency0", (t) => paidStats(t, s).iRevenue),
     row("emailRevenueSplit", "Email Revenue", "currency0", (t) => t.emailRevenue),
-    row("organicRevenueSplit", "Organic Revenue", "currency0", (t) => METRICS.organicRevenue.value(t, s)),
+    row("organicRevenueSplit", "Organic Revenue", "currency0", (t) => organicOf(t, s)),
     ...tail,
   ];
 }
@@ -176,16 +186,17 @@ export function buildPnl(totals: (Totals | null)[], s: ClientSettings, revenueBy
         ).flatMap(([k, name, keys]) => [
           row(`${k}Spend`, `${name} Spend`, "currency0", (t) => sp(t, keys)),
           row(`${k}Rev`, `${name} Revenue`, "currency0", (t) => rv(t, keys)),
+          row(`${k}Roas`, `${name} ROAS`, "ratio2", (t) => div(rv(t, keys), spReported(t, keys))),
           row(`${k}Conv`, `${name} Conversions`, "number", (t) => pu(t, keys)),
           row(`${k}Aov`, `${name} AOV`, "currency2", (t) => div(rv(t, keys), pu(t, keys))),
-          row(`${k}Cpa`, `${name} CPA`, "currency2", (t) => div(sp(t, keys), pu(t, keys))),
+          row(`${k}Cpa`, `${name} CPA`, "currency2", (t) => div(spReported(t, keys), pu(t, keys))),
         ]),
-        row("organic", "Organic Revenue", "currency0", (t) => METRICS.organicRevenue.value(t, s)),
+        row("organic", "Organic Revenue", "currency0", (t) => organicOf(t, s)),
       ],
     },
     {
       title: "Other metrics",
-      rows: [row("email", "Email Revenue", "currency0", (t) => t.emailRevenue)],
+      rows: [row("email", "Email Revenue", "currency0", (t) => t.emailRevenue), row("sms", "SMS Revenue", "currency0", (t) => t.smsRevenue)],
     },
   ];
 }

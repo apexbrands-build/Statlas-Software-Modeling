@@ -5,6 +5,9 @@ import { aggregate, cmParts, emptyTotals } from "../metrics";
 import { FLAT_SEASONALITY, generateMonth } from "../planning/generate";
 import { blankInputs } from "../planning/types";
 import type { DailyFact } from "../types";
+import type { RoasOf } from "../planning/roas";
+import type { MixOf } from "../planning/mix";
+import type { PlanTargetDay } from "../types";
 import { blendColumn, planDayToFact, pnlColumns } from "./plan-pnl";
 import { buildPnl } from "./pnl";
 
@@ -122,5 +125,108 @@ describe("plan P&L when a month has spend but no platform split", () => {
 
   it("MER and acquisition spend count the unsplit spend", () => {
     expect(get("acqSpend")).toBeCloseTo(30000, 4);
+  });
+});
+
+describe("plan columns carry the channel plan: spend, ROAS targets, email, SMS and organic", () => {
+  const day = (date: string, over: Partial<PlanTargetDay> = {}): PlanTargetDay => ({
+    planId: "p", clientId: "c", date, orderRevenue: 1000, newRevenue: 600, returningRevenue: 400, orders: 10, newOrders: 6, spend: 200, cm: 0,
+    spendByChannel: { meta_acquisition: 100, meta_returning: 40, google_nonbrand: 60 }, ...over,
+  });
+  const roasOf: RoasOf = (_d, ch) => ({ meta_acquisition: 2, meta_returning: 5, google_nonbrand: 3 } as Record<string, number>)[ch] ?? null;
+  const mixOf: MixOf = (_d, key) => ({ email: 0.2, sms: 0.05, organic: 0.3 })[key];
+  const row = (cols: ReturnType<typeof buildPnl>, key: string, i = 0) => cols.flatMap((x) => x.rows).find((r) => r.key === key)!.values[i];
+
+  it("a plan day expects the platform revenue its spend brings at the ROAS target, with conversions at the day's new or returning AOV", () => {
+    const f = planDayToFact(day("2026-10-05"), { roasOf });
+    expect(f.channels.meta_acquisition.platformRevenue).toBeCloseTo(200, 8); // 100 x 2
+    expect(f.channels.meta_acquisition.platformPurchases).toBeCloseTo(2, 8); // 200 / new AOV 100
+    expect(f.channels.meta_returning.platformRevenue).toBeCloseTo(200, 8); // 40 x 5
+    expect(f.channels.meta_returning.platformPurchases).toBeCloseTo(200 / 100, 8); // returning AOV = 400 / 4
+    expect(f.channels.google_nonbrand.platformRevenue).toBeCloseTo(180, 8);
+  });
+  it("without a ROAS target the channel has spend only, as before", () => {
+    const f = planDayToFact(day("2026-10-05"), { roasOf: (_d, ch) => (ch === "google_nonbrand" ? null : 2) });
+    expect(f.channels.google_nonbrand.spend).toBe(60);
+    expect(f.channels.google_nonbrand.platformRevenue).toBe(0);
+    expect(planDayToFact(day("2026-10-05")).channels.meta_acquisition.platformRevenue).toBe(0);
+  });
+  it("email and SMS revenue are the planned shares of the day's order revenue", () => {
+    const f = planDayToFact(day("2026-10-05"), { mixOf });
+    expect(f.emailRevenue).toBeCloseTo(200, 8);
+    expect(f.smsRevenue).toBeCloseTo(50, 8);
+  });
+
+  const plan = [day("2026-10-05"), day("2026-10-06")];
+  const sections = (src: { roasOf?: RoasOf; mixOf?: MixOf }) => buildPnl([blendColumn([], plan, settings, src)], settings);
+  it("the plan P&L shows each publisher's spend, planned revenue, ROAS and CPA", () => {
+    const p = sections({ roasOf });
+    expect(row(p, "fbSpend")).toBeCloseTo(280, 8); // (100 + 40) x 2 days
+    expect(row(p, "fbRev")).toBeCloseTo(800, 8); // (200 + 200) x 2
+    expect(row(p, "fbRoas")).toBeCloseTo(800 / 280, 8);
+    expect(row(p, "gSpend")).toBeCloseTo(120, 8);
+    expect(row(p, "gRoas")).toBeCloseTo(3, 8);
+    expect(row(p, "fbCpa")).toBeCloseTo(280 / 8, 8); // conversions (2 + 2) x 2
+  });
+  it("shows email and SMS revenue from the plan, and organic as the planned share when the plan has one", () => {
+    const p = sections({ roasOf, mixOf });
+    expect(row(p, "email")).toBeCloseTo(400, 8);
+    expect(row(p, "sms")).toBeCloseTo(100, 8);
+    expect(row(p, "organic")).toBeCloseTo(600, 8); // 30% of 2000
+  });
+  it("organic is what is left (the dashboard's definition) when the plan sets no organic share", () => {
+    const p = sections({ roasOf, mixOf: (_d, key) => (key === "email" ? 0.2 : null) });
+    // order revenue 2000 - paid incremental at the default factors (meta 1.2, meta returning 0.6, google non-brand 0.75) - email 400
+    const src = { roasOf, mixOf: (_d: string, key: "email" | "sms" | "organic") => (key === "email" ? 0.2 : null) };
+    const t = blendColumn([], plan, settings, src)!;
+    const paid = (200 * 1.2 + 200 * 0.6 + 180 * 0.75) * 2;
+    expect(row(p, "organic")).toBeCloseTo(2000 - paid - 400, 6);
+    expect(t.organicRevenue).toBeUndefined();
+  });
+  it("a month planning its organic share adds up with one that does not, in the year column", () => {
+    const octPlan = [day("2026-10-05")];
+    const novPlan = [day("2026-11-05")];
+    const src = { roasOf, mixOf: (d: string, key: "email" | "sms" | "organic") => (key === "organic" && d.startsWith("2026-10") ? 0.3 : null) };
+    const c = pnlColumns("P", 2026, [], [...octPlan, ...novPlan], "", settings, Array(12).fill(null), src);
+    const get = (i: number) => buildPnl([c.columns[i]], settings).flatMap((x) => x.rows).find((r) => r.key === "organic")!.values[0]!;
+    expect(get(9)).toBeCloseTo(300, 8);
+    expect(get(12)).toBeCloseTo(get(9) + get(10), 6);
+  });
+  it("actual columns show ROAS and SMS too", () => {
+    const f = factDay("2026-09-01");
+    f.channels = { ...f.channels, meta_acquisition: { spend: 100, platformRevenue: 250, platformPurchases: 2 } };
+    f.smsRevenue = 30;
+    const a = buildPnl([aggregate([f])], settings);
+    expect(row(a, "fbRoas")).toBeCloseTo(2.5, 8);
+    expect(row(a, "sms")).toBe(30);
+  });
+});
+
+describe("planned ROAS and CPA leave out spend that has no ROAS target", () => {
+  // Returning audiences get no target (aMER is an acquisition measure), so their spend must not dilute the publisher's planned ROAS.
+  const day = (date: string): PlanTargetDay => ({
+    planId: "p", clientId: "c", date, orderRevenue: 1000, newRevenue: 600, returningRevenue: 400, orders: 10, newOrders: 6, spend: 140, cm: 0,
+    spendByChannel: { meta_acquisition: 100, meta_returning: 40 },
+  });
+  const roasOf: RoasOf = (_d, ch) => (ch === "meta_acquisition" ? 2 : null);
+  const row = (c: ReturnType<typeof blendColumn>, key: string) => buildPnl([c], settings).flatMap((x) => x.rows).find((r) => r.key === key)!.values[0];
+
+  it("FB spend shows everything planned, ROAS and CPA are on the spend with a target", () => {
+    const c = blendColumn([], [day("2026-10-05")], settings, { roasOf });
+    expect(row(c, "fbSpend")).toBe(140);
+    expect(row(c, "fbRev")).toBeCloseTo(200, 8);
+    expect(row(c, "fbRoas")).toBeCloseTo(2, 8); // 200 / 100, not 200 / 140
+    expect(row(c, "fbCpa")).toBeCloseTo(100 / 2, 8); // 100 of targeted spend over 2 conversions
+  });
+  it("with no ROAS targets at all the plan has no ROAS or CPA to show", () => {
+    const c = blendColumn([], [day("2026-10-05")], settings);
+    expect(row(c, "fbRoas")).toBeNull();
+    expect(row(c, "fbCpa")).toBeNull();
+  });
+  it("actual days keep every dollar of spend in ROAS, also next to plan days", () => {
+    const f = factDay("2026-10-01");
+    f.channels = { ...f.channels, meta_acquisition: { spend: 100, platformRevenue: 250, platformPurchases: 2 }, meta_returning: { spend: 50, platformRevenue: 100, platformPurchases: 1 } };
+    const c = blendColumn([f], [day("2026-10-05")], settings, { roasOf });
+    expect(row(c, "fbRoas")).toBeCloseTo((250 + 100 + 200) / (150 + 100), 8);
   });
 });

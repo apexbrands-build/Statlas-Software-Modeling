@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { NUMBER_MODES, PnlTable, type NumberMode } from "@/components/reports/PnlTable";
+import { mixOf, planMixShares } from "@/lib/planning/mix";
+import { planRoasTargets, roasOf } from "@/lib/planning/roas";
 import { pnlColumns } from "@/lib/reports/plan-pnl";
 import { buildPnl, REVENUE_BY_LABELS, type RevenueBy } from "@/lib/reports/pnl";
 import type { PlanCtx } from "./ctx";
@@ -15,8 +17,9 @@ export function PnlStep({ ctx }: { ctx: PlanCtx }) {
 
   const view = useMemo(() => {
     const planFixed = months.map((m) => (m.inputs ? (m.inputs.fixedCosts ?? settings.monthlyFixedCosts) : null));
-    const cols = pnlColumns("P", plan.year, [], Object.values(rows).flat(), "", settings, planFixed);
-    const sections = buildPnl(cols.columns, settings, by, cols.fixed).filter((s) => !s.title.startsWith("Ad performance") && s.title !== "Other metrics");
+    const src = { roasOf: roasOf(planRoasTargets(months, settings)), mixOf: mixOf(planMixShares(months)) };
+    const cols = pnlColumns("P", plan.year, [], Object.values(rows).flat(), "", settings, planFixed, src);
+    const sections = buildPnl(cols.columns, settings, by, cols.fixed);
     const opRev = sections.flatMap((s) => s.rows).find((r) => r.key === "opRev")!.values;
     return { sections, opRev, status: cols.status, any: cols.columns[12] !== null };
   }, [months, rows, settings, plan.year, by]);
@@ -42,7 +45,7 @@ export function PnlStep({ ctx }: { ctx: PlanCtx }) {
             ))}
           </select>
         </label>
-        <span className="text-xs text-text-faint">Shows your current draft, saved or not. The same table appears in Reporting → P&amp;L with Compare to “P” once saved.</span>
+        <span className="text-xs text-text-faint">Shows your current draft, saved or not. The same table appears in Reporting → P&amp;L with Compare to “P” once saved. Platform revenue is the planned spend times the ROAS targets of the Details tab.</span>
       </div>
       <PnlTable title={`${plan.year} Plan P&L`} sections={view.sections} opRev={view.opRev} status={view.status} mode={mode} currency={client.currency} />
     </div>

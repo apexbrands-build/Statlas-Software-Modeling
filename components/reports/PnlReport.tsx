@@ -7,6 +7,9 @@ import { useApp } from "@/lib/app-context";
 import { min, todayLocal } from "@/lib/dates";
 import { buildPnl, REVENUE_BY_LABELS, type RevenueBy } from "@/lib/reports/pnl";
 import { pnlColumns, type PnlMode } from "@/lib/reports/plan-pnl";
+import { mixOf, planMixShares } from "@/lib/planning/mix";
+import { planRoasTargets, roasOf } from "@/lib/planning/roas";
+import type { PlanMonth } from "@/lib/planning/types";
 import { getRepository } from "@/lib/repository";
 import type { DailyFact, PlanTargetDay, PlanVersion } from "@/lib/types";
 
@@ -18,6 +21,8 @@ interface Loaded {
   planRows: PlanTargetDay[];
   /** SG&A per month from the plan (null = month has no plan inputs). */
   planFixed: (number | null)[];
+  /** The plan's months: their ROAS targets and email / SMS / organic shares feed the plan and forecast columns. */
+  planMonths: PlanMonth[];
 }
 
 const MODES: { id: PnlMode; label: string; hint: string }[] = [
@@ -55,7 +60,7 @@ export function PnlReport() {
         const m = months.find((x) => x.month === `${year}-${String(i + 1).padStart(2, "0")}-01`);
         return m?.inputs ? (m.inputs.fixedCosts ?? null) : null;
       });
-      if (!cancel) setLoaded({ key: `${client.id}|${year}`, facts, lastData, plan, planRows, planFixed });
+      if (!cancel) setLoaded({ key: `${client.id}|${year}`, facts, lastData, plan, planRows, planFixed, planMonths: months });
     })();
     return () => {
       cancel = true;
@@ -67,8 +72,8 @@ export function PnlReport() {
     // Plan and forecast columns have no incremental / organic split, so Paid vs Organic falls back to New vs Returning.
     const by: RevenueBy = compare !== "A" && revenueBy === "paidOrganic" ? "newReturning" : revenueBy;
     const planFixed = loaded.planFixed.map((v) => v ?? settings.monthlyFixedCosts);
-    const cols = pnlColumns(compare, year, loaded.facts, loaded.planRows, loaded.lastData, settings, planFixed);
-    const sections = buildPnl(cols.columns, settings, by, cols.fixed).filter((s) => compare === "A" || !s.title.startsWith("Ad performance") && s.title !== "Other metrics");
+    const cols = pnlColumns(compare, year, loaded.facts, loaded.planRows, loaded.lastData, settings, planFixed, { roasOf: roasOf(planRoasTargets(loaded.planMonths, settings)), mixOf: mixOf(planMixShares(loaded.planMonths)) });
+    const sections = buildPnl(cols.columns, settings, by, cols.fixed);
     const opRev = sections.flatMap((s) => s.rows).find((r) => r.key === "opRev")!.values;
     return { sections, opRev, status: cols.status, any: cols.columns[12] !== null && cols.columns[12]!.days > 0, swapped: by !== revenueBy };
   }, [client, settings, year, loaded, revenueBy, compare]);
