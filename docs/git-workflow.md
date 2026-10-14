@@ -24,6 +24,14 @@ Flow: build and commit on `development` -> merge `development` into `preview`, c
 ## What is not separated yet
 All three branches still talk to the **same Supabase database** and the same connector tokens. Database migrations are applied to that one live project, so they take effect for production at once; Claude applies them only when asked, keeps them additive, checks them in a rolled-back transaction first and says so. A separate development database (Supabase branching or a second project) is the next step if wanted.
 
-## One-time setup the strategist does on GitHub and Vercel
-- GitHub > repo Settings > Branches: add a protection rule for `main` (require a pull request, no direct pushes) and, optionally, for `preview`.
-- Vercel > project Settings: Production Branch = `main`; give the `preview` branch a fixed domain (Settings > Domains > assign to branch `preview`); every environment variable is currently scoped to **Production only** (checked 2026-10-14: none has Preview or Development), so a deployment of `preview` or `development` starts with no Supabase keys and no `NEXT_PUBLIC_DATA_MODE` and will not load real data. In Settings > Environment Variables, tick **Preview** on the ones the app needs (the Supabase and `NEXT_PUBLIC_*` ones first). Doing that points previews at the same live database; the safer route is a separate development Supabase project and its own keys for Preview.
+## Vercel (set up 2026-10-14)
+- Production branch is `main`: its deployments are `target: production`; every other branch deploys as a preview.
+- Stable preview addresses (no domain needed): `https://statlas-software-modeling-git-development-apex-brands.vercel.app` and `https://statlas-software-modeling-git-preview-apex-brands.vercel.app`. They sit behind Vercel login (deployment protection), so open them while logged in to Vercel.
+- **Previews run on the fictional demo data, not the live database.** All 21 production variables are scoped to Production only, and the only variable scoped to Preview is `NEXT_PUBLIC_DATA_MODE=seed`. So a preview has no Supabase keys, no Shopify / Meta / Google secrets and no way to read or write real client data, whatever the code does. It is for checking screens and logic against demo data. Variables with `NEXT_PUBLIC_` are baked in at build time: change one and the branch must be rebuilt (push, or Redeploy in Vercel).
+- Testing against real data needs a separate development database (a second Supabase project, or Supabase branching, with its own keys set for Preview). Not built; it costs money, so it is the strategist's call.
+
+## GitHub (the strategist, 2 minutes; Claude has no GitHub access)
+Repo `apexbrands-build/Statlas-Software-Modeling` > Settings > Branches > Add branch protection rule:
+1. Branch name pattern `main`; tick **Require a pull request before merging** (and, optionally, Do not allow bypassing). Do the same for `preview` if wanted.
+2. From then on `main` only changes by merging a pull request from `preview` (Pull requests > New > base `main`, compare `preview`), so GitHub Desktop can no longer push straight to it.
+3. Branch protection on a private repository needs a paid GitHub plan (Team or Pro); on the free plan the Branches page offers it only for public repositories. If it is not available, the rule in this file still holds, and Claude never commits to `main`.
