@@ -18,7 +18,15 @@ const LABEL: Record<MetricKey, { name: string; hint: string }> = {
 const TONE = { Poor: "text-bad", Average: "text-text", Great: "text-good" } as const;
 
 /** The Creative Score: overall 0 to 100, the Poor / Average / Great scale and the five metrics behind it. */
-export function CreativeScoreCard({ history, score, metrics, currency }: { history: CreativeHistory | null; score: ReturnType<typeof creativeScore> | null; metrics: Record<MetricKey, number | null> | null; currency: Currency }) {
+export function CreativeScoreCard({ history, score, metrics, currency, loadError = null }: { history: CreativeHistory | null; score: ReturnType<typeof creativeScore> | null; metrics: Record<MetricKey, number | null> | null; currency: Currency; loadError?: string | null }) {
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <h3 className="text-sm font-semibold">Creative Score</h3>
+        <p className="mt-2 text-sm text-bad">The ad history could not be loaded ({loadError}). Reload the page; if it keeps failing, the database functions of migration 0013 may be missing.</p>
+      </div>
+    );
+  }
   if (!history || !score || !metrics || history.scoreAds.length === 0) {
     const hasHistory = Boolean(history && (history.months.length > 0 || history.ads.length > 0));
     return (

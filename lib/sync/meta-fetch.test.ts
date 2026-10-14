@@ -26,7 +26,7 @@ describe("fetchAdDays", () => {
     const rows = await fetchAdDays("act_123", "2026-09-01", "2026-09-07", ["7d_click"], graph);
     expect(rows.map((r) => r.ad_id)).toEqual(["a1", "a2", "a3"]);
     expect(calls.map((c) => c.path)).toEqual(["act_123/insights", "https://graph.test/page2", "https://graph.test/page3"]);
-    expect(calls[0].params).toMatchObject({ level: "ad", time_increment: "1", limit: "500", action_attribution_windows: JSON.stringify(["7d_click"]) });
+    expect(calls[0].params).toMatchObject({ level: "ad", time_increment: "1", limit: "100", action_attribution_windows: JSON.stringify(["7d_click"]) });
     expect(JSON.parse(calls[0].params!.time_range)).toEqual({ since: "2026-09-01", until: "2026-09-07" });
     expect(calls[0].params!.fields).toContain("ad_id");
     expect(calls[0].params!.fields).toContain("impressions");
@@ -78,6 +78,74 @@ describe("fetchAdDays: pages, memory and the clock", () => {
     await expect(fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { deadline })).rejects.toThrow(/^TIMEOUT/);
     vi.useRealTimers();
     expect(n).toBe(1);
+  });
+});
+
+describe("fetchAdDays and fetchAds: transient Meta errors", () => {
+  const noWait = async () => undefined;
+  const flaky = (failures: string[], then: unknown) => {
+    let n = 0;
+    const graph = (async () => {
+      if (n < failures.length) throw new Error(failures[n++]);
+      return then;
+    }) as never;
+    return { graph, calls: () => n };
+  };
+
+  it("retries 'Service temporarily unavailable' and 'An unknown error occurred' and succeeds once Meta answers", async () => {
+    const { graph, calls } = flaky(["Meta: Service temporarily unavailable", "Meta: An unknown error occurred"], { data: [{ ad_id: "a1", date_start: "2026-09-01" }] });
+    const rows = await fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { sleep: noWait });
+    expect(rows.map((r) => r.ad_id)).toEqual(["a1"]);
+    expect(calls()).toBe(2);
+  });
+
+  it("gives up after three attempts and rejects with Meta's message", async () => {
+    let n = 0;
+    const graph = (async () => {
+      n += 1;
+      throw new Error("Meta: Service temporarily unavailable");
+    }) as never;
+    await expect(fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { sleep: noWait })).rejects.toThrow("Service temporarily unavailable");
+    expect(n).toBe(3);
+  });
+
+  it("does not retry an error that retrying cannot fix, such as a missing permission", async () => {
+    let n = 0;
+    const graph = (async () => {
+      n += 1;
+      throw new Error("Meta: (#200) Requires ads_read permission");
+    }) as never;
+    await expect(fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { sleep: noWait })).rejects.toThrow("permission");
+    expect(n).toBe(1);
+  });
+
+  it("waits a little longer before each retry", async () => {
+    const waits: number[] = [];
+    const graph = (async () => {
+      throw new Error("Meta: An unknown error occurred");
+    }) as never;
+    await fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { sleep: async (ms) => void waits.push(ms) }).catch(() => undefined);
+    expect(waits).toHaveLength(2);
+    expect(waits[1]).toBeGreaterThan(waits[0]);
+  });
+
+  it("does not wait for a retry that would run past the deadline", async () => {
+    const graph = (async () => {
+      throw new Error("Meta: Service temporarily unavailable");
+    }) as never;
+    await expect(fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph, { sleep: noWait, deadline: Date.now() + 5 })).rejects.toThrow();
+  });
+
+  it("asks for pages of 100 rows (smaller pages are less likely to fail on a big account)", async () => {
+    const { graph, calls } = pages([{ data: [] }]);
+    await fetchAdDays("act_1", "2026-09-01", "2026-09-07", ["7d_click"], graph);
+    expect(calls[0].params!.limit).toBe("100");
+  });
+
+  it("fetchAds retries a transient error too", async () => {
+    const { graph, calls } = flaky(["Meta: Service temporarily unavailable"], { data: [{ id: "a1" }] });
+    expect((await fetchAds("act_1", ["a1"], graph, { sleep: noWait })).map((a) => a.id)).toEqual(["a1"]);
+    expect(calls()).toBe(1);
   });
 });
 

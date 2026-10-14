@@ -96,6 +96,7 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
   const money = (v: number | null) => formatValue(v, "currency0", client.currency);
 
   const [history, setHistory] = useState<CreativeHistory | null | "loading">("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modelSettings] = useState<CreativeSettings>(() => ({ ...DEFAULT_CREATIVE, ...((savedModel?.settings as Partial<CreativeSettings> | undefined) ?? {}) }));
   const [blocks, setBlocks] = useState<Record<string, CreativeMonth>>(() => readSavedBlocks(savedModel?.results));
   const [dirty, setDirty] = useState(false);
@@ -112,8 +113,16 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
     getRepository()
       .getCreativeHistory(client.id, asOf, `${plan.year - 1}-01-01`)
       .then(
-        (h) => !cancel && setHistory(h),
-        () => !cancel && setHistory(null),
+        (h) => {
+          if (cancel) return;
+          setLoadError(null);
+          setHistory(h);
+        },
+        (e) => {
+          if (cancel) return;
+          setLoadError(e instanceof Error && e.message ? e.message : "unknown error");
+          setHistory(null);
+        },
       );
     return () => {
       cancel = true;
@@ -248,7 +257,7 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
         <div className="h-64 animate-pulse rounded-xl bg-surface" />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-          <CreativeScoreCard history={data} score={score} metrics={metrics} currency={client.currency} />
+          <CreativeScoreCard history={data} score={score} metrics={metrics} currency={client.currency} loadError={loadError} />
 
           <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
             <div className="flex flex-wrap items-center gap-2">

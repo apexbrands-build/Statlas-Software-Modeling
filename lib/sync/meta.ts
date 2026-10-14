@@ -116,6 +116,26 @@ type GraphFn = <T>(pathOrUrl: string, params?: Record<string, string>) => Promis
 const timedOut = (deadline: number | undefined) => deadline !== undefined && Date.now() > deadline;
 const TIMEOUT_MESSAGE = "TIMEOUT: ad-level data did not fit in one task";
 
+type Sleep = (ms: number) => Promise<void>;
+const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Meta's way of saying a request was too heavy or the service hiccuped: worth another try, unlike a missing permission. */
+const TRANSIENT_GRAPH = /temporarily unavailable|unknown error occurred/i;
+const RETRY_WAITS = [1000, 2500];
+
+/** One Graph call, tried up to three times (waiting 1 s, then 2.5 s) when Meta fails transiently; any other error, or no time left before the deadline, rejects at once. */
+async function callWithRetry<T>(fn: () => Promise<T>, opts: { deadline?: number; sleep?: Sleep }): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "";
+      if (!TRANSIENT_GRAPH.test(message) || attempt >= RETRY_WAITS.length) throw e;
+      if (opts.deadline !== undefined && Date.now() + RETRY_WAITS[attempt] > opts.deadline) throw e;
+      await (opts.sleep ?? realSleep)(RETRY_WAITS[attempt]);
+    }
+  }
+}
+
 /**
  * Ad-level daily insights (one row per ad and day with spend). Follows every page; a Graph error rejects so the caller decides what to do.
  * With `onPage` each page is handed over and not kept (the raw rows carry long action lists); without it all rows are returned.
@@ -127,24 +147,29 @@ export async function fetchAdDays(
   until: string,
   windows: string[] = ["7d_click"],
   graphImpl: GraphFn = graph,
-  opts: { deadline?: number; onPage?: (rows: AdInsightRow[]) => void } = {},
+  opts: { deadline?: number; onPage?: (rows: AdInsightRow[]) => void; sleep?: Sleep } = {},
 ): Promise<AdInsightRow[]> {
   const out: AdInsightRow[] = [];
   if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
-  let page = await graphImpl<{ data: AdInsightRow[]; paging?: { next?: string } }>(`${adAccountId}/insights`, {
-    level: "ad",
-    time_increment: "1",
-    time_range: JSON.stringify({ since, until }),
-    fields: "ad_id,ad_name,adset_id,campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
-    action_attribution_windows: JSON.stringify(windows),
-    limit: "500",
-  });
+  let page = await callWithRetry(
+    () =>
+      graphImpl<{ data: AdInsightRow[]; paging?: { next?: string } }>(`${adAccountId}/insights`, {
+        level: "ad",
+        time_increment: "1",
+        time_range: JSON.stringify({ since, until }),
+        fields: "ad_id,ad_name,adset_id,campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+        action_attribution_windows: JSON.stringify(windows),
+        limit: "100",
+      }),
+    opts,
+  );
   for (;;) {
     if (opts.onPage) opts.onPage(page.data);
     else out.push(...page.data);
     if (!page.paging?.next) break;
     if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
-    page = await graphImpl(page.paging.next);
+    const next = page.paging.next;
+    page = await callWithRetry(() => graphImpl<{ data: AdInsightRow[]; paging?: { next?: string } }>(next), opts);
   }
   return out;
 }
@@ -155,24 +180,29 @@ const AD_FIELDS = "id,name,adset_id,campaign{id,name},effective_status,created_t
 const ALL_STATUSES = ["ACTIVE", "PAUSED", "DELETED", "ARCHIVED", "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED", "PENDING_BILLING_INFO", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "WITH_ISSUES"];
 
 /** The ads behind the given ids (name, campaign, launch date, status, creative type), looked up 50 ids at a time. Past `deadline` it stops with a TIMEOUT. */
-export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: GraphFn = graph, opts: { deadline?: number } = {}): Promise<AdRow[]> {
+export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: GraphFn = graph, opts: { deadline?: number; sleep?: Sleep } = {}): Promise<AdRow[]> {
   const out: AdRow[] = [];
   for (let i = 0; i < adIds.length; i += 50) {
     const batch = adIds.slice(i, i + 50);
     if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
-    let page = await graphImpl<{ data: AdRow[]; paging?: { next?: string } }>(`${adAccountId}/ads`, {
-      fields: AD_FIELDS,
-      filtering: JSON.stringify([
-        { field: "id", operator: "IN", value: batch },
-        { field: "effective_status", operator: "IN", value: ALL_STATUSES },
-      ]),
-      limit: "100",
-    });
+    let page = await callWithRetry(
+      () =>
+        graphImpl<{ data: AdRow[]; paging?: { next?: string } }>(`${adAccountId}/ads`, {
+          fields: AD_FIELDS,
+          filtering: JSON.stringify([
+            { field: "id", operator: "IN", value: batch },
+            { field: "effective_status", operator: "IN", value: ALL_STATUSES },
+          ]),
+          limit: "100",
+        }),
+      opts,
+    );
     for (;;) {
       out.push(...page.data);
       if (!page.paging?.next) break;
       if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
-      page = await graphImpl(page.paging.next);
+      const next = page.paging.next;
+      page = await callWithRetry(() => graphImpl<{ data: AdRow[]; paging?: { next?: string } }>(next), opts);
     }
   }
   return out;

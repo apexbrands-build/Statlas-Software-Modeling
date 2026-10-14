@@ -89,7 +89,7 @@ describe("mapAd", () => {
 
 describe("isRetryableAdError", () => {
   it("is true for a timeout, Meta's rate limits and its too-much-data error", () => {
-    for (const m of ["TIMEOUT: ad-level data did not fit", "Meta: (#17) User request limit reached", "Meta: (#4) Application request limit reached", "Meta: (#80004) There have been too many calls to this ad-account", "Meta: (#613) Calls to this api have exceeded the rate limit", "Meta: Please reduce the amount of data you're asking for, then retry your request"]) {
+    for (const m of ["TIMEOUT: ad-level data did not fit", "Meta: (#17) User request limit reached", "Meta: (#4) Application request limit reached", "Meta: (#80004) There have been too many calls to this ad-account", "Meta: (#613) Calls to this api have exceeded the rate limit", "Meta: Please reduce the amount of data you're asking for, then retry your request", "Meta: Service temporarily unavailable", "Meta: An unknown error occurred"]) {
       expect(isRetryableAdError(new Error(m)), m).toBe(true);
     }
   });

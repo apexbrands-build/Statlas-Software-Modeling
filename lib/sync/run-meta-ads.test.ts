@@ -198,6 +198,52 @@ describe("syncMetaAds", () => {
   });
 });
 
+describe("syncMetaAds: the ad-level pull is split into 7-day windows", () => {
+  const range = (admin: never, deps: Record<string, unknown>, since: string, until: string) => syncMetaAds(admin, integration, since, until, ["7d_click"], "catalog", { deps: deps as never });
+
+  it("asks Meta for one 7-day window at a time, covering the whole range exactly once", async () => {
+    const { admin } = fakeAdmin();
+    const asked: [string, string][] = [];
+    const fetchAdDays = async (_a: string, since: string, until: string, _w: string[], _g: unknown, opts?: { onPage?: (rows: Row[]) => void }) => {
+      asked.push([since, until]);
+      opts?.onPage?.([dayRow(`ad-${since}`, since)]);
+      return [];
+    };
+    const r = await range(admin, { fetchAdDays, fetchAds: adsFor }, "2026-09-01", "2026-09-15");
+    expect(asked).toEqual([["2026-09-01", "2026-09-07"], ["2026-09-08", "2026-09-14"], ["2026-09-15", "2026-09-15"]]);
+    expect(r.days).toBe(3);
+  });
+
+  it("a range of seven days or less is a single call", async () => {
+    const { admin } = fakeAdmin();
+    const fetchAdDays = vi.fn(async () => []);
+    await range(admin, { fetchAdDays, fetchAds: adsFor }, "2026-09-01", "2026-09-07");
+    expect(fetchAdDays).toHaveBeenCalledTimes(1);
+  });
+
+  it("a window that fails fails the whole pull before anything is deleted, so a chunk is never half loaded", async () => {
+    const { admin, log } = fakeAdmin();
+    let n = 0;
+    const fetchAdDays = async (_a: string, since: string, _u: string, _w: string[], _g: unknown, opts?: { onPage?: (rows: Row[]) => void }) => {
+      n += 1;
+      if (n === 2) throw new Error("Meta: Service temporarily unavailable");
+      opts?.onPage?.([dayRow(`ad-${since}`, since)]);
+      return [];
+    };
+    const err = await range(admin, { fetchAdDays, fetchAds: adsFor }, "2026-09-01", "2026-09-21").catch((e) => e);
+    expect(isRetryableAdError(err)).toBe(true);
+    expect(log.filter((l) => l.op === "delete" || l.op === "insert")).toEqual([]);
+  });
+
+  it("passes the deadline to every window", async () => {
+    const { admin } = fakeAdmin();
+    const deadline = Date.now() + 30_000;
+    const fetchAdDays = vi.fn(async () => []);
+    await syncMetaAds(admin, integration, "2026-09-01", "2026-09-15", ["7d_click"], "catalog", { deps: { fetchAdDays, fetchAds: adsFor } as never, deadline });
+    for (const call of fetchAdDays.mock.calls) expect((call as unknown[])[5]).toMatchObject({ deadline });
+  });
+});
+
 describe("syncMetaAds: failures that must make the runner retry", () => {
   it("treats a rate limit from Meta as retryable, so the runner retries a smaller piece instead of leaving a silent gap", async () => {
     const { admin } = fakeAdmin();

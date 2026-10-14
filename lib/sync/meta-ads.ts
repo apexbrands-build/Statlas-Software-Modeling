@@ -96,10 +96,10 @@ export function mapAd(ad: AdRow, clientId: string, keywords: string, accountId: 
 /** A failure of the ad-level step that must fail the chunk so the job runner retries it (smaller), instead of leaving a silent gap. */
 export class RetryableAdError extends Error {}
 
-const RETRYABLE = /^TIMEOUT|reduce the amount of data|request limit reached|too many calls|rate limit|\(#(?:4|17|32|613|80000|80003|80004)\)/i;
+const RETRYABLE = /^TIMEOUT|reduce the amount of data|temporarily unavailable|unknown error occurred|request limit reached|too many calls|rate limit|\(#(?:4|17|32|613|80000|80003|80004)\)/i;
 
 /**
- * True when the ad step should fail the chunk: it ran out of time, Meta rate-limited it or said the pull was too large, or a write failed
+ * True when the ad step should fail the chunk: it ran out of time, Meta rate-limited it, said the pull was too large or was unavailable, or a write failed
  * after the window was cleared. Anything else (for example a missing permission on one account) stays a note in the run message.
  */
 export function isRetryableAdError(e: unknown): boolean {

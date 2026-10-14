@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { addDays } from "../dates";
 import { fetchAdDays, fetchAds } from "./meta";
 import { isCatalogCampaign, isRetryableAdError, mapAd, mapAdDay, RetryableAdError, type AdInsightRow, type AdRow } from "./meta-ads";
 
@@ -11,6 +12,16 @@ export interface AdSyncDeps {
 }
 
 const TIMEOUT = "TIMEOUT: ad-level data did not fit in one task";
+
+/** The range cut into consecutive windows of at most 7 days, first to last. */
+export function sevenDayWindows(since: string, until: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (let from = since; from <= until; from = addDays(from, 7)) {
+    const end = addDays(from, 6);
+    out.push([from, end < until ? end : until]);
+  }
+  return out;
+}
 
 async function inBatches<T>(rows: T[], deadline: number | undefined, write: (batch: T[]) => PromiseLike<{ error: { message: string } | null }>) {
   for (let i = 0; i < rows.length; i += BATCH) {
@@ -51,17 +62,17 @@ export async function syncMetaAds(
   // Each page is mapped as it arrives; only the small mapped rows (and the first row of each ad, for ads Meta cannot describe) are kept.
   const days: ReturnType<typeof mapAdDay>[] = [];
   const firstSeen = new Map<string, AdInsightRow>();
-  await deps.fetchAdDays(accountId, since, until, windows, undefined, {
-    deadline,
-    onPage: (rows) => {
-      for (const r of rows) {
-        const d = mapAdDay(r, windows, clientId, accountId);
-        if (d.spend <= 0) continue;
-        days.push(d);
-        if (!firstSeen.has(r.ad_id)) firstSeen.set(r.ad_id, { ad_id: r.ad_id, ad_name: r.ad_name, adset_id: r.adset_id, campaign_id: r.campaign_id, campaign_name: r.campaign_name, date_start: r.date_start });
-      }
-    },
-  });
+  const onPage = (rows: AdInsightRow[]) => {
+    for (const r of rows) {
+      const d = mapAdDay(r, windows, clientId, accountId);
+      if (d.spend <= 0) continue;
+      days.push(d);
+      if (!firstSeen.has(r.ad_id)) firstSeen.set(r.ad_id, { ad_id: r.ad_id, ad_name: r.ad_name, adset_id: r.adset_id, campaign_id: r.campaign_id, campaign_name: r.campaign_name, date_start: r.date_start });
+    }
+  };
+  // One 7-day window at a time: a long ad-level request is what Meta answers with "temporarily unavailable". Any window failing fails the pull
+  // before anything is deleted, so a chunk is never half loaded.
+  for (const [from, to] of sevenDayWindows(since, until)) await deps.fetchAdDays(accountId, from, to, windows, undefined, { deadline, onPage });
   const adIds = [...firstSeen.keys()];
 
   let details: AdRow[] = [];
