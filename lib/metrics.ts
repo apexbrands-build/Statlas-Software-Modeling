@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { CHANNEL_KEYS } from "./types";
 import { CORE_CHANNELS, PLATFORMS, RETENTION_CHANNELS } from "./channels";
+import { MIX_KEYS, type MixKey, type MixOf } from "./planning/mix";
 import type { RoasOf } from "./planning/roas";
 
 /* ------------------------------------------------------------------ */
@@ -116,6 +117,8 @@ export interface PlanTotals {
   spendByChannel: Partial<Record<ChannelKey, number>>;
   /** Per channel with a ROAS target: planned spend and the platform revenue that spend is expected to bring at the target. Empty unless aggregatePlan got a `roasOf`. */
   platformRoasPlan: Partial<Record<ChannelKey, { spend: number; expectedRevenue: number }>>;
+  /** Planned email, SMS and organic revenue for the period (order revenue x the plan's share), only for a line every day of the period plans. Empty unless aggregatePlan got a `mixOf`. */
+  mixRevenue: Partial<Record<MixKey, number>>;
   /** Optional P&L lines; null when the plan does not forecast them. */
   grossSales: number | null;
   discounts: number | null;
@@ -123,7 +126,8 @@ export interface PlanTotals {
   refunds: number | null;
 }
 
-export function aggregatePlan(rows: PlanTargetDay[], roasOf?: RoasOf): PlanTotals {
+export function aggregatePlan(rows: PlanTargetDay[], roasOf?: RoasOf, mixOf?: MixOf): PlanTotals {
+  const covered: Partial<Record<MixKey, { revenue: number; base: number }>> = {};
   const p: PlanTotals = {
     days: 0,
     orderRevenue: 0,
@@ -137,6 +141,7 @@ export function aggregatePlan(rows: PlanTargetDay[], roasOf?: RoasOf): PlanTotal
     cm: 0,
     spendByChannel: {},
     platformRoasPlan: {},
+    mixRevenue: {},
     grossSales: null,
     discounts: null,
     shipping: null,
@@ -164,6 +169,20 @@ export function aggregatePlan(rows: PlanTargetDay[], roasOf?: RoasOf): PlanTotal
     }
     p.brandSpend += r.spendByChannel.google_brand ?? 0;
     for (const k of RETENTION_CHANNELS) p.retentionSpend += r.spendByChannel[k] ?? 0;
+    if (mixOf) {
+      for (const k of MIX_KEYS) {
+        const share = mixOf(r.date, k);
+        if (share === null) continue;
+        const c = (covered[k] ??= { revenue: 0, base: 0 });
+        c.revenue += r.orderRevenue * share;
+        c.base += r.orderRevenue;
+      }
+    }
+  }
+  // A line counts only when every day of the period plans it: otherwise its total would cover part of the revenue and read as a shortfall.
+  for (const k of MIX_KEYS) {
+    const c = covered[k];
+    if (c && p.orderRevenue > 0 && c.base >= p.orderRevenue - 0.5) p.mixRevenue[k] = c.revenue;
   }
   return p;
 }
@@ -537,12 +556,14 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "emailRevenue",
+    additive: true,
     label: "Email Revenue",
     format: "currency0",
     direction: "up",
     source: "Klaviyo",
     formula: "Klaviyo-attributed revenue (campaigns + flows)",
     value: (t) => t.emailRevenue,
+    target: (p) => p.mixRevenue.email ?? null,
   }),
   def({
     key: "emailOrders",
@@ -582,12 +603,14 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
   }),
   def({
     key: "organicRevenue",
+    additive: true,
     label: "Organic Revenue",
     format: "currency0",
     direction: "up",
     source: "Derived",
     formula: "Order Revenue − Paid iRevenue − Email Revenue (floored at 0)",
     value: (t, s) => Math.max(0, orderRevenue(t) - paidStats(t, s).iRevenue - t.emailRevenue),
+    target: (p) => p.mixRevenue.organic ?? null,
   }),
   def({
     key: "organicOrders",

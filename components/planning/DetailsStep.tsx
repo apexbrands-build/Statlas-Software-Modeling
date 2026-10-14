@@ -4,7 +4,8 @@ import { useState } from "react";
 import { formatValue } from "@/lib/format";
 import { aggregate } from "@/lib/metrics";
 import { addYears, endOfMonth, todayLocal } from "@/lib/dates";
-import { inputsFromFacts, sourceRange } from "@/lib/planning/history";
+import { inputsFromFacts, recencyRange, sourceRange } from "@/lib/planning/history";
+import { mixActual, mixGet, mixSet } from "@/lib/planning/mix";
 import type { PlanMonthInputs } from "@/lib/planning/types";
 import type { PlanCtx } from "./ctx";
 import { RoasLine } from "./RoasLine";
@@ -119,6 +120,9 @@ const rate = (k: keyof Rates) => ({ get: (i: PlanMonthInputs) => i.rates[k], set
 
 const LINES: LineDef[] = [
   { id: "returning", label: "Returning revenue", unit: "revenue", help: "", get: (i) => i.returningRevenue, set: (i, v) => ({ ...i, returningRevenue: v }), actual: () => null },
+  { id: "email", label: "Email revenue", unit: "pct", help: "Email revenue as % of order revenue. Last year and Actual fill in once email is connected (Klaviyo or GA4, per Store Settings); until then type the share you expect. Home compares email revenue with it.", get: (i) => mixGet(i, "email"), set: (i, v) => mixSet(i, "email", v), actual: (x) => mixActual(x, "email") },
+  { id: "sms", label: "SMS revenue", unit: "pct", help: "SMS revenue as % of order revenue. No SMS source is connected yet (Postscript or Klaviyo SMS), so there is no Last year or Actual: type the share you expect. It will fill in once SMS is connected.", get: (i) => mixGet(i, "sms"), set: (i, v) => mixSet(i, "sms", v), actual: (x) => mixActual(x, "sms") },
+  { id: "organic", label: "Organic revenue", unit: "pct", help: "Organic revenue as % of order revenue: order revenue minus incremental paid revenue and email revenue (the dashboard's definition). The default follows the same month last year, which keeps its seasonality; switch the extrapolation to the last 30 or 90 days when organic efforts changed. Home compares organic revenue with it.", get: (i) => mixGet(i, "organic"), set: (i, v) => mixSet(i, "organic", v), actual: (x) => mixActual(x, "organic") },
   { id: "discounts", label: "Discounts", unit: "pct", help: "Discounts as % of gross sales. Q4 usually runs deeper, so last year's same month is the default.", ...rate("discountPct") },
   { id: "shipping", label: "Shipping", unit: "pct", help: "Shipping charged to customers, as % of gross sales after discounts.", ...rate("shippingPct") },
   { id: "taxes", label: "Taxes", unit: "pct", help: "Sales tax collected, as % of gross sales after discounts (part of order revenue, never of CM).", ...rate("taxPct") },
@@ -130,7 +134,7 @@ const LINES: LineDef[] = [
   { id: "roas", label: "ROAS targets", unit: "revenue", help: "", get: () => 0, set: (i) => i, actual: () => null },
 ];
 
-type Basis = "last_year" | "recent" | "range";
+type Basis = "last_year" | "recent" | "last30" | "last90" | "range";
 
 export function DetailsStep({ ctx }: { ctx: PlanCtx }) {
   const [line, setLine] = useState("returning");
@@ -156,7 +160,7 @@ export function DetailsStep({ ctx }: { ctx: PlanCtx }) {
         </button>
       </div>
       {def.id === "returning" ? <ReturningLine ctx={ctx} /> : def.id === "roas" ? <RoasLine ctx={ctx} /> : <RateLine ctx={ctx} def={def} />}
-      <p className="text-xs text-text-faint">Email, SMS and organic revenue lines are not planned yet: strategists usually forecast totals only. Spend, aMER and returning revenue come from the Models.</p>
+      <p className="text-xs text-text-faint">Spend, aMER and returning revenue come from the Models. Email, SMS and organic are shares of order revenue that Home tracks; they do not change the revenue forecast. Returns are one line for now (new and returning customers are not split yet).</p>
     </div>
   );
 }
@@ -184,6 +188,10 @@ function RateLine({ ctx, def }: { ctx: PlanCtx; def: LineDef }) {
     if (basis === "last_year") return ly(month);
     if (basis === "recent") {
       const r = sourceRange("recent", month, today);
+      return def.actual(over(r.from, r.to, r.months));
+    }
+    if (basis === "last30" || basis === "last90") {
+      const r = recencyRange(basis === "last30" ? 30 : 90, today);
       return def.actual(over(r.from, r.to, r.months));
     }
     const days = Math.max(1, (new Date(to).getTime() - new Date(from).getTime()) / 86400000 + 1);
@@ -281,6 +289,8 @@ function RateLine({ ctx, def }: { ctx: PlanCtx; def: LineDef }) {
             Extrapolate based on
             <select className={`${inputClass} mt-1 w-full`} value={basis} onChange={(e) => setBasis(e.target.value as Basis)}>
               <option value="last_year">Same month last year (YoY)</option>
+              <option value="last30">Last 30 days</option>
+              <option value="last90">Last 90 days</option>
               <option value="recent">Last 3 months</option>
               <option value="range">Date range</option>
             </select>

@@ -32,7 +32,7 @@ export function monthRows(def: MetricDef, data: DashData, cmp: CompareSource, wi
       tot,
       hasActual: facts.length > 0,
       actual: facts.length ? def.value(tot, data.settings) : null,
-      target: planRows.length && def.target ? def.target(aggregatePlan(planRows, data.roasOf ?? undefined), data.settings) : null,
+      target: planRows.length && def.target ? def.target(aggregatePlan(planRows, data.roasOf ?? undefined, data.mixOf ?? undefined), data.settings) : null,
       compare: cmpFacts.length ? def.value(aggregate(cmpFacts), data.settings) : null,
     };
   });
@@ -58,7 +58,7 @@ export function dayRows(def: MetricDef, data: DashData, cmp: CompareSource): Mon
       tot,
       hasActual: Boolean(f),
       actual: f ? def.value(tot, data.settings) : null,
-      target: p && def.target ? def.target(aggregatePlan([p], data.roasOf ?? undefined), data.settings) : null,
+      target: p && def.target ? def.target(aggregatePlan([p], data.roasOf ?? undefined, data.mixOf ?? undefined), data.settings) : null,
       compare: c ? def.value(aggregate([c]), data.settings) : null,
     };
   });

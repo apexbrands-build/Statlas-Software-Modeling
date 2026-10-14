@@ -44,6 +44,13 @@ export interface DayOverride {
   returningRevenue?: number;
 }
 
+/** Where the month's order revenue comes from beyond the new and returning split, as % of order revenue. Absent = not planned. */
+export interface PlanMix {
+  emailPct?: number;
+  smsPct?: number;
+  organicPct?: number;
+}
+
 /** What the strategist decides for one month; everything else is derived. */
 export interface PlanMonthInputs {
   /** Total ad spend for the month. */
@@ -66,6 +73,8 @@ export interface PlanMonthInputs {
   fixedCosts?: number;
   /** Fixed daily values (a locked day keeps them; the rest of the month absorbs the difference). */
   overrides?: Record<string, DayOverride>;
+  /** Planned email, SMS and organic revenue as % of the month's order revenue (Details lines). They do not change any target; Home compares email and organic revenue to them. */
+  mix?: PlanMix;
   /** Platform ROAS targets the strategist typed for this month, per channel. Absent = the suggested value (aMER / incrementality factor). */
   roas?: Partial<Record<ChannelKey, number>>;
   source?: "manual" | "last_year" | "recent" | "actuals";

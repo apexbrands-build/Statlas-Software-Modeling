@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDays, addYears, comparisonRange, diffDays, eachDay, min, type CompareModeName, type Range } from "./dates";
 import { aggregate, aggregatePlan, compare, type Comparison, type MetricDef, type PlanTotals, type Totals } from "./metrics";
+import { mixOf as makeMixOf, planMixShares, type MixOf, type MonthMixShares } from "./planning/mix";
 import { planRoasTargets, roasOf as makeRoasOf, type MonthRoasTargets, type RoasOf } from "./planning/roas";
 import { pickPlan, stretchOf } from "./planning/scenarios";
 import { getRepository } from "./repository";
@@ -21,8 +22,8 @@ interface Raw {
   planName: string | null;
   hasStretch: boolean;
   planScenario: PlanScenario;
-  /** Platform ROAS targets per month of the plan; null when they could not be loaded. */
-  roasTargets: MonthRoasTargets | null;
+  /** Platform ROAS targets and email/SMS/organic shares per month of the plan; null when they could not be loaded. */
+  planDerived: { roas: MonthRoasTargets; mix: MonthMixShares } | null;
 }
 
 export interface DashData {
@@ -56,6 +57,8 @@ export interface DashData {
   planTotals: PlanTotals;
   /** The plan's platform ROAS target for a channel on a date; null when the plan has none (or they did not load). */
   roasOf: RoasOf | null;
+  /** The plan's planned share of order revenue for email, SMS and organic on a date; null when the plan has none (or they did not load). */
+  mixOf: MixOf | null;
 }
 
 export function useDashboardData(
@@ -84,16 +87,16 @@ export function useDashboardData(
       const planScenario: PlanScenario = hasStretch ? scenario : "baseline";
       const plan = pickPlan(plans, year, planScenario);
       const trendFrom = range.from;
-      const [facts, lyFacts, prevFacts, customFacts, planRows, roasTargets] = await Promise.all([
+      const [facts, lyFacts, prevFacts, customFacts, planRows, planDerived] = await Promise.all([
         repo.getFacts(client.id, trendFrom, effTo),
         repo.getFacts(client.id, addYears(trendFrom, -1), addYears(range.to, -1)),
         repo.getFacts(client.id, prevRange.from, prevRange.to),
         customCompare ? repo.getFacts(client.id, customCompare.from, customCompare.to) : Promise.resolve([]),
         plan ? repo.getPlanTargets(client.id, plan.id, trendFrom, range.to) : Promise.resolve([]),
-        // The channel ROAS targets come from the plan's month inputs; Home still works without them.
-        plan && settings ? repo.getPlanMonths(plan.id).then((months) => planRoasTargets(months, settings)).catch(() => null) : Promise.resolve(null),
+        // The channel ROAS targets and the email/organic shares come from the plan's month inputs; Home still works without them.
+        plan && settings ? repo.getPlanMonths(plan.id).then((months) => ({ roas: planRoasTargets(months, settings), mix: planMixShares(months) })).catch(() => null) : Promise.resolve(null),
       ]);
-      if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, customFacts, plan: planRows, planName: plan?.name ?? null, hasStretch, planScenario, roasTargets });
+      if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, customFacts, plan: planRows, planName: plan?.name ?? null, hasStretch, planScenario, planDerived });
     })();
     return () => {
       cancel = true;
@@ -103,7 +106,8 @@ export function useDashboardData(
   return useMemo<DashData | null>(() => {
     if (!raw || !client || !settings || !range || raw.key !== key) return null;
     const lyLimit = addYears(raw.effTo, -1);
-    const roasOf = raw.roasTargets ? makeRoasOf(raw.roasTargets) : null;
+    const roasOf = raw.planDerived ? makeRoasOf(raw.planDerived.roas) : null;
+    const mixOf = raw.planDerived ? makeMixOf(raw.planDerived.mix) : null;
     return {
       client,
       settings,
@@ -127,8 +131,9 @@ export function useDashboardData(
       ly: aggregate(raw.lyFacts.filter((f) => f.date >= addYears(range.from, -1) && f.date <= lyLimit)),
       prev: aggregate(raw.prevFacts),
       custom: aggregate(raw.customFacts),
-      planTotals: aggregatePlan(raw.plan.filter((p) => p.date >= range.from && p.date <= raw.effTo), roasOf ?? undefined),
+      planTotals: aggregatePlan(raw.plan.filter((p) => p.date >= range.from && p.date <= raw.effTo), roasOf ?? undefined, mixOf ?? undefined),
       roasOf,
+      mixOf,
     };
   }, [raw, client, settings, range, key, customCompare]);
 }
@@ -174,7 +179,7 @@ export function tilePace(def: MetricDef, d: DashData, mode: CompareModeName): Pa
   const all = [...d.plan.values()];
   const remainingDays = all.filter((r) => r.date > d.effTo).length;
   if (remainingDays === 0) return null;
-  const full = def.target(aggregatePlan(all, d.roasOf ?? undefined), d.settings);
+  const full = def.target(aggregatePlan(all, d.roasOf ?? undefined, d.mixOf ?? undefined), d.settings);
   const toDate = def.target(d.planTotals, d.settings);
   const actual = def.value(d.cur, d.settings);
   if (full === null || toDate === null || actual === null || full === 0) return null;

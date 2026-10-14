@@ -1,5 +1,5 @@
 import { addDays, addYears, dayOfWeek, endOfMonth, startOfMonth } from "../dates";
-import { aggregate, amerSpend, cmParts, div } from "../metrics";
+import { aggregate, amerSpend, cmParts, div, METRICS, orderRevenue } from "../metrics";
 import type { ClientSettings, DailyFact, PlanSeasonality } from "../types";
 import { PLAN_PLATFORMS, type PlanMonthInputs } from "./types";
 
@@ -73,6 +73,14 @@ export function inputsFromFacts(facts: DailyFact[], monthsCount: number, setting
   }
   const base = t.grossSales - t.discounts;
   const cm = cmParts(t, settings);
+  // Where the revenue came from: email and organic as a share of order revenue (organic = order revenue - paid incremental - email, the dashboard's
+  // definition). No email revenue means no email data, not 0%; there is no SMS source yet.
+  const orderRev = orderRevenue(t);
+  const mix: PlanMonthInputs["mix"] = {};
+  if (orderRev > 0) {
+    if (t.emailRevenue > 0) mix.emailPct = round2((t.emailRevenue / orderRev) * 100);
+    mix.organicPct = round2(((METRICS.organicRevenue.value(t, settings) ?? 0) / orderRev) * 100);
+  }
   return {
     spend: Math.round((total / monthsCount) * g),
     amer: round2(div(t.newOrderRevenue, amerSpend(t, settings)) ?? 0),
@@ -90,6 +98,7 @@ export function inputsFromFacts(facts: DailyFact[], monthsCount: number, setting
       returningAov: round2(div(t.returningOrderRevenue, t.returningOrders) ?? 0),
     },
     fixedCosts: settings.monthlyFixedCosts,
+    ...(Object.keys(mix).length ? { mix } : {}),
     source,
   };
 }
@@ -104,4 +113,10 @@ export function sourceRange(source: FillSource, month: string, today: string): {
   if (source === "actuals") return { from: first, to: endOfMonth(first), months: 1 };
   const end = addDays(startOfMonth(today), -1);
   return { from: startOfMonth(addDays(startOfMonth(end), -62)), to: end, months: 3 };
+}
+
+/** The last 30 or 90 whole days up to yesterday, for rates that follow recent behaviour instead of the same month last year. */
+export function recencyRange(days: 30 | 90, today: string): { from: string; to: string; months: number } {
+  const to = addDays(today, -1);
+  return { from: addDays(to, -(days - 1)), to, months: days / 30.4 };
 }
