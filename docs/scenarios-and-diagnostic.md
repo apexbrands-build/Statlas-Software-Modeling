@@ -32,6 +32,7 @@ Idea: build it inside the app.
 - Results shown against benchmark percentages or numbers and against the **agency's own client database**, stored in Supabase as each client completes it, so the comparison improves over time.
 - Fits the onboarding checklist (`/onboarding`).
 - Before building: read the diagnostic form and the deck slides (which metrics, which benchmarks), decide what is inferred vs asked, and what is shared with clients (privacy of the cross-client database: show only anonymous percentiles).
+- **Update 2026-10-13:** the form was run end to end and the method verified (ten metrics, formulas, benchmarks, scoring 130 plus the plain sum of points, no cap). The replication design, input mapping to our tables and a test case are in `docs/superpowers/specs/2026-10-13-growth-quotient-design.md`. Still not started; it needs the strategist's go-ahead.
 
 ## 4. Next
 The strategist will send a list of adjustments to the New Customer / spend-aMER model. After that: Calendar + Event model, Returning model Create forecast, Spend daily table, Details, Input, P&L (see the outline).

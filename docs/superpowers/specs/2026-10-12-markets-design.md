@@ -52,5 +52,15 @@ Country-to-market mapping (including Other and a country listed twice), shares s
 ## Not in scope
 Exchange rates, several stores under one brand (separate accounts by decision), a New Customer model per market, ad spend by market (phase 2), per-market creative.
 
+## Wanted next: per-market marketing calendar (idea from the strategist, 2026-10-13, not started)
+A multi-market brand such as Pacha runs different moments per country (local holidays, sale dates, launches by market). Today `marketing_events` and the event model have no market field and measure lifts on total revenue. Needed: an optional market on each event (blank = all markets); event lifts measured per market from `market_daily_facts`; a market event applied only to that market's daily targets, with the market targets still summing to the total each day. Depends on Markets phase 1 and, for the aMER lift by market, on ad spend by market (phase 2). Needs the strategist's go-ahead before any build.
+
+## Decisions on the allocation rule (strategist, 2026-10-13, for the Pacha pitch; not started)
+- One target for the total business; it is then broken down by market and tracked on Home.
+- **Default allocation per market = that market's share of the last 30 days** (replaces the "year over year or trailing 90 days" default above; still overridable in the plan).
+- **Spend and aMER targets stay the same across markets.** What differs, and is tracked, is each market's allocation of the total target.
+- **Spend by market from campaign names**: a campaign belongs to a market when its name contains the market tag set per market (the same "name contains" pattern as the brand rule). This replaces relying on Meta country breakdowns or Google geography as the first method; those can follow.
+- Correction 2026-10-13: Pacha runs five Shopify stores, one per market group, so this spec does not apply to it. See `2026-10-13-multi-store-group-design.md` (market = store connection; no address access needed). The allocation rule above (last 30 days, shared spend and aMER targets, campaign-name tags) carries over.
+
 ## Done when
 A client with markets set up sees the Market selector and the Markets strip on Home, the plan has a Markets line with targets per market, and markets reconcile to the total.

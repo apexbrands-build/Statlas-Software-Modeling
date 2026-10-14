@@ -137,7 +137,7 @@ Lines:
 - **Discounts, Shipping, Taxes** (% of gross sales / order revenue)
 - **New-customer returns and Returning-customer returns** (% of the respective revenue)
 - **COGS** (% of net sales; Point6-type clients use the flat rate from Edit)
-- **Variable costs / cost of delivery** (% of net sales + shipping, plus per-order cost)
+- **Other variable costs** (the non-COGS part of cost of delivery; cost of delivery = COGS + these) (% of net sales + shipping, plus per-order cost)
 - **SG&A** (cost centers as rows: name, method, value, per-month inputs; "Add row"; only used in the Plan P&L)
 - **Email revenue, SMS revenue, Organic revenue** (optional, blank by default; strategists usually forecast totals only)
 - **ROAS** by platform (from incrementality settings)

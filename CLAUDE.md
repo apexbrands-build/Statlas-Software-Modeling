@@ -9,6 +9,7 @@ Internal app for Apex Brands (e-commerce growth agency, 30+ clients) that replic
 - `docs/build-plan.md`: phases, metric formulas, data model, integrations, stack, decisions
 - `docs/forecasting-context.md`: the strategist's intent and returning-revenue method
 - `docs/planning-layer.md`: plans, daily targets, Plan P&L (built 2026-10-01), next phases
+- `docs/pacha-handoff.md` and `docs/superpowers/specs/2026-10-13-multi-store-group-design.md`: the Pacha pitch (what the deck promises), the multi-store build, and the checklist for a clean copy of the repo (2026-10-13)
 
 ## Status (updated 2026-10-01)
 Live at https://apex-data-beta.vercel.app (Vercel, auto-deploys from GitHub `apexbrands-build/Statlas-Software-Modeling`, branch main; the user pushes with GitHub Desktop, Claude cannot push). Supabase project `ccejjijwrdnzljizzwsw` (Apex Brands org, us-east-1) holds the real schema (see `supabase/migrations/0001_init.sql`, applied incrementally via the Supabase connector).
@@ -45,7 +46,7 @@ Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in 
 
 Open items: (1) Point6 has almost no product costs in Shopify, so COGS is ~0: use the COGS % / flat rate in Edit or upload costs by SKU; (2) compare September Shopify numbers (gross, discounts, returns, net, shipping, taxes, total, orders) against the database; (3) verify Meta existing-customer spend and Google brand spend against the platforms; (4) check the first Shopify history load finishes; (5) set `CRON_SECRET`; (6) later: forecasting layer, reports, Klaviyo/GA4, more platforms, onboarding more clients (one Shopify app per store unless a public app is approved).
 
-Ideas wanted later (not built): marketing-event calendar inferred from Klaviyo/SMS sends plus a register for future initiatives (feeds the event-effect model). The user's `Jack-7xyz/aMER_ModelV2` repo (C pipeline: linear fit of day-of-week-adjusted aMER vs spend, IQR/z-score outliers) is the reference for the new-revenue forecast.
+Ideas wanted later (not built): marketing-event calendar inferred from Klaviyo/SMS sends plus a register for future initiatives (feeds the event-effect model); a per-market marketing calendar for multi-market brands (idea 2026-10-13, see the end of `docs/superpowers/specs/2026-10-12-markets-design.md`). The user's `Jack-7xyz/aMER_ModelV2` repo (C pipeline: linear fit of day-of-week-adjusted aMER vs spend, IQR/z-score outliers) is the reference for the new-revenue forecast.
 
 ## Rules
 - Read-only in Statlas and in every integration. Never change Statlas settings or click Save/Calculate/Sync there.
@@ -56,7 +57,7 @@ Ideas wanted later (not built): marketing-event calendar inferred from Klaviyo/S
 
 ## Confirmed decisions
 - Revenue definition = **Order Revenue** for all clients (gross − discounts + shipping + tax, returns excluded). Used for MER, AOV, iROAS; refunds are a separate CM line.
-- Contribution margin (user-confirmed 2026-09-29, final) = **Net Sales + Shipping − COGS − Ad spend − Cost of delivery**. Net Sales = gross − discounts − refunds (no tax). Shipping = shipping charges collected. Cost of delivery = other variable costs (% of net sales + shipping, plus optional per-order cost). COGS is pulled from Shopify variant cost. **Fixed costs are NOT in CM and not on the home dashboard**; they belong to the P&L output (bottom-line profit) built with the plan later.
+- Contribution margin (user-confirmed 2026-09-29, final) = **Net Sales + Shipping − Cost of delivery − Ad spend**. Net Sales = gross − discounts − refunds (no tax). Shipping = shipping charges collected. **Cost of delivery = COGS plus the other variable costs of getting the product to the customer** (% of net sales + shipping, plus optional per-order cost); corrected 2026-10-13, the math is unchanged. COGS is pulled from Shopify variant cost; the Store Settings field labelled "Cost of delivery" holds only the non-COGS part. **Fixed costs are NOT in CM and not on the home dashboard**; they belong to the P&L output (bottom-line profit) built with the plan later.
 - Incrementality (iROAS) multipliers are **editable per client** in settings. Defaults: Meta acquisition 1.2, Meta returning 0.6, Google non-brand 0.75, Google Brand 0.3, Pinterest 0.3.
 - Google brand = campaign name contains "brand" (case-insensitive; the keyword is editable per client). Names containing "non-brand" / "nonbrand" / "non brand", or the tag "NB" as its own word (agency naming convention, editable per client), are NOT treated as brand. Meta returning = existing-customer audience segment. Attribution: 7-day click only.
 - Dashboard must show year-over-year comparison for every metric.

@@ -11,7 +11,7 @@ Daily generation per month:
 - Weekday weight = 1 + that weekday's offset x strength. Spend and returning revenue are spread over the days by these weights; a day with a fixed value keeps it and the other days absorb the difference.
 - New revenue = acquisition spend x aMER (aMER keeps the dashboard definition: brand and Meta returning excluded when the client settings say so), so aMER is constant on free days (same as Statlas).
 - Order revenue = new + returning. With b = gross - discounts: shipping = s*b, tax = t*b, refunds = r*b, order revenue = b*(1+s+t). Net sales = b - refunds.
-- **CM = Net Sales + Shipping - COGS - Ad spend - Cost of delivery** (COGS = % of net sales, cost of delivery = % of net sales + shipping plus per-order cost). Identical to `cmParts`; a test fills a month from actuals and checks it reproduces the real CM within 1%.
+- **CM = Net Sales + Shipping - Cost of delivery - Ad spend**, where cost of delivery = COGS (% of net sales) + other variable costs (% of net sales + shipping plus per-order cost). Corrected 2026-10-13: cost of delivery includes COGS; the plan fields keep the two parts separate, so the math is unchanged. Identical to `cmParts`; a test fills a month from actuals and checks it reproduces the real CM within 1%.
 - Platform split: fixed per month. Google alt = Brand, other platforms alt = non-acquisition (`*_returning` channels).
 
 ## Weekday pattern (from Shopify)
@@ -52,7 +52,7 @@ Code: `lib/planning/events.ts` (types, Statlas event-type list, measurement, cat
 - **Applying:** event days get spend weight x spend lift and returning weight x returning lift; new revenue uses aMER x aMER lift re-centred on the spend-weighted month average, so **month totals stay what the models and strategist set**; other days are compressed. Master switch "Apply events to the plan days". Saving events marks every planned month for Save plan.
 
 ## Details lines (built 2026-10-02)
-Dropdown: Returning revenue (model + override table), Discounts, Shipping, Taxes, Returns, COGS, Variable costs, New and Returning AOV, SG&A. Each rate line: Plan (editable), Inferred, Last year, vs LY, Actual, "use". Tools: **Actualize all YTD**; **Extrapolate based on** same month last year (default), last 3 months or a date range, with a % change, applied to unlocked months. Not planned yet: email, SMS, organic revenue; SG&A cost centers; separate new/returning returns; ROAS.
+Dropdown: Returning revenue (model + override table), Discounts, Shipping, Taxes, Returns, COGS, Variable costs, SG&A. AOV is not a Details line: AOV is not forecast. New-customer AOV lives in the New Customer model (LTV settings, last 30 days by default with a window toggle) and repeat-order AOV in the Returning model (same toggle); Create forecast in each model writes it into the plan months (it only converts revenue into orders). Each rate line: Plan (editable), Inferred, Last year, vs LY, Actual, "use". Tools: **Actualize all YTD**; **Extrapolate based on** same month last year (default), last 3 months or a date range, with a % change, applied to unlocked months. Not planned yet: email, SMS, organic revenue; SG&A cost centers; separate new/returning returns; ROAS.
 
 ## Scenarios and Summary (built 2026-10-12, migration `0011_plan_scenarios`)
 Code: `lib/planning/{scenarios,summary,plan-fit,month-model,stretch,stretch-plan}.ts`, `components/planning/{SummaryStep,stretch-actions}`, the Home selector in `components/Dashboard.tsx` and `lib/dashboard-data.ts`.
@@ -64,3 +64,7 @@ Code: `lib/planning/{scenarios,summary,plan-fit,month-model,stretch,stretch-plan
 
 ## Still open
 Backtest for the New/Returning models; the growth diagnostic in `docs/scenarios-and-diagnostic.md`; marketing events from Klaviyo/SMS; apply migrations 0005-0008 in Supabase (SQL editor).
+
+## Wanted next (strategist, 2026-10-13, not started)
+- **EBITDA next to profit** on the total in the P&L view (the plan Summary already shows EBITDA; the P&L view stops at "Profit"). Small change.
+- **Multi-store brands** (one account, several Shopify stores as markets, FX, market allocation, rebills in daily targets): see `docs/superpowers/specs/2026-10-13-multi-store-group-design.md`.
