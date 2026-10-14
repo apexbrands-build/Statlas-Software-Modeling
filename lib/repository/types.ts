@@ -1,3 +1,5 @@
+import type { CreativePage, CreativeQuery } from "../creative/aggregate";
+import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import type { AovData, AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
@@ -30,6 +32,12 @@ export interface Repository {
   getCreativeHistory(clientId: string, asOf: string, fromMonth: string): Promise<CreativeHistory | null>;
   /** The ads launched in one month and that month's days (up to `asOf`), for the month view; null like getCreativeHistory. */
   getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null>;
+  /** Best Creatives (migration 0014). Last day with ad-level data: null = none yet, undefined = the ad tables are missing. */
+  getLastAdDate(clientId: string): Promise<string | null | undefined>;
+  /** One page of ads that spent in the range, filtered and ranked (see `lib/creative/aggregate.ts`); null when the read function is missing. */
+  getCreativeAds(clientId: string, q: CreativeQuery): Promise<CreativePage | null>;
+  /** Per-format totals over the range for the whole account (filters do not apply); null when the read function is missing. */
+  getCreativeFormats(clientId: string, from: string, to: string, w: WowWindows | null): Promise<FormatTotals[] | null>;
   /** Last day with actual data (inclusive). */
   getLastDataDate(clientId: string): Promise<string>;
   listPlans(clientId: string): Promise<PlanVersion[]>;

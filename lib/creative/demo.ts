@@ -3,6 +3,7 @@
  * launches, decaying daily spend, winners that live long, zero-spend ads and catalog ads. The same client and date always give the same history.
  */
 import { addDays, diffDays, endOfMonth, startOfMonth } from "../dates";
+import type { AdDayRow, AdInfo } from "./aggregate";
 import { zeroLaunched, type AdFormat, type CreativeDay, type CreativeHistory, type LaunchedAd, type MonthAgg, type ScoreAd } from "./types";
 
 interface DemoAd {
@@ -10,6 +11,9 @@ interface DemoAd {
   name: string;
   format: AdFormat;
   isCatalog: boolean;
+  campaignName: string;
+  /** ACTIVE when the ad still spent on the as-of date, else PAUSED. */
+  status: "ACTIVE" | "PAUSED";
   launch: string;
   /** Daily spend and revenue by date (only days up to the as-of date). */
   daily: Map<string, { spend: number; revenue: number }>;
@@ -31,6 +35,14 @@ function rng(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+const AD_NAMES: Record<AdFormat, string[]> = {
+  video: ["UGC hook", "Founder story", "Unboxing", "Review stack"],
+  image: ["Static offer", "Before and after", "Bestseller grid"],
+  carousel: ["Carousel bestsellers", "Collection carousel"],
+  other: ["Story frame"],
+};
+const CAMPAIGNS = ["Prospecting - US", "Retargeting - US", "Spring sale - Broad", "BFCM prelaunch"];
 
 const normal = (r: () => number) => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
 
@@ -61,7 +73,9 @@ function makeAds(clientId: string, asOf: string): DemoAd[] {
         daily.set(date, { spend, revenue: spend * roas0 * Math.max(0.3, 1 - 0.006 * t) });
       }
     }
-    ads.push({ id: `demo-${i}`, name: `${format === "video" ? "Video" : "Static"} ${i + 1}`, format, isCatalog, launch, daily });
+    const names = AD_NAMES[format];
+    const name = `${names[i % names.length]} ${String(i % 100).padStart(2, "0")}`;
+    ads.push({ id: `demo-${i}`, name, format, isCatalog, campaignName: isCatalog ? "Catalog sales (DPA)" : CAMPAIGNS[i % CAMPAIGNS.length], status: daily.has(asOf) ? "ACTIVE" : "PAUSED", launch, daily });
   }
   return ads;
 }
@@ -157,4 +171,18 @@ export function demoCreativeMonth(clientId: string, month: string, asOf: string)
   const from = startOfMonth(month);
   const to = endOfMonth(month) < asOf ? endOfMonth(month) : asOf;
   return { ads: ads.filter((a) => a.launch >= from && a.launch <= endOfMonth(month)).map(launchedAd), days: creativeDays(ads, from, to) };
+}
+
+/** The demo ads as ad-days and ad info, the shapes the Best Creatives aggregation takes (the same ads the Creative Score demo uses). */
+export function demoAdRows(clientId: string, asOf: string): { days: AdDayRow[]; ads: AdInfo[] } {
+  const made = makeAds(clientId, asOf);
+  const days: AdDayRow[] = [];
+  for (const ad of made) {
+    for (const [date, v] of ad.daily) {
+      const impressions = Math.round(v.spend * 90);
+      days.push({ adId: ad.id, date, spend: v.spend, impressions, clicks: Math.round(impressions * 0.012), purchases: v.revenue > 0 ? Math.max(1, Math.round(v.revenue / 82)) : 0, revenue: v.revenue });
+    }
+  }
+  const ads: AdInfo[] = made.map((a) => ({ adId: a.id, name: a.name, campaignName: a.campaignName, format: a.format, isCatalog: a.isCatalog, status: a.status, launched: a.launch }));
+  return { days, ads };
 }

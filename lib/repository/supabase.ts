@@ -1,4 +1,7 @@
 import { addDays, endOfMonth, startOfMonth, todayLocal } from "../dates";
+import { normalizeQuery, type CreativePage, type CreativeQuery } from "../creative/aggregate";
+import type { FormatTotals, WowWindows } from "../creative/best-creatives";
+import { isMissingFunction, mapAdRow, mapFormatRow } from "../creative/map-rows";
 import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
@@ -196,6 +199,60 @@ export class SupabaseRepository implements Repository {
     ]);
     if (!ads || !days) return null;
     return { ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay) };
+  }
+
+  async getLastAdDate(clientId: string): Promise<string | null | undefined> {
+    const { data, error } = await this.db.from("meta_ad_daily").select("date").eq("client_id", clientId).order("date", { ascending: false }).limit(1);
+    if (error) {
+      if (isMissingFunction(error)) return undefined;
+      throw new Error(error.message);
+    }
+    const last = (data as Row[] | null)?.[0]?.date;
+    return last ? String(last).slice(0, 10) : null;
+  }
+
+  async getCreativeAds(clientId: string, query: CreativeQuery): Promise<CreativePage | null> {
+    const q = normalizeQuery(query);
+    const { data, error } = await this.db.rpc("creative_ads_report", {
+      p_client: clientId,
+      p_from: q.from,
+      p_to: q.to,
+      p_cur_from: q.windows?.cur.from ?? null,
+      p_cur_to: q.windows?.cur.to ?? null,
+      p_prev_from: q.windows?.prev.from ?? null,
+      p_prev_to: q.windows?.prev.to ?? null,
+      p_format: q.format,
+      p_campaign: q.campaign,
+      p_catalog: q.catalog,
+      p_live: q.live,
+      p_sort: q.sort,
+      p_margin: q.margin,
+      p_limit: q.limit,
+      p_offset: q.offset,
+    });
+    if (error) {
+      if (isMissingFunction(error)) return null;
+      throw new Error(error.message);
+    }
+    const rows = (data ?? []) as Row[];
+    return { rows: rows.map(mapAdRow), total: rows.length ? Number(rows[0].total_count) : 0 };
+  }
+
+  async getCreativeFormats(clientId: string, from: string, to: string, w: WowWindows | null): Promise<FormatTotals[] | null> {
+    const { data, error } = await this.db.rpc("creative_format_totals", {
+      p_client: clientId,
+      p_from: from,
+      p_to: to,
+      p_cur_from: w?.cur.from ?? null,
+      p_cur_to: w?.cur.to ?? null,
+      p_prev_from: w?.prev.from ?? null,
+      p_prev_to: w?.prev.to ?? null,
+    });
+    if (error) {
+      if (isMissingFunction(error)) return null;
+      throw new Error(error.message);
+    }
+    return ((data ?? []) as Row[]).map(mapFormatRow);
   }
 
   async getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]> {

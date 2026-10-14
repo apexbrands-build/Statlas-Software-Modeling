@@ -1,5 +1,7 @@
 import { addDays, dayOfWeek, diffDays, eachDay, todayLocal } from "../dates";
-import { demoCreativeHistory, demoCreativeMonth } from "../creative/demo";
+import { aggregateAds, aggregateFormats, type CreativePage, type CreativeQuery } from "../creative/aggregate";
+import type { FormatTotals, WowWindows } from "../creative/best-creatives";
+import { demoAdRows, demoCreativeHistory, demoCreativeMonth } from "../creative/demo";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import type { AovData } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
@@ -404,6 +406,21 @@ export class SeedRepository implements Repository {
 
   async getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null> {
     return demoCreativeMonth(clientId, month, asOf);
+  }
+
+  /** Demo ads end on the last data day, like the rest of the demo data. */
+  async getLastAdDate(clientId: string): Promise<string | null | undefined> {
+    return this.getLastDataDate(clientId);
+  }
+
+  async getCreativeAds(clientId: string, q: CreativeQuery): Promise<CreativePage | null> {
+    const { days, ads } = demoAdRows(clientId, await this.getLastDataDate(clientId));
+    return aggregateAds(days, ads, q);
+  }
+
+  async getCreativeFormats(clientId: string, from: string, to: string, w: WowWindows | null): Promise<FormatTotals[] | null> {
+    const { days, ads } = demoAdRows(clientId, await this.getLastDataDate(clientId));
+    return aggregateFormats(days, ads, from, to, w);
   }
 
   async getFirstProducts(): Promise<FirstProductRow[] | null> {
