@@ -3,7 +3,7 @@
 import { formatValue } from "@/lib/format";
 import type { YearRow } from "@/lib/creative/plan";
 import type { Currency } from "@/lib/types";
-import { MONTHS } from "../ui";
+import { MONTHS } from "@/components/planning/ui";
 
 /** The year at a glance: the ads each month needs next to last year's launches, Meta spend, aMER and ROAS, and this year's spend and aMER. Click a row to open its month. */
 export function CreativeYearTable({ rows, total, selected, onSelect, currency }: { rows: YearRow[]; total: YearRow; selected: string; onSelect: (month: string) => void; currency: Currency }) {

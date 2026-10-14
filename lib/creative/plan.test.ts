@@ -2,12 +2,10 @@ import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import { emptyTotals } from "../metrics";
 import type { MarketingEvent } from "../planning/events";
-import { FLAT_SEASONALITY, generateMonth } from "../planning/generate";
 import { DEFAULT_CREATIVE } from "../planning/models";
-import { planFigures } from "../planning/summary";
 import { blankInputs, type PlanMonth, type PlanMonthInputs } from "../planning/types";
 import type { ClientSettings, DailyFact } from "../types";
-import { computeCreativeMonth, creativeInsights, isStale, keepCreative, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth } from "./plan";
+import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth } from "./plan";
 import { creativeScore } from "./score";
 import { launchedAd, monthAgg } from "./fixtures";
 import type { CreativeHistory } from "./types";
@@ -134,37 +132,39 @@ const saved = (over: Partial<CreativeMonth> = {}): CreativeMonth => ({
 const month = (m: string, inputs: PlanMonthInputs | null, locked = false): PlanMonth => ({ month: `${m}-01`, inputs, status: "in_progress", locked });
 
 describe("regenerateCreative", () => {
-  const A = month("2026-01", inputsFor({ creative: saved({ overrides: { carryRate: 0.9 } }) }));
-  const B = month("2026-02", inputsFor({ creative: saved({ needed: 77 }) }), true);
-  const C = month("2026-03", inputsFor({ creative: saved({ needed: 88, locked: true }) }));
+  const A = month("2026-01", inputsFor());
+  const B = month("2026-02", inputsFor(), true); // locked in the plan: that does not freeze the ad plan
+  const C = month("2026-03", inputsFor());
   const D = month("2026-04", null);
   const E = month("2026-05", inputsFor());
+  const savedBlocks = { "2026-01-01": saved({ overrides: { carryRate: 0.9 } }), "2026-02-01": saved({ needed: 77 }), "2026-03-01": saved({ needed: 88, locked: true }) };
 
-  it("recomputes unlocked months with their saved overrides, and leaves a locked month (plan or creative) exactly as saved", () => {
+  it("recomputes every month with the overrides it saved, and leaves a month whose ad plan is locked exactly as saved", () => {
     const calls: [string, unknown][] = [];
-    const out = regenerateCreative([A, B, C, D, E], (m, o) => (calls.push([m.month, o]), saved({ needed: 1, overrides: o })));
-    expect(calls).toEqual([["2026-01-01", { carryRate: 0.9 }], ["2026-05-01", {}]]);
-    expect(out["2026-02-01"]).toBe(B.inputs!.creative);
-    expect(out["2026-03-01"]).toBe(C.inputs!.creative);
+    const out = regenerateCreative([A, B, C, D, E], savedBlocks, (m, o) => (calls.push([m.month, o]), saved({ needed: 1, overrides: o })));
+    expect(calls).toEqual([["2026-01-01", { carryRate: 0.9 }], ["2026-02-01", {}], ["2026-05-01", {}]]);
+    expect(out["2026-03-01"]).toBe(savedBlocks["2026-03-01"]);
     expect(out["2026-01-01"].overrides).toEqual({ carryRate: 0.9 });
+    expect(out["2026-02-01"].needed).toBe(1);
   });
 
-  it("skips months with no inputs, and a locked month that has no creative block yet", () => {
-    const out = regenerateCreative([D, month("2026-06", inputsFor(), true)], () => saved());
-    expect(out).toEqual({});
+  it("skips months with no inputs", () => {
+    expect(regenerateCreative([D], {}, () => saved())).toEqual({});
   });
 
   it("drops a month whose compute gives nothing", () => {
-    expect(regenerateCreative([E], () => null)).toEqual({});
+    expect(regenerateCreative([E], {}, () => null)).toEqual({});
   });
 });
 
-describe("lockAll, isStale and keepCreative", () => {
-  it("lockAll locks or unlocks every month that has a creative block and ignores the rest", () => {
-    const ms = [month("2026-01", inputsFor({ creative: saved() })), month("2026-02", inputsFor()), month("2026-03", null)];
-    expect(Object.keys(lockAll(ms, true))).toEqual(["2026-01-01"]);
-    expect(lockAll(ms, true)["2026-01-01"].locked).toBe(true);
-    expect(lockAll([month("2026-01", inputsFor({ creative: saved({ locked: true }) }))], false)["2026-01-01"].locked).toBe(false);
+describe("lockAll and isStale", () => {
+  it("lockAll locks or unlocks every saved block and returns new objects", () => {
+    const blocks = { "2026-01-01": saved(), "2026-02-01": saved({ locked: true }) };
+    const locked = lockAll(blocks, true);
+    expect(Object.values(locked).every((b) => b.locked)).toBe(true);
+    expect(Object.values(lockAll(locked, false)).every((b) => !b.locked)).toBe(true);
+    expect(blocks["2026-01-01"].locked).toBe(false);
+    expect(lockAll({}, true)).toEqual({});
   });
 
   it("isStale when the plan's Meta spend moved more than 1% from the one the block was computed for", () => {
@@ -179,13 +179,6 @@ describe("lockAll, isStale and keepCreative", () => {
   it("isStale does not fire just because the catalog share moved while the plan's Meta spend did not", () => {
     const c = saved({ basis: { ...saved().basis, metaSpend: 88000, targetSpend: 79200 } });
     expect(isStale(c, 88000)).toBe(false);
-  });
-
-  it("keepCreative carries the creative block onto freshly filled inputs, and gives null for null", () => {
-    const prev = inputsFor({ creative: saved({ needed: 5 }) });
-    expect(keepCreative(prev, inputsFor({ spend: 1 }))!.creative!.needed).toBe(5);
-    expect(keepCreative(null, inputsFor())!.creative).toBeUndefined();
-    expect(keepCreative(prev, null)).toBeNull();
   });
 });
 
@@ -211,9 +204,10 @@ describe("yearTable", () => {
   };
   const h = history({ months: [monthAgg("2025-09-01", 1000, 0, 0, { video: 3, image: 2 }), monthAgg("2026-09-01", 2000, 0, 0, { video: 4 })] });
   const months: PlanMonth[] = Array.from({ length: 12 }, (_, i) => month(`2026-${String(i + 1).padStart(2, "0")}`, null));
-  months[8] = month("2026-09", inputsFor({ creative: saved({ needed: 40 }) }));
-  months[10] = month("2026-11", inputsFor({ spend: 100000, amer: 2.5, platformPct: { meta: 100 }, creative: saved({ needed: 50 }) }));
-  const t = yearTable({ year: 2026, months, history: h, facts: [fact("2025-09-10", 1000, 3000, 2500), fact("2026-09-10", 2000, 5000, 5000)], settings, lastData: "2026-09-30" });
+  months[8] = month("2026-09", inputsFor());
+  const blocks = { "2026-09-01": saved({ needed: 40 }), "2026-11-01": saved({ needed: 50 }) };
+  months[10] = month("2026-11", inputsFor({ spend: 100000, amer: 2.5, platformPct: { meta: 100 } }));
+  const t = yearTable({ year: 2026, months, blocks, history: h, facts: [fact("2025-09-10", 1000, 3000, 2500), fact("2026-09-10", 2000, 5000, 5000)], settings, lastData: "2026-09-30" });
   const sep = t.rows[8];
   const nov = t.rows[10];
 
@@ -250,7 +244,7 @@ describe("yearTable", () => {
   });
 
   it("works with no ad history at all", () => {
-    const none = yearTable({ year: 2026, months, history: null, facts: [], settings, lastData: "2026-09-30" });
+    const none = yearTable({ year: 2026, months, blocks: {}, history: null, facts: [], settings, lastData: "2026-09-30" });
     expect(none.rows).toHaveLength(12);
     expect(none.total.launchedThisYear).toBe(0);
   });
@@ -296,23 +290,8 @@ describe("creativeInsights", () => {
   });
 });
 
-describe("the creative block never changes a target", () => {
-  const settings: ClientSettings = defaultSettings("c1");
-  const base = inputsFor({ spend: 30000, amer: 2, returningRevenue: 20000 });
-  const gen = (inputs: PlanMonthInputs) => generateMonth({ planId: "p", clientId: "c1", month: "2026-11-01", inputs, seasonality: FLAT_SEASONALITY, deliveryCostPerOrder: 1, excludeBrandFromAmer: false, excludeMetaReturningFromAmer: false });
-
-  it("generateMonth returns identical daily rows with and without a creative block", () => {
-    expect(gen({ ...base, creative: saved({ needed: 99 }) })).toEqual(gen(base));
-  });
-
-  it("planFigures gives the same figures both ways", () => {
-    const rows = gen(base);
-    const plain = [month("2026-11", base)];
-    const withBlock = [month("2026-11", { ...base, creative: saved({ needed: 99 }) })];
-    expect(planFigures(rows, withBlock, 2026, settings)).toEqual(planFigures(rows, plain, 2026, settings));
-  });
-
-  it("the model's own settings start at a 14-day lead and the calendar rule", () => {
+describe("creative model settings", () => {
+  it("start at a 14-day lead and the calendar rule", () => {
     expect(DEFAULT_CREATIVE).toEqual({ leadDays: 14, momentRule: "calendar" });
   });
 });

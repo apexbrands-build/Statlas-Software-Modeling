@@ -8,7 +8,6 @@ import { formatValue } from "@/lib/format";
 import { aggregate, aggregatePlan, amerSpend } from "@/lib/metrics";
 import { dayMultipliers, DEFAULT_EVENT_SETTINGS, measureEventDays, toDayFacts, type EventSettings, type MarketingEvent } from "@/lib/planning/events";
 import { FLAT_SEASONALITY, generateMonth } from "@/lib/planning/generate";
-import { keepCreative } from "@/lib/creative/plan";
 import { driftedMonths } from "@/lib/planning/drift";
 import { saveButtonState } from "@/lib/planning/save-state";
 import { dowFromHistory, inputsFromFacts, sourceRange, type FillSource } from "@/lib/planning/history";
@@ -195,8 +194,6 @@ export function PlanEditor({ planId }: { planId: string }) {
         );
         if (!inputs) return `No ${source === "last_year" ? "last year" : source === "actuals" ? "actual" : "recent"} data to fill ${MONTHS[Number(month.slice(5, 7)) - 1]}.`;
       }
-      // A Fill replaces the month's inputs but keeps its creative block (the ad plan is not part of what Fill sets).
-      inputs = keepCreative(target.inputs, inputs);
       setMonths((ms) => ms && ms.map((m) => (m.month === month ? { ...m, inputs } : m)));
       markDirty(month);
       return null;

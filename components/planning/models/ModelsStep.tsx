@@ -8,8 +8,7 @@ import { getRepository } from "@/lib/repository";
 import type { DailyFact } from "@/lib/types";
 import type { PlanCtx } from "../ctx";
 import { btn, btnPrimary } from "../ui";
-import { BulletGlyph, CreativeIllustration, EventIllustration, GrowthIllustration, RetentionIllustration, type BulletIcon } from "./icons";
-import { CreativeModel } from "./CreativeModel";
+import { BulletGlyph, EventIllustration, GrowthIllustration, RetentionIllustration, type BulletIcon } from "./icons";
 import { NewCustomerModel } from "./NewCustomerModel";
 import { EventModel } from "./EventModel";
 import { ReturningModel } from "./ReturningModel";
@@ -41,14 +40,13 @@ export interface ModelCtx {
   savedAt: Partial<Record<ModelKind, string | null>>;
 }
 
-type View = "info" | "new" | "returning" | "event" | "creative";
+type View = "info" | "new" | "returning" | "event";
 
 const SIDE: { id: View; label: string }[] = [
   { id: "info", label: "Info" },
   { id: "new", label: "New Customer Model" },
   { id: "returning", label: "Returning Customer Model" },
   { id: "event", label: "Event Model" },
-  { id: "creative", label: "Creative Demand Model" },
 ];
 
 function Card({ title, sub, art, bullets, onOpen, disabled }: { title: string; sub: string; art: React.ReactNode; bullets: { icon: BulletIcon; text: string }[]; onOpen?: () => void; disabled?: boolean }) {
@@ -176,7 +174,7 @@ export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
         {view === "info" && (
           <div className="space-y-4">
             <p className="text-center text-sm text-text-muted">Models are the starting point and form the basis for the forecast. They only use the client&apos;s own history; you can then bet against them.</p>
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 lg:grid-cols-3">
               <Card
                 title="New Revenue Model"
                 sub="aMER / CAC"
@@ -207,23 +205,12 @@ export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
                 ]}
                 onOpen={() => setView("event")}
               />
-              <Card
-                title="Creative Demand Model"
-                sub="New Meta ads per month"
-                art={<CreativeIllustration />}
-                bullets={[
-                  { icon: "layers", text: "Works out how many new ads each month needs to carry the plan's Meta spend, after the spend that carries over from last month, split into moments and evergreen, videos and images." },
-                  { icon: "target", text: "Scores the account's creative health from its own ad data (Creative Score). It never changes a revenue, spend or CM target." },
-                ]}
-                onOpen={() => setView("creative")}
-              />
             </div>
           </div>
         )}
         {view === "new" && <NewCustomerModel mc={mc} />}
         {view === "returning" && <ReturningModel mc={mc} />}
         {view === "event" && <EventModel ctx={ctx} />}
-        {view === "creative" && <CreativeModel mc={mc} />}
       </div>
     </div>
   );

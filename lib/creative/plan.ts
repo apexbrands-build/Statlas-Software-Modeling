@@ -114,29 +114,27 @@ export function computeCreativeMonth(a: {
 }
 
 /**
- * Recomputes the creative block of every plan month that is not locked, passing back the overrides it saved. A month locked in the plan or
- * in its creative block comes back exactly as saved; a month with no inputs has none.
+ * Recomputes the ad plan of every plan month that has inputs, passing back the overrides it saved. A month whose ad plan is locked comes back
+ * exactly as saved. A month locked in the plan is not frozen here: the plan's lock is about its targets, and the ad plan follows them.
  */
-export function regenerateCreative(months: PlanMonth[], compute: (m: PlanMonth, overrides: CreativeOverrides) => CreativeMonth | null): Record<string, CreativeMonth> {
+export function regenerateCreative(months: PlanMonth[], saved: Record<string, CreativeMonth>, compute: (m: PlanMonth, overrides: CreativeOverrides) => CreativeMonth | null): Record<string, CreativeMonth> {
   const out: Record<string, CreativeMonth> = {};
   for (const m of months) {
     if (!m.inputs) continue;
-    const saved = m.inputs.creative;
-    if (m.locked || saved?.locked) {
-      if (saved) out[m.month] = saved;
+    const was = saved[m.month];
+    if (was?.locked) {
+      out[m.month] = was;
       continue;
     }
-    const c = compute(m, saved?.overrides ?? {});
+    const c = compute(m, was?.overrides ?? {});
     if (c) out[m.month] = c;
   }
   return out;
 }
 
-/** The creative blocks with `locked` set, for every month that has one. */
-export function lockAll(months: PlanMonth[], locked: boolean): Record<string, CreativeMonth> {
-  const out: Record<string, CreativeMonth> = {};
-  for (const m of months) if (m.inputs?.creative) out[m.month] = { ...m.inputs.creative, locked };
-  return out;
+/** The saved blocks with `locked` set. */
+export function lockAll(saved: Record<string, CreativeMonth>, locked: boolean): Record<string, CreativeMonth> {
+  return Object.fromEntries(Object.entries(saved).map(([month, b]) => [month, { ...b, locked }]));
 }
 
 /**
@@ -147,12 +145,6 @@ export function isStale(c: CreativeMonth, metaSpend: number): boolean {
   const was = c.basis.metaSpend ?? c.basis.targetSpend;
   if (was === metaSpend) return false;
   return Math.abs(was - metaSpend) / Math.max(Math.abs(was), Math.abs(metaSpend)) > 0.01;
-}
-
-/** A Fill from last year or recent actuals replaces a month's inputs: the month keeps its creative block. */
-export function keepCreative(prev: PlanMonthInputs | null, next: PlanMonthInputs | null): PlanMonthInputs | null {
-  if (!next) return null;
-  return prev?.creative ? { ...next, creative: prev.creative } : next;
 }
 
 /** What was launched in a month so far, by moment or evergreen and video or image (carousel counts as image); catalog ads are left out. */
@@ -197,7 +189,7 @@ const launchedIn = (h: CreativeHistory | null, month: string) => {
  * beside this year (what happened for completed months, the plan for the rest). The total row adds the counts and spend; its aMER columns are
  * the year's aMER from the facts and, for this year, the Meta-spend-weighted average of the months.
  */
-export function yearTable(a: { year: number; months: PlanMonth[]; history: CreativeHistory | null; facts: DailyFact[]; settings: ClientSettings; lastData: string }): { rows: YearRow[]; total: YearRow } {
+export function yearTable(a: { year: number; months: PlanMonth[]; blocks: Record<string, CreativeMonth>; history: CreativeHistory | null; facts: DailyFact[]; settings: ClientSettings; lastData: string }): { rows: YearRow[]; total: YearRow } {
   const amerOf = (facts: DailyFact[]) => (facts.length ? METRICS.amer.value(aggregate(facts), a.settings) : null);
   const inMonth = (start: string) => a.facts.filter((f) => f.date >= start && f.date <= endOfMonth(start));
 
@@ -211,7 +203,7 @@ export function yearTable(a: { year: number; months: PlanMonth[]; history: Creat
     const facts = inMonth(key);
     return {
       month: key,
-      target: plan?.inputs?.creative?.needed ?? null,
+      target: a.blocks[key]?.needed ?? null,
       launchedThisYear: launchedIn(a.history, key),
       launchedLastYear: launchedIn(a.history, lyKey),
       metaSpendLastYear: lySpend,

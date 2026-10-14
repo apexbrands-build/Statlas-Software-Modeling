@@ -1,21 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { MONTHS, btn, btnPrimary, inputClass } from "@/components/planning/ui";
 import { catalogShare, metaSpendOf, monthsWithData, SPEND_PER_AD_RANGE, spendPerNewAd } from "@/lib/creative/demand";
 import { scoreMetrics } from "@/lib/creative/metrics";
 import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth, type CreativeOverrides } from "@/lib/creative/plan";
+import { adPlanResults, readSavedBlocks } from "@/lib/creative/saved";
 import { creativeScore } from "@/lib/creative/score";
 import type { CreativeHistory } from "@/lib/creative/types";
 import { addDays, startOfMonth, todayLocal } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
-import { DEFAULT_CREATIVE, type CreativeSettings } from "@/lib/planning/models";
+import { DEFAULT_CREATIVE, type CreativeSettings, type SavedModel } from "@/lib/planning/models";
+import type { MarketingEvent } from "@/lib/planning/events";
 import type { PlanMonth } from "@/lib/planning/types";
 import { getRepository } from "@/lib/repository";
-import { btn, btnPrimary, inputClass, MONTHS } from "../ui";
+import type { Client, ClientSettings, DailyFact, PlanVersion } from "@/lib/types";
 import { CreativeMonthView } from "./CreativeMonthView";
 import { CreativeScoreCard } from "./CreativeScoreCard";
 import { CreativeYearTable } from "./CreativeYearTable";
-import type { ModelCtx } from "./ModelsStep";
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -82,16 +85,20 @@ function OverrideField({ label, value, auto, suffix, disabled, onChange }: { lab
   );
 }
 
-/** The fourth model: how many new Meta ads each month needs, and the Creative Score of the account. */
-export function CreativeModel({ mc }: { mc: ModelCtx }) {
-  const { ctx, saveModel } = mc;
-  const { plan, client, months, events, editInputs, history: planHistory } = ctx;
-  const asOf = planHistory.lastData || todayLocal();
+/**
+ * The Ad plan for one plan: the account's Creative Score and, for each month, how many new Meta ads it needs. Its numbers are saved in the plan's
+ * `creative` model record, apart from the plan's own targets, so creative strategists never have to open the plan editor. Keyed by plan, so
+ * switching client or year starts it fresh.
+ */
+export function AdPlanBoard({ client, settings, plan, months, events, facts, lastData, savedModel }: { client: Client; settings: ClientSettings; plan: PlanVersion; months: PlanMonth[]; events: MarketingEvent[]; facts: DailyFact[]; lastData: string; savedModel: SavedModel<unknown, unknown> | null }) {
+  const asOf = lastData || todayLocal();
   const now = `${asOf}T00:00:00.000Z`;
   const money = (v: number | null) => formatValue(v, "currency0", client.currency);
 
   const [history, setHistory] = useState<CreativeHistory | null | "loading">("loading");
-  const [settings, setSettings] = useState<CreativeSettings>(DEFAULT_CREATIVE);
+  const [modelSettings] = useState<CreativeSettings>(() => ({ ...DEFAULT_CREATIVE, ...((savedModel?.settings as Partial<CreativeSettings> | undefined) ?? {}) }));
+  const [blocks, setBlocks] = useState<Record<string, CreativeMonth>>(() => readSavedBlocks(savedModel?.results));
+  const [dirty, setDirty] = useState(false);
   const [draft, setDraft] = useState<Record<string, CreativeOverrides>>({});
   const [msg, setMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -113,19 +120,6 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
     };
   }, [client.id, plan.year, asOf]);
 
-  useEffect(() => {
-    let cancel = false;
-    getRepository()
-      .getPlanModel(plan.id, "creative")
-      .then(
-        (m) => !cancel && m && setSettings({ ...DEFAULT_CREATIVE, ...(m.settings as Partial<CreativeSettings>) }),
-        () => undefined,
-      );
-    return () => {
-      cancel = true;
-    };
-  }, [plan.id]);
-
   const data = history === "loading" ? null : history;
   const openMonth = startOfMonth(asOf);
   const metrics = useMemo(() => (data ? scoreMetrics(data) : null), [data]);
@@ -140,24 +134,24 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
     const byMonth: Record<string, number> = {};
     let last30 = 0;
     const from = addDays(asOf, -29);
-    for (const f of planHistory.facts) {
+    for (const f of facts) {
       const v = (f.channels.meta_acquisition?.spend ?? 0) + (f.channels.meta_returning?.spend ?? 0);
       const k = `${f.date.slice(0, 7)}-01`;
       byMonth[k] = (byMonth[k] ?? 0) + v;
       if (f.date >= from && f.date <= asOf) last30 += v;
     }
     return { byMonth, last30 };
-  }, [planHistory.facts, asOf]);
+  }, [facts, asOf]);
 
   const computeFor = (m: PlanMonth, overrides: CreativeOverrides) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides, now });
 
   const selMonth = months.find((m) => m.month === sel) ?? months[0];
-  const saved = selMonth.inputs?.creative;
-  const monthLocked = selMonth.locked || Boolean(saved?.locked);
+  const saved = blocks[sel];
+  const monthLocked = Boolean(saved?.locked);
   const overrides = draft[sel] ?? saved?.overrides ?? {};
-  const block: CreativeMonth | null = !selMonth.inputs ? null : monthLocked && saved ? saved : computeFor(selMonth, overrides);
+  const block: CreativeMonth | null = !selMonth.inputs ? null : monthLocked ? saved : computeFor(selMonth, overrides);
   const stale = Boolean(saved && block && !monthLocked && isStale(saved, block.basis.metaSpend));
-  const progress = data ? launchProgress(data.ads, events, sel, settings.leadDays) : null;
+  const progress = data ? launchProgress(data.ads, events, sel, modelSettings.leadDays) : null;
   const perAd = data ? spendPerNewAd(data.ads, asOf, monthsWithData(data.months)) : null;
   const monthName = MONTHS[Number(sel.slice(5, 7)) - 1];
 
@@ -171,65 +165,71 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
       return { ...d, [sel]: next };
     });
 
-  const applyBlocks = (blocks: Record<string, CreativeMonth>) => {
-    let n = 0;
-    for (const m of months) {
-      const b = blocks[m.month];
-      if (!b || b === m.inputs?.creative || m.locked) continue;
-      editInputs(m.month, (i) => ({ ...i, creative: b }));
-      n += 1;
-    }
-    return n;
-  };
-  const recompute = () => regenerateCreative(months, (m, savedOverrides) => computeFor(m, draft[m.month] ?? savedOverrides));
+  /** What Save would write: every month recomputed with the typed overrides, months whose ad plan is locked as saved. */
+  const recompute = () => regenerateCreative(months, blocks, (m, saved0) => computeFor(m, draft[m.month] ?? saved0));
+  const preview = useMemo(
+    () => regenerateCreative(months, blocks, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides: draft[m.month] ?? o, now })),
+    [months, blocks, data, events, planNonCatalog, metaFacts, draft, now],
+  );
+  const year = useMemo(() => yearTable({ year: plan.year, months, blocks: preview, history: data, facts, settings, lastData }), [plan.year, months, preview, data, facts, settings, lastData]);
 
   const regenerate = () => {
-    const n = applyBlocks(recompute());
+    const next = recompute();
+    setBlocks(next);
     setDraft({});
-    setMsg({ tone: "ok", text: n ? `Recalculated ${n} month${n === 1 ? "" : "s"} (locked months left as they are). Press Save plan to keep it.` : "Nothing to recalculate: every planned month is locked or has no inputs." });
+    setDirty(true);
+    const n = Object.values(next).filter((b) => !b.locked).length;
+    setMsg({ tone: "ok", text: n ? `Recalculated ${n} month${n === 1 ? "" : "s"} (months with a locked ad plan left as they are). Press Save to keep it.` : "Nothing to recalculate: no month has a plan yet, or every ad plan is locked." });
+  };
+
+  const persist = async (next: Record<string, CreativeMonth>, note: string) => {
+    setBusy(true);
+    try {
+      await getRepository().savePlanModel(plan, "creative", modelSettings, adPlanResults({ asOf, score, metrics, months: next }), note);
+      setDirty(false);
+      return null;
+    } catch (e) {
+      const text = e instanceof Error ? e.message : "Could not save the ad plan";
+      return /plan_models|schema cache/i.test(text) ? "The ad plan could not be stored: the plan models table is missing (migration 0007)." : text;
+    } finally {
+      setBusy(false);
+    }
   };
 
   const save = async () => {
-    setBusy(true);
-    const n = applyBlocks(recompute());
+    const next = recompute();
+    setBlocks(next);
     setDraft({});
-    const err = await saveModel("creative", settings, { asOf, score: score?.score ?? null, parts: score?.parts ?? null, metrics, mode: score?.mode ?? null }, "Saved the creative demand model");
-    setBusy(false);
-    setMsg(err ? { tone: "bad", text: err } : { tone: "ok", text: `Saved. ${n} month${n === 1 ? "" : "s"} updated. Press Save plan to keep the numbers in the plan.` });
+    const err = await persist(next, "Saved the ad plan");
+    const n = Object.keys(next).length;
+    setMsg(err ? { tone: "bad", text: err } : { tone: "ok", text: `Saved the ad plan for ${plan.year} (${n} month${n === 1 ? "" : "s"}).` });
   };
 
-  const withBlock = months.filter((m) => m.inputs?.creative);
-  const allLocked = withBlock.length > 0 && withBlock.every((m) => m.locked || m.inputs!.creative!.locked);
+  const hasBlocks = Object.keys(blocks).length > 0;
+  const allLocked = hasBlocks && Object.values(blocks).every((b) => b.locked);
   const toggleLock = () => {
-    const n = applyBlocks(lockAll(months, !allLocked));
-    setMsg({ tone: "ok", text: `${allLocked ? "Unlocked" : "Locked"} ${n} month${n === 1 ? "" : "s"}. Press Save plan to keep it.` });
+    setBlocks((cur) => lockAll(cur, !allLocked));
+    setDirty(true);
+    setMsg({ tone: "ok", text: `${allLocked ? "Unlocked" : "Locked"} the ad plan. Press Save to keep it.` });
   };
 
   const insights = score && metrics ? creativeInsights(score, metrics, block) : [];
-  // The year table shows what Save would write (locked months as saved), so it is useful before the first Save.
-  const previewMonths = useMemo(() => {
-    const blocks = regenerateCreative(months, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides: draft[m.month] ?? o, now }));
-    return months.map((m) => (m.inputs && blocks[m.month] ? { ...m, inputs: { ...m.inputs, creative: blocks[m.month] } } : m));
-  }, [months, data, events, planNonCatalog, metaFacts, draft, now]);
-  const year = useMemo(() => yearTable({ year: plan.year, months: previewMonths, history: data, facts: planHistory.facts, settings: ctx.settings, lastData: planHistory.lastData }), [plan.year, previewMonths, data, planHistory.facts, planHistory.lastData, ctx.settings]);
   const gap = block ? Math.max(0, block.basis.targetSpend - block.basis.currentSpend * block.basis.carryRate) : 0;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="mr-auto">
-          <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
-            Creative Demand Model
-          </h2>
-          <p className="text-xs text-text-muted">How many new Meta ads each month needs to carry the plan&apos;s Meta spend, and how healthy the account&apos;s creative is. It does not change any target.</p>
-        </div>
+        <p className="mr-auto max-w-2xl text-xs text-text-muted">
+          How many new Meta ads each month needs to carry the plan&apos;s Meta spend, and how healthy the account&apos;s creative is. It follows the {plan.year} plan&apos;s Meta spend and the marketing calendar and never changes a plan target.
+        </p>
+        {dirty && <span className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-xs">Unsaved changes</span>}
         <button className={btnPrimary} onClick={save} disabled={busy || history === "loading"}>
           {busy ? "Saving…" : "Save"}
         </button>
         <button className={btn} onClick={regenerate} disabled={history === "loading"}>
           Regenerate Plan
         </button>
-        <button className={btn} onClick={toggleLock} disabled={withBlock.length === 0}>
+        <button className={btn} onClick={toggleLock} disabled={!hasBlocks}>
           {allLocked ? "Unlock Plan" : "Lock Plan"}
         </button>
       </div>
@@ -239,7 +239,7 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
         {months.map((m, i) => (
           <button key={m.month} role="tab" aria-selected={m.month === sel} onClick={() => setSel(m.month)} className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm ${m.month === sel ? "border-accent bg-accent font-semibold text-black" : "border-border text-text-muted hover:text-text"}`}>
             {MONTHS[i]}
-            {m.inputs?.creative && <span className={`h-1.5 w-1.5 rounded-full ${m.month === sel ? "bg-black" : "bg-accent"}`} title="Saved in the plan" />}
+            {blocks[m.month] && <span className={`h-1.5 w-1.5 rounded-full ${m.month === sel ? "bg-black" : "bg-accent"}`} title="Saved" />}
           </button>
         ))}
       </div>
@@ -257,13 +257,19 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
               </h3>
               {monthLocked && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">🔒 locked</span>}
               {stale && <span className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-xs">Spend changed, regenerate</span>}
-              {saved && !stale && !monthLocked && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">saved in the plan</span>}
+              {saved && !stale && !monthLocked && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">saved</span>}
             </div>
 
             {!selMonth.inputs || !block ? (
-              <p className="text-sm text-text-muted">Plan this month first: start it in the Overview tab, then come back.</p>
+              <p className="text-sm text-text-muted">
+                This month has no plan yet. Start it in{" "}
+                <Link href={`/planning/${plan.id}`} className="text-accent underline">
+                  Planning
+                </Link>
+                , then come back.
+              </p>
             ) : block.basis.reason === "no_meta_spend" ? (
-              <p className="text-sm text-text-muted">No Meta spend planned for {monthName}: no new ads are needed. Give Facebook / Meta a share in the Spend tab.</p>
+              <p className="text-sm text-text-muted">No Meta spend planned for {monthName}: no new ads are needed. Give Facebook / Meta a share in the plan&apos;s Spend tab.</p>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-4">
@@ -304,7 +310,7 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
         </div>
       )}
 
-      {history !== "loading" && <CreativeMonthView ctx={ctx} month={sel} history={data} block={block} asOf={asOf} />}
+      {history !== "loading" && <CreativeMonthView client={client} settings={settings} facts={facts} lastData={lastData} month={sel} history={data} block={block} asOf={asOf} />}
 
       {history !== "loading" && (
         <div className="space-y-2">

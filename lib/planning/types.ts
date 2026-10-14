@@ -1,4 +1,3 @@
-import type { CreativeMonth } from "../creative/plan";
 import type { ChannelKey } from "../types";
 
 /** A platform in the plan's spend split. `alt` is the Brand (Google) or non-acquisition / returning (others) share. */
@@ -69,8 +68,6 @@ export interface PlanMonthInputs {
   overrides?: Record<string, DayOverride>;
   /** Platform ROAS targets the strategist typed for this month, per channel. Absent = the suggested value (aMER / incrementality factor). */
   roas?: Partial<Record<ChannelKey, number>>;
-  /** The Creative Demand model's result for this month (new ads needed, moments and evergreen, video and image). Does not change any target. */
-  creative?: CreativeMonth;
   source?: "manual" | "last_year" | "recent" | "actuals";
 }
 

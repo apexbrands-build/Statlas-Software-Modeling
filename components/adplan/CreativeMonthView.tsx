@@ -7,10 +7,10 @@ import { AD_FORMATS } from "@/lib/creative/types";
 import { endOfMonth, startOfMonth } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
 import { aggregate, METRICS } from "@/lib/metrics";
+import type { Client, ClientSettings, DailyFact } from "@/lib/types";
 import { getRepository } from "@/lib/repository";
-import type { PlanCtx } from "../ctx";
-import { MONTHS } from "../ui";
-import { Legend, LineChart } from "./charts";
+import { Legend, LineChart } from "@/components/planning/models/charts";
+import { MONTHS } from "@/components/planning/ui";
 
 const FORMAT_COLOR: Record<AdFormat, string> = { video: "#5eead4", image: "#facc15", carousel: "#fb923c", other: "#94a3b8" };
 const FORMAT_LABEL: Record<AdFormat, string> = { video: "Video", image: "Image", carousel: "Carousel", other: "Other" };
@@ -40,8 +40,7 @@ function LaunchBars({ days }: { days: CreativeDay[] }) {
 }
 
 /** One month in detail: launches by day, daily Meta spend and aMER, the batch's first-week and first-month spend, and the launches themselves. */
-export function CreativeMonthView({ ctx, month, history, block, asOf }: { ctx: PlanCtx; month: string; history: CreativeHistory | null; block: CreativeMonth | null; asOf: string }) {
-  const { client, settings, history: planHistory } = ctx;
+export function CreativeMonthView({ client, settings, facts: allFacts, lastData, month, history, block, asOf }: { client: Client; settings: ClientSettings; facts: DailyFact[]; lastData: string; month: string; history: CreativeHistory | null; block: CreativeMonth | null; asOf: string }) {
   const [loaded, setLoaded] = useState<{ key: string; data: { ads: LaunchedAd[]; days: CreativeDay[] } | null } | null>(null);
   const key = `${client.id}|${month}|${asOf}`;
 
@@ -65,7 +64,7 @@ export function CreativeMonthView({ ctx, month, history, block, asOf }: { ctx: P
 
   const from = startOfMonth(month);
   const to = endOfMonth(month);
-  const facts = planHistory.facts.filter((f) => f.date >= from && f.date <= to);
+  const facts = allFacts.filter((f) => f.date >= from && f.date <= to);
   const factByDate = new Map(facts.map((f) => [f.date, f]));
   const days = Array.from({ length: Number(to.slice(8, 10)) }, (_, i) => `${month.slice(0, 8)}${String(i + 1).padStart(2, "0")}`);
   const labels = days.map((d) => (Number(d.slice(8, 10)) % 5 === 1 ? String(Number(d.slice(8, 10))) : ""));
@@ -82,7 +81,7 @@ export function CreativeMonthView({ ctx, month, history, block, asOf }: { ctx: P
   const real = launched.filter((a) => !a.isCatalog);
   const spend7 = real.reduce((s, a) => s + a.spend7, 0);
   const spend30 = real.reduce((s, a) => s + a.spend30, 0);
-  const future = from > planHistory.lastData;
+  const future = from > lastData;
 
   return (
     <section className="space-y-4 rounded-xl border border-border bg-surface p-4" aria-label={`${name} in detail`}>

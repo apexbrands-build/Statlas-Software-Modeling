@@ -44,26 +44,6 @@ export function EventIllustration() {
   );
 }
 
-export function CreativeIllustration() {
-  const tiles = [
-    [16, 52, 22, 30],
-    [44, 36, 22, 46],
-    [72, 24, 22, 58],
-  ];
-  return (
-    <svg viewBox="0 0 160 100" className="h-24 w-full" role="img" aria-label="Ad tiles of growing height beside a score dial">
-      {tiles.map(([x, y, w, h], i) => (
-        <rect key={i} x={x} y={y} width={w} height={h} rx={4} fill={i === 2 ? ACC : "currentColor"} opacity={i === 2 ? 0.9 : 0.25} />
-      ))}
-      <path d="M104 78 A30 30 0 1 1 152 78" fill="none" stroke="currentColor" opacity={0.25} strokeWidth={6} strokeLinecap="round" />
-      <path d="M104 78 A30 30 0 0 1 136 38" fill="none" stroke={ACC} strokeWidth={6} strokeLinecap="round" />
-      <text x={128} y={72} textAnchor="middle" fontSize={16} fontWeight={700} fill="currentColor">
-        61
-      </text>
-    </svg>
-  );
-}
-
 const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
 export type BulletIcon = "scatter" | "target" | "cohort" | "layers" | "calendar" | "bolt";
