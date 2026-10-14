@@ -39,7 +39,7 @@ Five Shopify stores (France + Belgium + Luxembourg, UK, Germany + Austria, Switz
 8. **Settings.** Subscription apps appear as Shopify sales channels, so they must be added to the client's DTC channels or rebills are dropped from revenue (default is Online Store and Shop only).
 
 ## Subscription layer
-- **Rebills from orders (no connector needed):** a rebill is a returning order whose sales channel is a subscription app. Add `rebill_revenue` and `rebill_orders` to the daily facts.
+- **Rebills from orders (no connector needed):** a rebill is a returning order whose sales channel is a subscription app. The daily facts get the subscription columns planned in `docs/superpowers/plans/2026-10-12-subscriptions-orders-report.md` (`sub_orders`, `sub_revenue`, `sub_new_orders`, `sub_new_revenue`); rebills are derived as `sub_orders - sub_new_orders` and `sub_revenue - sub_new_revenue`, so no separate `rebill_*` columns are added.
 - **Daily targets:** the planning generator already keeps a fixed value on a day and lets the other days absorb the difference. Scheduled rebills for the next 30 to 60 days are written as fixed daily returning values; later days keep the weekday-weighted spread of the monthly returning forecast. The month still reconciles to the Returning model.
 - **Schedule:** from the connector (next billing date, interval, status) when available; otherwise inferred per customer as last order plus that customer's median gap. Expected rebills = scheduled x payment success x (1 - skip, pause, cancel risk), measured from history.
 - **Connectors**, one provider file each: Recharge (France and UK), Juo (Netherlands), Next Commerce (Germany and Switzerland; API to be checked). `integrations.provider` needs the new names.

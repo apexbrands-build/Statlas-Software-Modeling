@@ -8,7 +8,7 @@ Know every client's subscription business inside Apex Analytics: how many people
 ## Decisions (strategist, 2026-10-12)
 - **Both methods.** Loop and Skio connect through their APIs (one connection per store). Where a client has no API access (for example a Loop plan without it) or uses another app, the same report runs on an estimate from Shopify orders. The report does not care where the rows came from.
 - **A Subscriptions report** is part of the build: share of new customers who subscribe, churn and the standard subscription metrics.
-- Other apps (Recharge, Smartrr, Seal) get connectors later, one provider file each.
+- Connector order (updated 2026-10-13): Recharge first (the biggest app and the first one Pacha needs), then Loop and Skio, then Juo and Next Commerce; Smartrr and Seal later. One provider file each. Plans: `docs/superpowers/plans/2026-10-13-subscription-connectors.md`. A client with several stores can use different apps, so the source is kept per connection, not one value per client (to settle in the A2 plan).
 
 ## What the research found
 - Shopify's own subscription API (the "Access subscriptions APIs" request in the Dev Dashboard, scopes `read_customer_payment_methods` and `write_own_subscription_contracts`) is for apps that create subscriptions. The read scope returns only contracts the requesting app created (Shopify Community answers, Fivetran's connector team and a developer's test with PayWhirl all say contracts of other apps come back empty). **We do not request it**: it cannot read Loop or Skio subscriptions.
