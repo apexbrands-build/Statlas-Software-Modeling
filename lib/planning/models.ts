@@ -77,7 +77,7 @@ export interface ReturningResults {
   months: { month: string; total: number; preCohort: number; knownCohorts: number; futureCohorts: number }[];
 }
 
-export type ModelKind = "new_customer" | "returning" | "event";
+export type ModelKind = "new_customer" | "returning" | "event" | "creative";
 
 export interface SavedModel<S, R> {
   settings: S;
@@ -85,6 +85,13 @@ export interface SavedModel<S, R> {
   updatedAt: string | null;
   updatedBy: string | null;
 }
+
+/** Creative Demand model settings: how long before a calendar moment an ad counts as a moment ad, and the rule that tags moments (calendar only for now). */
+export interface CreativeSettings {
+  leadDays: number;
+  momentRule: "calendar";
+}
+export const DEFAULT_CREATIVE: CreativeSettings = { leadDays: 14, momentRule: "calendar" };
 
 export const DEFAULT_RETURNING: ReturningSettings = { window: 12, calibrationMonths: 0, seasonality: true, aovSource: "last30" };
 export const DEFAULT_NEW_CUSTOMER: Omit<NewCustomerSettings, "months"> = { fitKind: "revenue", actualizeFrom: null, recentWeight: 3 };

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import { emptyTotals } from "../metrics";
 import type { MarketingEvent } from "../planning/events";
+import { FLAT_SEASONALITY, generateMonth } from "../planning/generate";
+import { DEFAULT_CREATIVE } from "../planning/models";
+import { planFigures } from "../planning/summary";
 import { blankInputs, type PlanMonth, type PlanMonthInputs } from "../planning/types";
 import type { ClientSettings, DailyFact } from "../types";
 import { computeCreativeMonth, creativeInsights, isStale, keepCreative, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth } from "./plan";
@@ -240,5 +243,26 @@ describe("creativeInsights", () => {
     const out = creativeInsights(none, { zeroRevenue: null, concentration: null, roasDegradation: null, spendDegradation: null, evergreenShare: null }, null);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatch(/not enough/i);
+  });
+});
+
+describe("the creative block never changes a target", () => {
+  const settings: ClientSettings = defaultSettings("c1");
+  const base = inputsFor({ spend: 30000, amer: 2, returningRevenue: 20000 });
+  const gen = (inputs: PlanMonthInputs) => generateMonth({ planId: "p", clientId: "c1", month: "2026-11-01", inputs, seasonality: FLAT_SEASONALITY, deliveryCostPerOrder: 1, excludeBrandFromAmer: false, excludeMetaReturningFromAmer: false });
+
+  it("generateMonth returns identical daily rows with and without a creative block", () => {
+    expect(gen({ ...base, creative: saved({ needed: 99 }) })).toEqual(gen(base));
+  });
+
+  it("planFigures gives the same figures both ways", () => {
+    const rows = gen(base);
+    const plain = [month("2026-11", base)];
+    const withBlock = [month("2026-11", { ...base, creative: saved({ needed: 99 }) })];
+    expect(planFigures(rows, withBlock, 2026, settings)).toEqual(planFigures(rows, plain, 2026, settings));
+  });
+
+  it("the model's own settings start at a 14-day lead and the calendar rule", () => {
+    expect(DEFAULT_CREATIVE).toEqual({ leadDays: 14, momentRule: "calendar" });
   });
 });
