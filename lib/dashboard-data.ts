@@ -91,7 +91,7 @@ export function useDashboardData(
         customCompare ? repo.getFacts(client.id, customCompare.from, customCompare.to) : Promise.resolve([]),
         plan ? repo.getPlanTargets(client.id, plan.id, trendFrom, range.to) : Promise.resolve([]),
         // The channel ROAS targets come from the plan's month inputs; Home still works without them.
-        plan && settings ? repo.getPlanMonths(plan.id).then((months) => planRoasTargets(months, settings), () => null) : Promise.resolve(null),
+        plan && settings ? repo.getPlanMonths(plan.id).then((months) => planRoasTargets(months, settings)).catch(() => null) : Promise.resolve(null),
       ]);
       if (!cancel) setRaw({ key, effTo, lastData, facts, lyFacts, prevFacts, customFacts, plan: planRows, planName: plan?.name ?? null, hasStretch, planScenario, roasTargets });
     })();

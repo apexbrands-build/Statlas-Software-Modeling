@@ -69,7 +69,8 @@ export function withRoas(inputs: PlanMonthInputs, channel: ChannelKey, value: nu
 
 /** Whether a channel's row is all suggested, all typed (every month with inputs), or a mix. */
 export function rowMethod(months: PlanMonth[], channel: ChannelKey): "suggested" | "manual" | "mixed" {
-  const open = months.filter((m) => m.inputs);
+  // A month with no aMER (and nothing typed) cannot have a target, so it does not count either way.
+  const open = months.filter((m) => m.inputs && (m.inputs.amer > 0 || (m.inputs.roas?.[channel] ?? 0) > 0));
   const typed = open.filter((m) => (m.inputs!.roas?.[channel] ?? 0) > 0).length;
   if (typed === 0) return "suggested";
   return typed === open.length ? "manual" : "mixed";
@@ -86,4 +87,9 @@ export function actualPlatformRoas(facts: DailyFact[], channel: ChannelKey): num
     revenue += c.platformRevenue;
   }
   return spend > 0 ? revenue / spend : null;
+}
+
+/** What a ROAS cell shows and holds: the target rounded to two decimals (so leaving a cell untouched changes nothing), or null with no target. */
+export function roasCellValue(value: number | null): number | null {
+  return value === null ? null : Math.round(value * 100) / 100;
 }

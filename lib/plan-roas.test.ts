@@ -38,6 +38,11 @@ describe("groupRoasTarget", () => {
     expect(groupRoasTarget(mixed, settings, ["meta_acquisition", "meta_returning"], false)).toBeNull();
     expect(groupRoasTarget(mixed, settings, ["meta_returning"], false)).toBeNull();
   });
+  it("is null when only part of a channel's planned spend has a target (a month with no aMER), instead of quietly using the covered months", () => {
+    const partial: RoasOf = (date, ch) => (ch === "meta_acquisition" && date.startsWith("2026-11") ? 2 : null);
+    const t = aggregatePlan([day("2026-11-10", { meta_acquisition: 100 }), day("2026-12-10", { meta_acquisition: 300 })], partial);
+    expect(groupRoasTarget(t, settings, ["meta_acquisition"], false)).toBeNull();
+  });
   it("ignores a channel in the group that has no planned spend", () => {
     expect(groupRoasTarget(p, settings, ["meta_acquisition", "meta_returning"], false)).toBeCloseTo(500 / 400, 10);
   });

@@ -173,6 +173,18 @@ describe("stretchPlanMonths", () => {
     expect(out[1].status).toBe("in_progress");
   });
 
+  it("drops the baseline's typed ROAS targets from a month it recomputes (its aMER changed) but keeps them on a locked month", () => {
+    const typed = { ...inputs, roas: { meta_acquisition: 2.0 } };
+    const out = stretchPlanMonths(
+      [{ month: "2026-01-01", status: "final", locked: true, inputs: typed }, { month: "2026-02-01", status: "final", locked: false, inputs: typed }],
+      [result("2026-01-01"), result("2026-02-01")],
+      settings,
+    );
+    expect(out[0].inputs!.roas).toEqual({ meta_acquisition: 2.0 });
+    expect(out[1].inputs!.roas).toBeUndefined();
+    expect(typed.roas).toEqual({ meta_acquisition: 2.0 });
+  });
+
   it("turns acquisition spend back into total spend with the month's acquisition share", () => {
     const withAlt = { ...inputs, altPct: { meta: 20 } };
     const out = stretchPlanMonths([{ month: "2026-02-01", status: "final", locked: false, inputs: withAlt }], [result("2026-02-01", { acqSpend: 4000 })], { ...settings, excludeMetaReturningFromAmer: true });

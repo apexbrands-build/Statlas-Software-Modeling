@@ -261,6 +261,8 @@ export function groupRoasTarget(p: PlanTotals, s: ClientSettings, channels: Chan
       if ((p.spendByChannel[k] ?? 0) > 0) return null;
       continue;
     }
+    // Some of this channel's planned spend has no target (a month with no aMER): show none rather than the covered months only.
+    if (t.spend < (p.spendByChannel[k] ?? 0) - 1e-6) return null;
     spend += t.spend;
     revenue += t.expectedRevenue * (incremental ? factor(s, k) : 1);
   }

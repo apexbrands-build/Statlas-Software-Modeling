@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import { blankInputs, type PlanMonth, type PlanMonthInputs } from "./types";
-import { actualPlatformRoas, planRoasTargets, roasChannels, roasOf, roasTarget, rowMethod, suggestedRoas, withRoas } from "./roas";
+import { actualPlatformRoas, planRoasTargets, roasCellValue, roasChannels, roasOf, roasTarget, rowMethod, suggestedRoas, withRoas } from "./roas";
 import type { ClientSettings, DailyFact } from "../types";
 
 const settings = (multipliers: ClientSettings["multipliers"]): ClientSettings => ({ ...defaultSettings("c"), multipliers });
@@ -107,6 +107,10 @@ describe("rowMethod", () => {
     expect(rowMethod(ms({ meta_acquisition: 2 }, { meta_acquisition: 2.5 }), "meta_acquisition")).toBe("manual");
     expect(rowMethod(ms({ meta_acquisition: 2 }, null), "meta_acquisition")).toBe("mixed");
   });
+  it("ignores a month that cannot have a target (aMER 0), so a manual row does not read Mixed because of it", () => {
+    const ms = [month("2026-11", inputs({ roas: { meta_acquisition: 2 } })), month("2026-12", inputs({ amer: 0 }))];
+    expect(rowMethod(ms, "meta_acquisition")).toBe("manual");
+  });
   it("ignores months with no inputs and is suggested when none has inputs", () => {
     expect(rowMethod([month("2026-11", null)], "meta_acquisition")).toBe("suggested");
   });
@@ -124,5 +128,16 @@ describe("actualPlatformRoas", () => {
     expect(actualPlatformRoas([fact(0, 0)], "meta_acquisition")).toBeNull();
     expect(actualPlatformRoas([], "meta_acquisition")).toBeNull();
     expect(actualPlatformRoas([fact(100, 200)], "pinterest")).toBeNull();
+  });
+});
+
+describe("roasCellValue", () => {
+  it("is the suggested value rounded to what the cell shows, so tabbing through a cell commits nothing", () => {
+    const v = roasCellValue(1.84166666)!;
+    expect(v).toBe(1.84);
+    expect(Number(String(v))).toBe(v);
+  });
+  it("is null when there is no target, never 0", () => {
+    expect(roasCellValue(null)).toBeNull();
   });
 });

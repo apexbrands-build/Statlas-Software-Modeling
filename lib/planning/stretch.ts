@@ -178,11 +178,14 @@ export function stretchPlanMonths(base: PlanMonth[], stretch: StretchMonth[], se
     const s = byMonth.get(m.month);
     if (!s || m.locked || !m.inputs) return copy;
     const returning = Math.round(s.returningRevenue);
+    // Typed ROAS targets belong to the baseline's aMER; the stretch's own aMER gets the suggested ones.
+    const { roas: _baselineRoas, ...kept } = copy.inputs!;
+    void _baselineRoas;
     return {
       ...copy,
       status: "in_progress",
       inputs: {
-        ...copy.inputs!,
+        ...kept,
         spend: Math.round(s.acqSpend / acqShare(m.inputs, settings)),
         amer: Math.round(s.amer * 10000) / 10000,
         returningRevenue: returning,

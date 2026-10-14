@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { endOfMonth } from "@/lib/dates";
-import { actualPlatformRoas, roasChannels, roasTarget, rowMethod, withRoas } from "@/lib/planning/roas";
+import { actualPlatformRoas, roasCellValue, roasChannels, roasTarget, rowMethod, withRoas } from "@/lib/planning/roas";
 import { CHANNEL_LABELS, type ChannelKey } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
 import { btnPrimary, inputClass, MONTHS, NumField } from "./ui";
@@ -47,7 +47,7 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
       <div>
         <h3 className="text-base font-semibold">ROAS targets</h3>
         <p className="max-w-3xl text-sm text-text-muted">
-          Platform ROAS target per channel and month. Suggested = the month&apos;s aMER divided by the channel&apos;s incrementality factor (Store Settings), so a channel that only delivers 75% incrementally needs a higher platform ROAS to hit the same aMER. Type a number to set your own for a month. Home and the Paid Media tiles compare actual ROAS to these.
+          Platform ROAS target per channel and month. Suggested = the month&apos;s aMER divided by the channel&apos;s incrementality factor (Store Settings), so a channel that only delivers 75% incrementally needs a higher platform ROAS to hit the same aMER. Type a number to set your own for a month. Home&apos;s channel tiles compare actual ROAS to these.
         </p>
       </div>
       <div className="overflow-x-auto rounded-xl border border-border bg-surface">
@@ -80,9 +80,10 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
                   </td>
                   {months.map((m) => {
                     const t = roasTarget(m.inputs, k, factorOf(k));
+                    const shown = roasCellValue(t.value);
                     return (
                       <td key={m.month} className="px-1 py-1 text-right">
-                        {m.inputs ? <NumField value={t.value ?? 0} decimals={2} className={`w-14 ${t.manual ? "border-accent!" : ""}`} disabled={m.locked} onCommit={(v) => editInputs(m.month, (i) => withRoas(i, k, v))} /> : <span className="text-text-faint">–</span>}
+                        {m.inputs && shown !== null ? <NumField value={shown} decimals={2} className={`w-14 ${t.manual ? "border-accent!" : ""}`} disabled={m.locked} onCommit={(v) => editInputs(m.month, (i) => withRoas(i, k, v))} /> : <span className="text-text-faint" title={m.inputs ? "Set this month's aMER in the Overview tab first" : undefined}>–</span>}
                       </td>
                     );
                   })}
