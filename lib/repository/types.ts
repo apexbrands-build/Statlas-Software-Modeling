@@ -1,3 +1,4 @@
+import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import type { AovData, AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type { MarketingEvent } from "../planning/events";
@@ -22,6 +23,13 @@ export interface Repository {
   getFirstProducts(clientId: string, from: string, to: string): Promise<FirstProductRow[] | null>;
   /** AOV histogram buckets and order-value stats (migration 0010); null in demo data or before the migration is applied. `step` only applies to mode "step". */
   getAovHistogram(clientId: string, from: string, to: string, mode: AovMode, step: number): Promise<AovData | null>;
+  /**
+   * Ad-level Meta data for the Creative Score and Creative Demand model (migration 0013): months from `fromMonth` to `asOf`, ads launched in the
+   * 365 days to `asOf`, the last 97 days and the score ads at `asOf`. Aggregates only. Null before the migration is applied or without ad data tables.
+   */
+  getCreativeHistory(clientId: string, asOf: string, fromMonth: string): Promise<CreativeHistory | null>;
+  /** The ads launched in one month and that month's days (up to `asOf`), for the month view; null like getCreativeHistory. */
+  getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null>;
   /** Last day with actual data (inclusive). */
   getLastDataDate(clientId: string): Promise<string>;
   listPlans(clientId: string): Promise<PlanVersion[]>;

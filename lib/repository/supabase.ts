@@ -1,4 +1,6 @@
-import { addDays, todayLocal } from "../dates";
+import { addDays, endOfMonth, startOfMonth, todayLocal } from "../dates";
+import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
+import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
 import { getBrowserClient } from "../supabase/client";
 import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
@@ -156,6 +158,44 @@ export class SupabaseRepository implements Repository {
       throw new Error(buckets.error.message);
     }
     return mapAovRows(((stats.data ?? []) as Row[])[0], (buckets.data ?? []) as Row[]);
+  }
+
+  /** One creative read function, all pages (1,000 rows each, ordered so pages never overlap); null when the function is not there yet (migration 0013). */
+  private async creativeRpc(fn: string, args: Record<string, unknown>, orderBy: string): Promise<Row[] | null> {
+    const missing = /creative_|PGRST202|PGRST205|42883/;
+    const rows: Row[] = [];
+    for (let i = 0; ; i += 1000) {
+      const { data, error } = await this.db.rpc(fn, args).order(orderBy).range(i, i + 999);
+      if (error) {
+        if (missing.test(`${error.code} ${error.message}`)) return null;
+        throw new Error(error.message);
+      }
+      rows.push(...((data ?? []) as Row[]));
+      if (!data || data.length < 1000) break;
+    }
+    return rows;
+  }
+
+  async getCreativeHistory(clientId: string, asOf: string, fromMonth: string): Promise<CreativeHistory | null> {
+    const [months, ads, days, score] = await Promise.all([
+      this.creativeRpc("creative_months", { p_client: clientId, p_from: fromMonth, p_to: asOf }, "month"),
+      this.creativeRpc("creative_ads", { p_client: clientId, p_from: addDays(asOf, -364), p_to: asOf }, "ad_id"),
+      this.creativeRpc("creative_days", { p_client: clientId, p_from: addDays(asOf, -96), p_to: asOf }, "date"),
+      this.creativeRpc("creative_score_ads", { p_client: clientId, p_to: asOf }, "ad_id"),
+    ]);
+    if (!months || !ads || !days || !score) return null;
+    return { asOf, months: months.map(mapMonthAgg), ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay), scoreAds: score.map(mapScoreAd) };
+  }
+
+  async getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null> {
+    const from = startOfMonth(month);
+    const to = endOfMonth(month);
+    const [ads, days] = await Promise.all([
+      this.creativeRpc("creative_ads", { p_client: clientId, p_from: from, p_to: to }, "ad_id"),
+      this.creativeRpc("creative_days", { p_client: clientId, p_from: from, p_to: to < asOf ? to : asOf }, "date"),
+    ]);
+    if (!ads || !days) return null;
+    return { ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay) };
   }
 
   async getCampaignDays(clientId: string, from: string, to: string): Promise<CampaignDay[]> {

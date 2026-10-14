@@ -1,4 +1,6 @@
 import { addDays, dayOfWeek, diffDays, eachDay, todayLocal } from "../dates";
+import { demoCreativeHistory, demoCreativeMonth } from "../creative/demo";
+import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import type { AovData } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type {
@@ -393,6 +395,15 @@ export class SeedRepository implements Repository {
   /** Demo data has no individual orders. */
   async getAovHistogram(): Promise<AovData | null> {
     return null;
+  }
+
+  /** Deterministic demo ads (see lib/creative/demo.ts). */
+  async getCreativeHistory(clientId: string, asOf: string): Promise<CreativeHistory | null> {
+    return demoCreativeHistory(clientId, asOf);
+  }
+
+  async getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null> {
+    return demoCreativeMonth(clientId, month, asOf);
   }
 
   async getFirstProducts(): Promise<FirstProductRow[] | null> {
