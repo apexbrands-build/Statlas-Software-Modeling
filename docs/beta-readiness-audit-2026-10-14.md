@@ -2,6 +2,16 @@
 
 Beta Wed Oct 21, team roll-out Mon Oct 26. Read-only audit: code read, 396 tests pass, type check clean. Screens were not opened in a browser, and a live Supabase save was not tried (it needs a login).
 
+## Status, end of 2026-10-14 (what changed after the audit)
+- **Gap 4 (aMER, two definitions): fixed.** The plan's aMER target uses acquisition spend like the actual (`planAmerSpend`).
+- **Gap 8 (deleted incrementality factor): fixed.** **Gap 9 (Save before history loads): fixed.**
+- **Gap 1 (Calendar events not reaching targets): fixed, not seen firing live.** The editor compares saved targets with what it would generate and prompts a save; unit-tested, and no false banner in the demo.
+- **Gap 3 (ROAS targets): built** with the strategist's formula (platform ROAS target = month aMER / channel factor; question 3, first and third bullets, answered: the month's aMER, platform ROAS). Details line, Spend panel, Home channel tiles. Paid Media Overview goal columns are not wired yet. The non-acquisition question is answered by the reference screenshots: the Statlas table has no returning channels, ours neither; Google Brand has a row.
+- **Gap 5 (Home as the tracking screen): partly built.** Home opens on Plan (when the client has one) with the range month to date, and has Yesterday and Month to date presets. Not built: the month target, target to date and projected month end on the hero and tiles.
+- **Gap 2 (events with no history): decided, no default lifts.** An event type with no measured history changes nothing, because the Event Effect model needs historical calendar events to expect anything (strategist, 2026-10-14). A strategist who expects more for an early-stage client types a higher spend in the Spend step (2x, 3x, 4x of the baseline is allowed). Open: a "no lift applied" chip in Calendar and Spend so the strategist can see which events do nothing.
+- **Gaps 6 (P&L plan column drops unsplit spend) and 7 (live save never tried with a login): open.**
+- Answers to section (e): question 1 (no defaults), 3 (formula), 7 (Plan by default, month to date). Still open: 2 (does BFCM add revenue), 4 (do ROAS targets drive the Spend split; today they are shown only), 5, 6, 8.
+
 ## (a) Verdict per foundation
 
 **1. Creating the forecast: WORKS (some numbers disagree).**
