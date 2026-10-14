@@ -14,4 +14,4 @@ Review-gated import of ad batches from a Google Drive folder: submitted -> group
 ## Statlas Ads (creative production platform)
 Plan ad needs per marketing moment (video/static), order batches from design partners, track In Production / In Review / Completed, approve/reject/revise with threads, auto-build final creatives and share links.
 API (alpha, partners): base api.statlas.io/v1, bearer token; batches list/get/deliver/complete, per-ad asset upload and update; webhooks batch.created, batch.updated, revision.requested; limits 100 GET, 30 POST/PATCH, 10 uploads per minute.
-Not in our scope (we never build Best Creatives / Global Creatives).
+Best Creatives is now in scope as our own design (released 2026-10-12, plan `docs/superpowers/plans/2026-10-13-best-creatives-report.md`); Global Creatives stays out of scope.
