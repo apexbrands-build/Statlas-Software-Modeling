@@ -358,3 +358,43 @@ describe("unassigned spend", () => {
     expect(emptyTotals().unassignedSpend).toBe(0);
   });
 });
+
+describe("new and total paid incremental revenue", () => {
+  const t = aggregate([
+    fact(
+      { newOrderRevenue: 3000, returningOrderRevenue: 2000 },
+      {
+        meta_acquisition: { spend: 500, platformRevenue: 1000 },
+        google_nonbrand: { spend: 200, platformRevenue: 400 },
+        google_brand: { spend: 100, platformRevenue: 500 },
+        meta_returning: { spend: 100, platformRevenue: 200 },
+      },
+    ),
+  ]);
+
+  it("total paid iRevenue adds every channel's platform revenue times its factor, brand search and returning audiences included", () => {
+    expect(METRICS.paidIRevenue.value(t, settings)).toBeCloseTo(1200 + 300 + 150 + 120, 6);
+    expect(METRICS.paidIRevenue.label).toBe("Total paid iRevenue");
+  });
+
+  it("new paid iRevenue counts only the acquisition channels (Meta acquisition, Google non-brand, other platforms' acquisition), not brand search or returning audiences", () => {
+    expect(METRICS.newPaidIRevenue.value(t, settings)).toBeCloseTo(1200 + 300, 6);
+  });
+
+  it("each is shown against the revenue it should explain: total paid over order revenue, new paid over new revenue", () => {
+    expect(METRICS.paidShareOfRevenue.value(t, settings)).toBeCloseTo(1770 / 5000, 10);
+    expect(METRICS.newPaidShareOfNewRevenue.value(t, settings)).toBeCloseTo(1500 / 3000, 10);
+  });
+
+  it("the shares are a dash, not zero or infinity, when there is no revenue to divide by", () => {
+    const empty = aggregate([fact({ newOrderRevenue: 0, returningOrderRevenue: 0 }, { meta_acquisition: { platformRevenue: 100 } })]);
+    expect(METRICS.paidShareOfRevenue.value(empty, settings)).toBeNull();
+    expect(METRICS.newPaidShareOfNewRevenue.value(empty, settings)).toBeNull();
+  });
+
+  it("uses the incrementality factors of the settings: with none set a channel counts as platform-reported", () => {
+    const plain = { ...settings, multipliers: {} };
+    expect(METRICS.newPaidIRevenue.value(t, plain)).toBeCloseTo(1400, 6);
+    expect(METRICS.paidIRevenue.value(t, plain)).toBeCloseTo(2100, 6);
+  });
+});
