@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { catalogShare, metaSpendOf, monthsWithData, SPEND_PER_AD_RANGE, spendPerNewAd } from "@/lib/creative/demand";
 import { scoreMetrics } from "@/lib/creative/metrics";
-import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, type CreativeMonth, type CreativeOverrides } from "@/lib/creative/plan";
+import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth, type CreativeOverrides } from "@/lib/creative/plan";
 import { creativeScore } from "@/lib/creative/score";
 import type { CreativeHistory } from "@/lib/creative/types";
 import { startOfMonth, todayLocal } from "@/lib/dates";
@@ -12,7 +12,9 @@ import { DEFAULT_CREATIVE, type CreativeSettings } from "@/lib/planning/models";
 import type { PlanMonth } from "@/lib/planning/types";
 import { getRepository } from "@/lib/repository";
 import { btn, btnPrimary, inputClass, MONTHS } from "../ui";
+import { CreativeMonthView } from "./CreativeMonthView";
 import { CreativeScoreCard } from "./CreativeScoreCard";
+import { CreativeYearTable } from "./CreativeYearTable";
 import type { ModelCtx } from "./ModelsStep";
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -190,6 +192,12 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
   };
 
   const insights = score && metrics ? creativeInsights(score, metrics, block) : [];
+  // The year table shows what Save would write (locked months as saved), so it is useful before the first Save.
+  const previewMonths = useMemo(() => {
+    const blocks = regenerateCreative(months, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, overrides: draft[m.month] ?? o, now }));
+    return months.map((m) => (m.inputs && blocks[m.month] ? { ...m, inputs: { ...m.inputs, creative: blocks[m.month] } } : m));
+  }, [months, data, events, planNonCatalog, draft, now]);
+  const year = useMemo(() => yearTable({ year: plan.year, months: previewMonths, history: data, facts: planHistory.facts, settings: ctx.settings, lastData: planHistory.lastData }), [plan.year, previewMonths, data, planHistory.facts, planHistory.lastData, ctx.settings]);
   const gap = block ? Math.max(0, block.basis.targetSpend - block.basis.currentSpend * block.basis.carryRate) : 0;
 
   return (
@@ -276,6 +284,15 @@ export function CreativeModel({ mc }: { mc: ModelCtx }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {history !== "loading" && <CreativeMonthView ctx={ctx} month={sel} history={data} block={block} asOf={asOf} />}
+
+      {history !== "loading" && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">{plan.year} at a glance</h3>
+          <CreativeYearTable rows={year.rows} total={year.total} selected={sel} onSelect={setSel} currency={client.currency} />
         </div>
       )}
 
