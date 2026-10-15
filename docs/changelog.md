@@ -2,6 +2,13 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-10-15: Shopify app submitted for review
+- **Submitted** the public app "Apex Analytics" (listing, screencast https://youtu.be/vfid4VB4OU4, review account limited to the Apex Analytics Test client). Details and lessons: `docs/shopify-listing/shopify-submission.md` section 10. The submission and screencast docs moved to `docs/shopify-listing/`.
+- **Webhooks fixed.** The active app version had no webhook subscriptions, so an uninstall never reached the app and a reinstall kept a revoked token (Shopify 401 on sync). The Shopify CLI refuses app-specific webhooks with the legacy install flow, so the flow was switched off and `shopify.app.toml` deployed (version `apex-analytics-4`: privacy topics and `app/uninstalled` to `/api/shopify/webhooks`, scopes unchanged incl. `read_all_orders`, install works on the dev store). Never run `config link` or deploy with an empty client ID: the CLI overwrites the file with the live config.
+- **Protected customer data request:** the draft had Address selected (left over from Markets), so the install screen said "physical address". Now only the main block with the reason Analytics is selected; removing the main block makes orders queries fail with ACCESS_DENIED.
+- Screencast script rewritten as readable steps with a narration-only block for ElevenLabs, a Reporting, Planning and Calendar tour, and no Markets. The Shopify listing draft now mentions reports and the forecast.
+- Lost-files scare: GitHub Desktop had parked 82 uncommitted files (Statlas Original UX, aMER model, SQL) in a stash when switching branches; restored from the stash, which was kept. Those folders are still not committed.
+
 ## 2026-10-14 (night): three-branch workflow
 - New rule from the strategist: `main` is production, `preview` is staging, `development` is where all work happens; Claude commits only on `development` and never changes `main` or `preview` unless asked. Details, the release steps in GitHub Desktop and the one-time GitHub / Vercel settings: `docs/git-workflow.md`. The branches `development` and `preview` were created locally at the last commit; the first seven commits of this stretch are still on `main` because the strategist pushed them as the last direct push. All branches still share one Supabase database (noted in the workflow doc).
 - Migrations `0016` and `0017` applied to the live project at the strategist's go-ahead (see the entry below).

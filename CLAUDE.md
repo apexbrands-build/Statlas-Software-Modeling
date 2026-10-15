@@ -24,7 +24,7 @@ Built and working:
 
 Vercel env vars and setup steps: `docs/connector-setup.md` (never put values in the repo).
 
-**Shopify public app (in progress):** replaces one-app-per-store; the new app is "Apex Analytics" (old custom app "Apex Data" stays until cutover). Details and review checklist: `docs/shopify-submission.md`, `docs/changelog.md`.
+**Shopify public app (submitted for review 2026-10-15):** replaces one-app-per-store; the new app is "Apex Analytics" (old custom app "Apex Data" stays until cutover). Details and review checklist: `docs/shopify-listing/shopify-submission.md`, `docs/changelog.md`.
 
 **Gross sales and discounts (2026-10-01, migration 0003, applied):** `daily_facts` stores `gross_sales` and `discounts` (net_sales = gross - discounts - refunds); `plan_targets` has optional `gross_sales`, `discounts`, `shipping`, `refunds` so the forecasting layer can plan shipping/refund/discount % and a plan-level P&L.
 
