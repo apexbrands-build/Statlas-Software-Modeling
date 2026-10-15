@@ -1,28 +1,32 @@
-# Apex Analytics: Shopify public app configuration.
-# Use with the Shopify CLI (`shopify app config link`, then `shopify app deploy`), or copy the same values into the
-# Dev Dashboard by hand (see docs/shopify-submission.md). client_id is filled in by `config link`.
+# Apex Analytics: Shopify public app configuration. Deploy with: npx @shopify/cli@latest app deploy --allow-updates
+# client_id is set, so a deploy uses this file as it is. Do NOT run `app config link` or `app deploy` with an empty client_id:
+# the CLI then overwrites this file with the live config, which on 2026-10-15 dropped the webhook subscriptions below.
+# Read-only app. read_all_orders is approved and on the live version: keep it here, or a deploy removes it.
+# read_markets (store market names and countries) joins the scopes when Markets is built; lib/shopify.ts must change in the same release.
+
+client_id = "921ba4424435340e2fdbb4c5b38b306e"
 name = "Apex Analytics"
-client_id = ""
 application_url = "https://apex-data-beta.vercel.app/shopify"
 embedded = false
 
+[webhooks]
+api_version = "2026-10"
+
+  # Mandatory privacy webhooks and the uninstall notice, one endpoint (app/api/shopify/webhooks, HMAC-verified).
+  [[webhooks.subscriptions]]
+  uri = "https://apex-data-beta.vercel.app/api/shopify/webhooks"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://apex-data-beta.vercel.app/api/shopify/webhooks"
+  topics = [ "app/uninstalled" ]
+
 [access_scopes]
-# Read-only. read_all_orders is added after Shopify approves it (see docs/shopify-submission.md).
-# read_markets (store market names and countries) joins this list when Markets is built; lib/shopify.ts must change in the same release.
-scopes = "read_orders,read_customers,read_products,read_inventory"
-# The app runs its own OAuth authorization-code install (app/api/shopify/install + callback).
-use_legacy_install_flow = true
+scopes = "read_all_orders,read_customers,read_inventory,read_orders,read_products"
+optional_scopes = [ ]
+# use_legacy_install_flow was removed on 2026-10-15: the CLI refuses app-specific webhooks (the mandatory compliance topics, which
+# the API cannot register) while it is on. Installation is now managed by Shopify; the app still gets its token through its own
+# OAuth route (app/api/shopify/install + callback). If that does not work on the dev store, put the line back and redeploy.
 
 [auth]
-redirect_urls = ["https://apex-data-beta.vercel.app/api/shopify/callback"]
-
-[webhooks]
-api_version = "2025-10"
-
-  [[webhooks.subscriptions]]
-  uri = "https://apex-data-beta.vercel.app/api/shopify/webhooks"
-  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
-
-  [[webhooks.subscriptions]]
-  uri = "https://apex-data-beta.vercel.app/api/shopify/webhooks"
-  topics = ["app/uninstalled"]
+redirect_urls = [ "https://apex-data-beta.vercel.app/api/shopify/callback" ]
