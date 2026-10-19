@@ -319,7 +319,8 @@ function Body(props: {
       </Section>
       <Section title="Paid (incremental)">
         <Grid cols={5}>{row(["paidIRevenue", "paidIOrders", "paidAov", "paidICac", "ipaMer"])}</Grid>
-        <Grid cols={4}>{row(["newPaidIRevenue", "newPaidShareOfNewRevenue", "paidShareOfRevenue"])}</Grid>
+        <Grid cols={5}>{row(["newPaidIRevenue", "newPaidIOrders", "newPaidAov", "newPaidICac", "newIpaMer"])}</Grid>
+        <Grid cols={4}>{row(["newPaidShareOfNewRevenue", "paidShareOfRevenue"])}</Grid>
       </Section>
 
       <section className="space-y-3">

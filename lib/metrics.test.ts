@@ -381,6 +381,27 @@ describe("new and total paid incremental revenue", () => {
     expect(METRICS.newPaidIRevenue.value(t, settings)).toBeCloseTo(1200 + 300, 6);
   });
 
+  it("new paid iOrders, AOV, iCAC and ipaMER use the acquisition channels only, with their own spend", () => {
+    const withOrders = aggregate([
+      fact(
+        { newOrderRevenue: 3000, returningOrderRevenue: 2000 },
+        {
+          meta_acquisition: { spend: 500, platformRevenue: 1000, platformPurchases: 20 },
+          google_nonbrand: { spend: 200, platformRevenue: 400, platformPurchases: 10 },
+          google_brand: { spend: 100, platformRevenue: 500, platformPurchases: 50 },
+          meta_returning: { spend: 100, platformRevenue: 200, platformPurchases: 5 },
+        },
+      ),
+    ]);
+    const iOrders = 20 * (settings.multipliers.meta_acquisition ?? 1) + 10 * (settings.multipliers.google_nonbrand ?? 1);
+    expect(METRICS.newPaidIOrders.value(withOrders, settings)).toBeCloseTo(iOrders, 6);
+    expect(METRICS.newPaidAov.value(withOrders, settings)).toBeCloseTo(1500 / iOrders, 6);
+    expect(METRICS.newPaidICac.value(withOrders, settings)).toBeCloseTo(700 / iOrders, 6);
+    expect(METRICS.newIpaMer.value(withOrders, settings)).toBeCloseTo(1500 / 700, 6);
+    // the total ipaMER still divides by every channel's spend
+    expect(METRICS.ipaMer.value(withOrders, settings)).toBeCloseTo(1770 / 900, 6);
+  });
+
   it("each is shown against the revenue it should explain: total paid over order revenue, new paid over new revenue", () => {
     expect(METRICS.paidShareOfRevenue.value(t, settings)).toBeCloseTo(1770 / 5000, 10);
     expect(METRICS.newPaidShareOfNewRevenue.value(t, settings)).toBeCloseTo(1500 / 3000, 10);
