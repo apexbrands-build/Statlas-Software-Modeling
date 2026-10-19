@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { fetchAdDays, fetchAds, fetchActiveAds } = await import("./meta");
+const { fetchAdDays, fetchAds } = await import("./meta");
 
 type Page = { data: unknown[]; paging?: { next?: string } };
 const pages = (list: Page[]) => {
@@ -195,33 +195,5 @@ describe("fetchAds", () => {
     const { graph, calls } = pages([{ data: [{ id: "a" }], paging: { next: "https://graph.test/next" } }, { data: [{ id: "b" }] }]);
     expect((await fetchAds("act_123", ["a", "b"], graph)).map((a) => a.id)).toEqual(["a", "b"]);
     expect(calls[1].path).toBe("https://graph.test/next");
-  });
-});
-
-describe("fetchActiveAds", () => {
-  it("asks the account for its ads that are active right now, details included, and follows every page", async () => {
-    const { graph, calls } = pages([
-      { data: [{ id: "a1" }], paging: { next: "https://graph.test/p2" } },
-      { data: [{ id: "a2" }] },
-    ]);
-    const ads = await fetchActiveAds("act_9", graph);
-    expect(ads.map((a) => a.id)).toEqual(["a1", "a2"]);
-    expect(calls.map((c) => c.path)).toEqual(["act_9/ads", "https://graph.test/p2"]);
-    expect(JSON.parse(calls[0].params!.filtering)).toEqual([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]);
-    expect(calls[0].params).toMatchObject({ limit: "100" });
-    expect(calls[0].params!.fields).toContain("effective_status");
-    expect(calls[0].params!.fields).toContain("created_time");
-  });
-  it("is empty for an account with nothing running", async () => {
-    expect(await fetchActiveAds("act_9", pages([{ data: [] }]).graph)).toEqual([]);
-  });
-  it("retries a transient Meta error and stops at the deadline", async () => {
-    let n = 0;
-    const flaky = (async () => {
-      if (n++ === 0) throw new Error("Meta: An unknown error occurred");
-      return { data: [{ id: "a1" }] };
-    }) as never;
-    expect((await fetchActiveAds("act_9", flaky, { sleep: async () => {} })).map((a) => a.id)).toEqual(["a1"]);
-    await expect(fetchActiveAds("act_9", pages([{ data: [{ id: "a1" }], paging: { next: "https://graph.test/p2" } }]).graph, { deadline: Date.now() - 1 })).rejects.toThrow(/^TIMEOUT/);
   });
 });

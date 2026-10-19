@@ -31,12 +31,6 @@ export interface ScoreAd {
   weeks: [number, number, number, number];
 }
 
-/** An ad Meta runs right now (saved status ACTIVE, catalog ads left out) and what it spent in the last 30 days: 0 for an ad that is active but got no budget. */
-export interface ActiveAd {
-  adId: string;
-  spend30: number;
-}
-
 export interface CreativeDay {
   date: string;
   spend: number;
@@ -60,7 +54,6 @@ export interface CreativeHistory {
   ads: LaunchedAd[];
   days: CreativeDay[];
   scoreAds: ScoreAd[];
-  activeAds: ActiveAd[];
 }
 
 export const zeroLaunched = (): Record<AdFormat, number> => ({ video: 0, image: 0, carousel: 0, other: 0 });

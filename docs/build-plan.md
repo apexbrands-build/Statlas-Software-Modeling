@@ -56,7 +56,7 @@ All are computed from daily rows; each metric is labelled by source in the UI.
 | New / Returning revenue, orders | by customer's first order date | Shopify | |
 | Weighted CAC | ad spend / new orders | mixed | Confirm whether Statlas divides all spend or acquisition spend |
 | aMER | new revenue / acquisition ad spend | mixed | Acquisition spend excludes brand search and Meta returning audiences per settings |
-| iRevenue (channel) | platform-reported revenue × incrementality multiplier | platform | Multipliers fixed: Google non-brand 0.75, Google Brand 0.3, Meta acquisition 1.2, Meta returning 0.6 (per user) |
+| iRevenue (channel) | platform-reported revenue × incrementality multiplier | platform | Multipliers fixed: Google non-brand 0.65, Google Brand 0.15 (changed 2026-10-19; originally 0.75 and 0.3), Meta acquisition 1.2, Meta returning 0.6 (per user) |
 | iROAS | iRevenue / spend | | Matches Statlas tiles to 2 decimals |
 | iCPA | spend / (iRevenue / AOV) | | Verified on Google tiles |
 | Paid iRevenue / ipaMER | Σ channel iRevenue / total spend | | Confirm (Statlas totals don't tie exactly to channel sums) |

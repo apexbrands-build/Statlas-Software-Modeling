@@ -1,10 +1,10 @@
 import type { ChannelKey, ClientSettings, ExtraSettings } from "./types";
 
 export const DEFAULT_MULTIPLIERS: Partial<Record<ChannelKey, number>> = {
-  google_nonbrand: 0.75,
-  google_brand: 0.3,
+  google_nonbrand: 0.65,
+  google_brand: 0.15,
   google_nonbrand_returning: 0.6,
-  google_brand_returning: 0.3,
+  google_brand_returning: 0.15,
   meta_acquisition: 1.2,
   meta_returning: 0.6,
   pinterest: 0.3,

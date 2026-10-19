@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapActiveAd, mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "./rows";
+import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "./rows";
 
 describe("database row mappers", () => {
   it("mapLaunchedAd turns numeric strings into numbers, null into 0, and keeps the launch date as YYYY-MM-DD", () => {
@@ -25,11 +25,6 @@ describe("database row mappers", () => {
   it("mapScoreAd maps the four weeks oldest first", () => {
     const s = mapScoreAd({ ad_id: "a3", launch_date: "2026-08-20", spend_30: "300", revenue_30: "450", w1: "10", w2: "20", w3: null, w4: "40" });
     expect(s).toEqual({ adId: "a3", launchDate: "2026-08-20", spend30: 300, revenue30: 450, weeks: [10, 20, 0, 40] });
-  });
-
-  it("mapActiveAd keeps the ad id and its 30-day spend, with 0 for an ad that never spent", () => {
-    expect(mapActiveAd({ ad_id: "q1", spend_30: "12.5" })).toEqual({ adId: "q1", spend30: 12.5 });
-    expect(mapActiveAd({ ad_id: "q2", spend_30: null })).toEqual({ adId: "q2", spend30: 0 });
   });
 
   it("a non-numeric value becomes 0 rather than NaN", () => {

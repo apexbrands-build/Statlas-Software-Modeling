@@ -237,7 +237,7 @@ export function yearTable(a: { year: number; months: PlanMonth[]; blocks: Record
 }
 
 const PART_LABEL: Record<MetricKey, string> = {
-  zeroSpend: "active ads that get no spend",
+  zeroRevenue: "ads that spent with no revenue",
   concentration: "spend concentrated in a few ads",
   roasDegradation: "ROAS holding up after a launch",
   spendDegradation: "spend holding up over four weeks",
