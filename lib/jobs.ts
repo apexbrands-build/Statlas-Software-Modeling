@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { afterChunk, chunkWindow, failureCount, MAX_PARALLEL_JOBS, onChunkError, selectToKick, shouldCountFailure, type JobRow } from "@/lib/job-plan";
 import { getAdminClient } from "@/lib/supabase/server";
 import { getSync } from "@/lib/sync/registry";
+import { yesterdayLocal } from "@/lib/sync-schedule";
 
 const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
 const daysBetween = (a: string, b: string) => Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000) + 1;
@@ -55,7 +56,9 @@ export async function createJob(integrationId: string, opts: { months?: number; 
   const { data: active } = await admin.from("sync_jobs").select("id").eq("integration_id", integrationId).in("status", ["queued", "running"]).limit(1);
   if (active && active.length > 0) return { id: active[0].id as string, alreadyRunning: true };
 
-  const yesterday = addDays(new Date().toISOString().slice(0, 10), -1);
+  // "Yesterday" is the store's last complete day in its own time zone (clients.timezone), not UTC's.
+  const { data: client } = await admin.from("clients").select("timezone").eq("id", integration.client_id).single();
+  const yesterday = yesterdayLocal(new Date(), (client?.timezone as string | undefined) ?? "UTC");
   const kind = opts.kind ?? "history";
   const from = kind === "recent" ? addDays(yesterday, -13) : addDays(yesterday, -(Math.min(Math.max(opts.months ?? 12, 1), 48) * 30));
   // Resume: history already loaded (coverage runs from its start date to yesterday) is skipped.
