@@ -1,6 +1,6 @@
 /** Shared fixtures for the creative tests (Tasks 2 to 5). Not used by the app. */
 import { eachDay } from "../dates";
-import { zeroLaunched, type ActiveAd, type AdFormat, type CreativeDay, type CreativeHistory, type LaunchedAd, type MonthAgg, type ScoreAd } from "./types";
+import { zeroLaunched, type AdFormat, type CreativeDay, type CreativeHistory, type LaunchedAd, type MonthAgg, type ScoreAd } from "./types";
 
 export const FIXTURE_AS_OF = "2026-09-30";
 
@@ -80,21 +80,12 @@ export const FIXTURE_ADS: LaunchedAd[] = [
   launchedAd({ adId: "nobefore", launchDate: "2026-07-05", spend7: 500 }),
 ];
 
-/** Ten ads active at 2026-09-30: seven that spent in the 30 days and three active ads that got no spend at all. */
-export const FIXTURE_ACTIVE_ADS: ActiveAd[] = [
-  ...FIXTURE_SCORE_ADS.slice(0, 7).map((a) => ({ adId: a.adId, spend30: a.spend30 })),
-  { adId: "a9", spend30: 0 },
-  { adId: "a10", spend30: 0 },
-  { adId: "a11", spend30: 0 },
-];
-
 export const FIXTURE_HISTORY: CreativeHistory = {
   asOf: FIXTURE_AS_OF,
   months: [],
   ads: FIXTURE_ADS,
   days: FIXTURE_DAYS,
   scoreAds: FIXTURE_SCORE_ADS,
-  activeAds: FIXTURE_ACTIVE_ADS,
 };
 
-export const EMPTY_HISTORY: CreativeHistory = { asOf: FIXTURE_AS_OF, months: [], ads: [], days: [], scoreAds: [], activeAds: [] };
+export const EMPTY_HISTORY: CreativeHistory = { asOf: FIXTURE_AS_OF, months: [], ads: [], days: [], scoreAds: [] };

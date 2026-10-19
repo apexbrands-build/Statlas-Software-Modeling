@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { METRIC_KEYS, bandScore, creativeScore, percentileScore, scoreLabel, type MetricKey } from "./score";
 
 const slide: Record<MetricKey, number | null> = {
-  zeroSpend: 0.37,
+  zeroRevenue: 0.37,
   concentration: 0.31,
   roasDegradation: -0.12,
   spendDegradation: -0.34,
@@ -10,13 +10,13 @@ const slide: Record<MetricKey, number | null> = {
 };
 
 describe("bandScore", () => {
-  it("zero-spend anchors (bands of the reference slide)", () => {
-    expect(bandScore("zeroSpend", 0.37)).toBe(90);
-    expect(bandScore("zeroSpend", 0.25)).toBe(100);
-    expect(bandScore("zeroSpend", 0.2)).toBe(100);
-    expect(bandScore("zeroSpend", 0.7)).toBe(0);
-    expect(bandScore("zeroSpend", 0.9)).toBe(0);
-    expect(bandScore("zeroSpend", 0.5)).toBe(55);
+  it("zero-revenue anchors", () => {
+    expect(bandScore("zeroRevenue", 0.37)).toBe(90);
+    expect(bandScore("zeroRevenue", 0.25)).toBe(100);
+    expect(bandScore("zeroRevenue", 0.2)).toBe(100);
+    expect(bandScore("zeroRevenue", 0.7)).toBe(0);
+    expect(bandScore("zeroRevenue", 0.9)).toBe(0);
+    expect(bandScore("zeroRevenue", 0.5)).toBe(55);
   });
   it("concentration anchors", () => {
     expect(bandScore("concentration", 0.31)).toBe(41);
@@ -83,7 +83,7 @@ describe("creativeScore", () => {
     expect(r.score).toBe(Math.round((90 + 41 + 80 + 76) / 4));
   });
   it("all null gives a null score", () => {
-    const r = creativeScore({ zeroSpend: null, concentration: null, roasDegradation: null, spendDegradation: null, evergreenShare: null });
+    const r = creativeScore({ zeroRevenue: null, concentration: null, roasDegradation: null, spendDegradation: null, evergreenShare: null });
     expect(r.score).toBeNull();
   });
   it("switches to percentile only with 10 portfolio values for every metric", () => {
@@ -92,8 +92,8 @@ describe("creativeScore", () => {
     const ten = Object.fromEntries(METRIC_KEYS.map((k) => [k, Array.from({ length: 10 }, (_, i) => i / 10)]));
     const r = creativeScore(slide, ten);
     expect(r.mode).toBe("percentile");
-    // zero-spend rate 0.37 beats 0.4..0.9 (6 of 10), lower is better
-    expect(r.parts.zeroSpend).toBe(60);
+    // zero-revenue 0.37 beats 0.4..0.9 (6 of 10), lower is better
+    expect(r.parts.zeroRevenue).toBe(60);
     const partial = { ...ten, evergreenShare: [0.1] };
     expect(creativeScore(slide, partial).mode).toBe("provisional");
     expect(creativeScore(slide, null).mode).toBe("provisional");

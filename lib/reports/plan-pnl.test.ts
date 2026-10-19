@@ -176,10 +176,10 @@ describe("plan columns carry the channel plan: spend, ROAS targets, email, SMS a
   });
   it("organic is what is left (the dashboard's definition) when the plan sets no organic share", () => {
     const p = sections({ roasOf, mixOf: (_d, key) => (key === "email" ? 0.2 : null) });
-    // order revenue 2000 - paid incremental at the default factors (meta 1.2, meta returning 0.6, google non-brand 0.75) - email 400
+    // order revenue 2000 - paid incremental at the default factors (meta 1.2, meta returning 0.6, google non-brand 0.65) - email 400
     const src = { roasOf, mixOf: (_d: string, key: "email" | "sms" | "organic") => (key === "email" ? 0.2 : null) };
     const t = blendColumn([], plan, settings, src)!;
-    const paid = (200 * 1.2 + 200 * 0.6 + 180 * 0.75) * 2;
+    const paid = (200 * 1.2 + 200 * 0.6 + 180 * 0.65) * 2;
     expect(row(p, "organic")).toBeCloseTo(2000 - paid - 400, 6);
     expect(t.organicRevenue).toBeUndefined();
   });

@@ -1,7 +1,7 @@
 /* Creative Score: the zero-spend rate (share of the ads that are active right now that had no spend in the 30 days to p_to).
    creative_active_ads: one row per non-catalog ad whose saved Meta status is ACTIVE, with its spend over the 30 days to p_to (0 when it has no
    ad-days: the sync stores every active ad, see `refreshActiveAds`). Read-only, runs as the caller, so row-level security on meta_ads and
-   meta_ad_daily applies. `lib/creative/metrics.ts` (`zeroSpendRate`) is the specification of what is counted. */
+   meta_ad_daily applies. The zero-spend metric was withdrawn 2026-10-19 (the score uses the zero-revenue rate again); this function stays as applied but is no longer called. */
 
 create or replace function public.creative_active_ads(p_client uuid, p_to date)
 returns table (ad_id text, spend_30 numeric)

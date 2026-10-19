@@ -21,7 +21,6 @@ const history = (over: Partial<CreativeHistory> = {}): CreativeHistory => ({
   ads: [launchedAd({ adId: "a", launchDate: "2026-06-01", spend30: 0 }), launchedAd({ adId: "b", launchDate: "2026-06-05", spend30: 300 }), launchedAd({ adId: "c", launchDate: "2026-06-10", spend30: 600 })],
   days: [],
   scoreAds: [],
-  activeAds: [],
   ...over,
 });
 const compute = (o: Partial<Parameters<typeof computeCreativeMonth>[0]> = {}) =>
@@ -252,30 +251,30 @@ describe("yearTable", () => {
 });
 
 describe("creativeInsights", () => {
-  const metrics = { zeroSpend: 0.5, concentration: 0.2, roasDegradation: -0.05, spendDegradation: -0.2, evergreenShare: 0.4 };
+  const metrics = { zeroRevenue: 0.5, concentration: 0.2, roasDegradation: -0.05, spendDegradation: -0.2, evergreenShare: 0.4 };
 
   it("for a score under 50 says the account needs more new ads, names the weakest and strongest part, and stays short", () => {
-    const poor = { score: 40, parts: { zeroSpend: 10, concentration: 90, roasDegradation: 30, spendDegradation: 40, evergreenShare: 30 }, mode: "provisional" as const };
+    const poor = { score: 40, parts: { zeroRevenue: 10, concentration: 90, roasDegradation: 30, spendDegradation: 40, evergreenShare: 30 }, mode: "provisional" as const };
     const out = creativeInsights(poor, metrics, null);
     expect(out.some((s) => /needs more new ads/i.test(s))).toBe(true);
-    expect(out.some((s) => /no spend/i.test(s))).toBe(true);
+    expect(out.some((s) => /no revenue/i.test(s))).toBe(true);
     expect(out.length).toBeGreaterThanOrEqual(2);
     expect(out.length).toBeLessThanOrEqual(5);
   });
 
   it("does not say the account needs more ads when the score is 75 or more", () => {
-    const great = creativeScore({ zeroSpend: 0.25, concentration: 0.15, roasDegradation: 0.1, spendDegradation: 0.2, evergreenShare: 0.5 });
+    const great = creativeScore({ zeroRevenue: 0.25, concentration: 0.15, roasDegradation: 0.1, spendDegradation: 0.2, evergreenShare: 0.5 });
     expect(creativeInsights(great, metrics, null).some((s) => /needs more new ads/i.test(s))).toBe(false);
   });
 
   it("mentions a month that is already covered or has no Meta spend", () => {
-    const part = { score: 60, parts: { zeroSpend: 60, concentration: 60, roasDegradation: 60, spendDegradation: 60, evergreenShare: 60 }, mode: "provisional" as const };
+    const part = { score: 60, parts: { zeroRevenue: 60, concentration: 60, roasDegradation: 60, spendDegradation: 60, evergreenShare: 60 }, mode: "provisional" as const };
     expect(creativeInsights(part, metrics, saved({ basis: { ...saved().basis, reason: "covered" } })).join(" ")).toMatch(/already covered|covers/i);
     expect(creativeInsights(part, metrics, saved({ basis: { ...saved().basis, reason: "no_meta_spend" } })).join(" ")).toMatch(/no Meta spend/i);
   });
 
   it("says when the need was typed over the model, with the model's number, instead of describing a calculation that was not used", () => {
-    const part = { score: 60, parts: { zeroSpend: 60, concentration: 60, roasDegradation: 60, spendDegradation: 60, evergreenShare: 60 }, mode: "provisional" as const };
+    const part = { score: 60, parts: { zeroRevenue: 60, concentration: 60, roasDegradation: 60, spendDegradation: 60, evergreenShare: 60 }, mode: "provisional" as const };
     const typed = saved({ needed: 40, overrides: { needed: 40 }, basis: { ...saved().basis, reason: "covered", modelNeeded: 0 } });
     const text = creativeInsights(part, metrics, typed).join(" ");
     expect(text).toMatch(/typed 40/i);
@@ -284,8 +283,8 @@ describe("creativeInsights", () => {
   });
 
   it("explains there is not enough data when no part could be scored", () => {
-    const none = creativeScore({ zeroSpend: null, concentration: null, roasDegradation: null, spendDegradation: null, evergreenShare: null });
-    const out = creativeInsights(none, { zeroSpend: null, concentration: null, roasDegradation: null, spendDegradation: null, evergreenShare: null }, null);
+    const none = creativeScore({ zeroRevenue: null, concentration: null, roasDegradation: null, spendDegradation: null, evergreenShare: null });
+    const out = creativeInsights(none, { zeroRevenue: null, concentration: null, roasDegradation: null, spendDegradation: null, evergreenShare: null }, null);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatch(/not enough/i);
   });

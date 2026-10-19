@@ -208,21 +208,3 @@ export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: 
   return out;
 }
 
-/** The account's ads whose effective status is ACTIVE right now, with the same details as `fetchAds`. Past `deadline` it stops with a TIMEOUT. */
-export async function fetchActiveAds(adAccountId: string, graphImpl: GraphFn = graph, opts: { deadline?: number; sleep?: Sleep } = {}): Promise<AdRow[]> {
-  if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
-  type AdPage = { data: AdRow[]; paging?: { next?: string } };
-  let page = await callWithRetry(
-    () => graphImpl<AdPage>(`${adAccountId}/ads`, { fields: AD_FIELDS, filtering: JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]), limit: "100" }),
-    opts,
-  );
-  const out: AdRow[] = [];
-  for (;;) {
-    out.push(...page.data);
-    if (!page.paging?.next) break;
-    if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
-    const next = page.paging.next;
-    page = await callWithRetry(() => graphImpl<AdPage>(next), opts);
-  }
-  return out;
-}

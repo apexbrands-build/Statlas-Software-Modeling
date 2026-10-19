@@ -1,14 +1,20 @@
 /** The five Creative Score metrics, from ad-level data (catalog ads already left out of `scoreAds` by the SQL). */
 import { addDays, diffDays } from "../dates";
 import type { MetricKey } from "./score";
-import type { ActiveAd, CreativeDay, CreativeHistory, LaunchedAd, ScoreAd } from "./types";
+import type { CreativeDay, CreativeHistory, LaunchedAd, ScoreAd } from "./types";
 
 const spenders = (ads: ScoreAd[]) => ads.filter((a) => a.spend30 > 0);
 
-/** Active ads that had no spend in the window / active ads: how many ads sit without budget. Revenue plays no part. */
-export function zeroSpendRate(active: ActiveAd[]): number | null {
-  if (!active.length) return null;
-  return active.filter((a) => !(a.spend30 > 0)).length / active.length;
+/** Ads that spent in the window with zero attributed revenue / ads that spent. */
+export function zeroRevenueRate(ads: ScoreAd[]): number | null {
+  const s = spenders(ads);
+  if (!s.length) return null;
+  return s.filter((a) => !(a.revenue30 > 0)).length / s.length;
+}
+
+/** Ads with no spend in the window: shown apart, never in the zero-revenue denominator. */
+export function undeliveredCount(ads: ScoreAd[]): number {
+  return ads.filter((a) => !(a.spend30 > 0)).length;
 }
 
 /** Spend of the top 5 ads / total spend. */
@@ -86,7 +92,7 @@ export function roasDegradation(days: CreativeDay[], ads: LaunchedAd[], asOf: st
 
 export function scoreMetrics(h: CreativeHistory): Record<MetricKey, number | null> {
   return {
-    zeroSpend: zeroSpendRate(h.activeAds),
+    zeroRevenue: zeroRevenueRate(h.scoreAds),
     concentration: adConcentration(h.scoreAds),
     roasDegradation: roasDegradation(h.days, h.ads, h.asOf),
     spendDegradation: spendDegradation(h.scoreAds),
