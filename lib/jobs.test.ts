@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ provider: "klaviyo", inserted: [] as { table: string; row: Record<string, unknown> }[] }));
+const state = vi.hoisted(() => ({ provider: "klaviyo", coverage: null as string | null, inserted: [] as { table: string; row: Record<string, unknown> }[] }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/sync/registry", () => ({ getSync: (p: string) => (p === "shopify" ? { chunkDays: 14 } : undefined) }));
@@ -15,7 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({
           state.inserted.push({ table, row });
           return b;
         },
-        single: async () => (table === "integrations" ? { data: { id: "i1", client_id: "c1", provider: state.provider, coverage_start: null } } : { data: { id: "job1" }, error: null }),
+        single: async () => (table === "integrations" ? { data: { id: "i1", client_id: "c1", provider: state.provider, coverage_start: state.coverage } } : { data: { id: "job1" }, error: null }),
         limit: async () => ({ data: [] }),
       };
       return b;
@@ -27,6 +27,7 @@ const { createJob, NothingToSyncError } = await import("./jobs");
 
 beforeEach(() => {
   state.inserted = [];
+  state.coverage = null;
 });
 
 describe("createJob", () => {
@@ -45,5 +46,17 @@ describe("createJob", () => {
     await expect(createJob("i1", { kind: "recent" })).resolves.toEqual({ id: "job1", alreadyRunning: false });
     expect(state.inserted).toHaveLength(1);
     expect(state.inserted[0].row).toMatchObject({ provider: "shopify", chunk_days: 14 });
+  });
+
+  it("history resumes after the covered days, and a reload takes the whole range again", async () => {
+    state.provider = "shopify";
+    state.coverage = "2026-09-01";
+    await createJob("i1", { kind: "history", months: 3 });
+    await createJob("i1", { kind: "history", months: 3, reload: true });
+    const [resume, reload] = state.inserted.map((i) => i.row);
+    expect(resume.cursor_end).toBe("2026-08-31");
+    expect(reload.cursor_end).toBe(reload.to_date);
+    expect(reload.done_days).toBe(0);
+    expect(reload.message).toBeNull();
   });
 });

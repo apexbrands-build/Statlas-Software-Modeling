@@ -46,7 +46,7 @@ export class NothingToSyncError extends Error {
   }
 }
 
-export async function createJob(integrationId: string, opts: { months?: number; kind?: "history" | "recent" }): Promise<{ id: string; alreadyRunning: boolean }> {
+export async function createJob(integrationId: string, opts: { months?: number; kind?: "history" | "recent"; reload?: boolean }): Promise<{ id: string; alreadyRunning: boolean }> {
   const admin = getAdminClient();
   const { data: integration } = await admin.from("integrations").select("id,client_id,provider,coverage_start").eq("id", integrationId).single();
   if (!integration) throw new Error("Connection not found");
@@ -61,8 +61,9 @@ export async function createJob(integrationId: string, opts: { months?: number; 
   const yesterday = yesterdayLocal(new Date(), (client?.timezone as string | undefined) ?? "UTC");
   const kind = opts.kind ?? "history";
   const from = kind === "recent" ? addDays(yesterday, -13) : addDays(yesterday, -(Math.min(Math.max(opts.months ?? 12, 1), 48) * 30));
-  // Resume: history already loaded (coverage runs from its start date to yesterday) is skipped.
-  const cursorEnd = kind === "history" && integration.coverage_start && integration.coverage_start > from && integration.coverage_start <= yesterday ? addDays(integration.coverage_start, -1) : yesterday;
+  // Resume: history already loaded (coverage runs from its start date to yesterday) is skipped, unless `reload` asks for the whole range again
+  // (needed when something besides the covered days changed, e.g. ad-level Meta data that failed while the campaign rows loaded fine).
+  const cursorEnd = kind === "history" && !opts.reload && integration.coverage_start && integration.coverage_start > from && integration.coverage_start <= yesterday ? addDays(integration.coverage_start, -1) : yesterday;
   const done = cursorEnd < from;
 
   const { data: job, error } = await admin
