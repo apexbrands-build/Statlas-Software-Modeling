@@ -274,6 +274,11 @@ export function paidStats(t: Totals, s: ClientSettings) {
   return groupStats(t, s, CHANNEL_KEYS);
 }
 
+/** The acquisition channels only (brand search and returning audiences left out): what "new paid" means. */
+export function newPaidStats(t: Totals, s: ClientSettings) {
+  return groupStats(t, s, PLATFORMS.filter((p) => !p.returningOnly).map((p) => p.acquisition));
+}
+
 /**
  * Spend counted as acquisition spend for aMER. Settings can leave out brand search and the retention (returning) spend of every platform;
  * total spend, and so MER, always keep all of it.
@@ -510,7 +515,52 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     direction: "up",
     source: "Platform-reported",
     formula: "Σ platform-reported revenue × incrementality multiplier on the acquisition channels only (Meta acquisition, Google non-brand and each platform's acquisition channel); brand search and returning audiences are left out",
-    value: (t, s) => groupStats(t, s, PLATFORMS.filter((p) => !p.returningOnly).map((p) => p.acquisition)).iRevenue,
+    value: (t, s) => newPaidStats(t, s).iRevenue,
+  }),
+  def({
+    key: "newPaidIOrders",
+    label: "New paid iOrders",
+    format: "number",
+    direction: "up",
+    source: "Platform-reported",
+    formula: "Σ platform-reported purchases × incrementality multiplier on the acquisition channels only",
+    value: (t, s) => newPaidStats(t, s).iOrders,
+  }),
+  def({
+    key: "newPaidAov",
+    label: "New paid AOV",
+    format: "currency2",
+    direction: "up",
+    source: "Platform-reported",
+    formula: "New paid iRevenue ÷ New paid iOrders",
+    value: (t, s) => {
+      const p = newPaidStats(t, s);
+      return div(p.iRevenue, p.iOrders);
+    },
+  }),
+  def({
+    key: "newPaidICac",
+    label: "New paid iCAC",
+    format: "currency2",
+    direction: "down",
+    source: "Platform-reported",
+    formula: "Spend on the acquisition channels ÷ New paid iOrders",
+    value: (t, s) => {
+      const p = newPaidStats(t, s);
+      return div(p.spend, p.iOrders);
+    },
+  }),
+  def({
+    key: "newIpaMer",
+    label: "New ipaMER",
+    format: "ratio2",
+    direction: "up",
+    source: "Platform-reported",
+    formula: "New paid iRevenue ÷ spend on the acquisition channels",
+    value: (t, s) => {
+      const p = newPaidStats(t, s);
+      return div(p.iRevenue, p.spend);
+    },
   }),
   def({
     key: "paidShareOfRevenue",
@@ -528,7 +578,7 @@ export const METRICS: Record<string, MetricDef> = Object.fromEntries([
     direction: "up",
     source: "Derived",
     formula: "New paid iRevenue ÷ new customer order revenue",
-    value: (t, s) => div(groupStats(t, s, PLATFORMS.filter((p) => !p.returningOnly).map((p) => p.acquisition)).iRevenue, t.newOrderRevenue),
+    value: (t, s) => div(newPaidStats(t, s).iRevenue, t.newOrderRevenue),
   }),
   def({
     key: "paidIOrders",

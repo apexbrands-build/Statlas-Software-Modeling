@@ -1,5 +1,5 @@
 import type { Format } from "../format";
-import { amerSpend, cmParts, div, orderRevenue, planAmerSpend, totalSpend, type Direction, type PlanTotals, type Totals } from "../metrics";
+import { amerSpend, cmParts, div, newPaidStats, orderRevenue, paidStats, planAmerSpend, totalSpend, type Direction, type PlanTotals, type Totals } from "../metrics";
 import type { ChannelKey, ClientSettings } from "../types";
 
 /** One report metric: an actual value from the daily facts and, when the plan covers it, a goal. */
@@ -27,6 +27,10 @@ export const MER_SPECS: MetricSpec[] = [
   { key: "acqRev", label: "Acquisition Revenue", format: "currency0", direction: "up", value: (t) => t.newOrderRevenue, goal: (p) => p.newRevenue },
   { key: "acqSpend", label: "Acquisition Spend", format: "currency0", direction: "up", value: (t, s) => amerSpend(t, s), goal: (p, s) => planAmerSpend(p, s) },
   { key: "amer", label: "Acquisition MER", format: "ratio2", direction: "up", value: (t, s) => div(t.newOrderRevenue, amerSpend(t, s)), goal: (p, s) => div(p.newRevenue, planAmerSpend(p, s)) },
+  { key: "paidIRev", label: "Paid iRevenue", format: "currency0", direction: "up", value: (t, s) => paidStats(t, s).iRevenue },
+  { key: "ipaMer", label: "Paid iMER (ipaMER)", format: "ratio2", direction: "up", value: (t, s) => div(paidStats(t, s).iRevenue, totalSpend(t)) },
+  { key: "newPaidIRev", label: "New Paid iRevenue", format: "currency0", direction: "up", value: (t, s) => newPaidStats(t, s).iRevenue },
+  { key: "newIpaMer", label: "New Paid iMER (new ipaMER)", format: "ratio2", direction: "up", value: (t, s) => { const p = newPaidStats(t, s); return div(p.iRevenue, p.spend); } },
   { key: "fbSpend", label: "Facebook Ad Spend", format: "currency0", direction: "up", value: (t) => sum(t, META, "spend"), goal: (p) => (planSpend(p, META) > 0 ? planSpend(p, META) : null) },
   { key: "fbConv", label: "Facebook Conversion Value", format: "currency0", direction: "up", value: (t) => sum(t, META, "platformRevenue") },
   { key: "fbRoas", label: "Facebook ROAS", format: "ratio2", direction: "up", value: (t) => div(sum(t, META, "platformRevenue"), sum(t, META, "spend")) },

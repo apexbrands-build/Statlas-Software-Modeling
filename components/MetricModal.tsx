@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DailyChart } from "./DailyChart";
 import { theme } from "@/theme/theme";
 import type { CompareModeName } from "@/lib/dates";
-import { monthRows, type MonthRow } from "@/lib/monthly";
+import { chartGranularity, dayRows, monthRows, type MonthRow } from "@/lib/monthly";
 import { compareSource, tileNumbers, type DashData } from "@/lib/dashboard-data";
 import { formatDiff, formatValue, type Format } from "@/lib/format";
 import { cmParts, totalSpend, type MetricDef, type Totals } from "@/lib/metrics";
@@ -98,8 +98,9 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
   const cmp = compareSource(data, mode);
   const compareName = COMPARE_NAME[mode];
 
-  // Grouped by month (YYYYMM), like the reference tool.
-  const rows: MonthRow[] = useMemo(() => monthRows(def, data, cmp), [def, data, cmp]);
+  // Same rule as Home's trend chart: one row per day up to about two months, grouped by month (YYYYMM) beyond.
+  const gran = chartGranularity(data.range);
+  const rows: MonthRow[] = useMemo(() => (gran === "day" ? dayRows(def, data, cmp) : monthRows(def, data, cmp)), [def, data, cmp, gran]);
 
   const hasTarget = rows.some((r) => r.target !== null);
   const hasCompare = rows.some((r) => r.compare !== null);
@@ -188,7 +189,7 @@ export function MetricModal({ def, title, data, mode, onClose }: Props) {
             </table>
           </div>
         </div>
-        <p className="mt-2 text-[11px] text-text-faint">Grouped by month ({data.range.from} → {data.range.to}); {cmp.label.toLowerCase()} compares like for like. {data.client.name}.</p>
+        <p className="mt-2 text-[11px] text-text-faint">{gran === "day" ? "One row per day" : "Grouped by month"} ({data.range.from} → {data.range.to}); {cmp.label.toLowerCase()} compares like for like. {data.client.name}.</p>
       </div>
     </div>
   );
