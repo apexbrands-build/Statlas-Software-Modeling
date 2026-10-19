@@ -73,13 +73,13 @@ describe("the two returning Google channels", () => {
     expect(amerSpend(t, { ...settings, excludeBrandFromAmer: true, excludeMetaReturningFromAmer: true })).toBe(100);
   });
   it("come with incrementality defaults like the other returning and brand channels", () => {
-    expect(settings.multipliers.google_nonbrand_returning).toBe(0.6);
+    expect(settings.multipliers.google_nonbrand_returning).toBe(0.65);
     expect(settings.multipliers.google_brand_returning).toBe(0.15);
   });
   it("do not count as new-customer paid revenue", () => {
     const t = aggregate([fact({ google_nonbrand: 100, google_nonbrand_returning: 50 }, { google_nonbrand: 300, google_nonbrand_returning: 500 })]);
     expect(METRICS.newPaidIRevenue.value(t, settings)).toBeCloseTo(300 * 0.65, 8);
-    expect(METRICS.paidIRevenue.value(t, settings)).toBeCloseTo(300 * 0.65 + 500 * 0.6, 8);
+    expect(METRICS.paidIRevenue.value(t, settings)).toBeCloseTo(300 * 0.65 + 500 * 0.65, 8);
   });
   it("show as Google Returning rows on Home only in the breakout, and never in the acquisition-only view", () => {
     const ids = (breakout: boolean, acqOnly = false) => channelGroups(breakout, acqOnly).map((g) => g.id);
