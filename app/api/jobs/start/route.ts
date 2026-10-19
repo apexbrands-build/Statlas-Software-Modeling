@@ -6,7 +6,7 @@ export const maxDuration = 30;
 
 // Starts a background job (history load or recent sync). The browser only watches its progress.
 export async function POST(request: Request) {
-  const body = (await request.json()) as { integrationId?: string; months?: number; kind?: "history" | "recent" };
+  const body = (await request.json()) as { integrationId?: string; months?: number; kind?: "history" | "recent"; reload?: boolean };
   if (!body.integrationId) return NextResponse.json({ error: "integrationId required" }, { status: 400 });
   const supabase = await getServerClient();
   const { data: auth } = await supabase.auth.getUser();
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const { data: integration } = await supabase.from("integrations").select("id").eq("id", body.integrationId).maybeSingle();
   if (!integration) return NextResponse.json({ error: "Connection not found" }, { status: 404 });
   try {
-    const job = await createJob(integration.id, { months: body.months, kind: body.kind });
+    const job = await createJob(integration.id, { months: body.months, kind: body.kind, reload: body.reload === true });
     if (!job.alreadyRunning) after(() => kickRunner(job.id));
     return NextResponse.json({ ok: true, ...job });
   } catch (e) {

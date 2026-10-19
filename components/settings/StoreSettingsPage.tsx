@@ -623,11 +623,11 @@ function HistoryLoader({ row }: { row: Integration }) {
     return json;
   }
 
-  async function start() {
+  async function start(reload = false) {
     setStarting(true);
     setMsg(null);
     try {
-      await call("/api/jobs/start", { integrationId: row.id, months });
+      await call("/api/jobs/start", { integrationId: row.id, months, reload });
       setJob(await latestJob(row.id));
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Could not start");
@@ -656,9 +656,14 @@ function HistoryLoader({ row }: { row: Integration }) {
               ))}
             </select>
             {!active ? (
-              <button onClick={start} disabled={starting} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-60">
-                {starting ? "Starting…" : "Load history"}
-              </button>
+              <>
+                <button onClick={() => start()} disabled={starting} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-60">
+                  {starting ? "Starting…" : "Load history"}
+                </button>
+                <button onClick={() => start(true)} disabled={starting} title="Loads the whole range again instead of continuing after what is already loaded. Use it when a past load left gaps, such as missing ad-level data." className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text disabled:opacity-60">
+                  Reload all
+                </button>
+              </>
             ) : (
               <>
                 <button onClick={() => call("/api/jobs/cancel", { jobId: job!.id })} className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted hover:text-text">
