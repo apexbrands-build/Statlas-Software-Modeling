@@ -54,7 +54,11 @@ export async function createJob(integrationId: string, opts: { months?: number; 
   if (!sync) throw new NothingToSyncError();
 
   const { data: active } = await admin.from("sync_jobs").select("id").eq("integration_id", integrationId).in("status", ["queued", "running"]).limit(1);
-  if (active && active.length > 0) return { id: active[0].id as string, alreadyRunning: true };
+  if (active && active.length > 0) {
+    // A reload replaces whatever is still queued or running (a stuck job would otherwise swallow the click and nothing would start).
+    if (!opts.reload) return { id: active[0].id as string, alreadyRunning: true };
+    await admin.from("sync_jobs").update({ status: "cancelled", message: "Stopped. Replaced by a full reload.", updated_at: new Date().toISOString() }).in("id", active.map((j) => j.id as string));
+  }
 
   // "Yesterday" is the store's last complete day in its own time zone (clients.timezone), not UTC's.
   const { data: client } = await admin.from("clients").select("timezone").eq("id", integration.client_id).single();

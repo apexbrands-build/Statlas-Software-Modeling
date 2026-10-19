@@ -11,6 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
         select: () => b,
         eq: () => b,
         in: () => b,
+        update: () => b,
         insert: (row: Record<string, unknown>) => {
           state.inserted.push({ table, row });
           return b;
