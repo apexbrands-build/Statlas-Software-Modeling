@@ -56,7 +56,7 @@ All are computed from daily rows; each metric is labelled by source in the UI.
 | New / Returning revenue, orders | by customer's first order date | Shopify | |
 | Weighted CAC | ad spend / new orders | mixed | Confirm whether Statlas divides all spend or acquisition spend |
 | aMER | new revenue / acquisition ad spend | mixed | Acquisition spend excludes brand search and Meta returning audiences per settings |
-| iRevenue (channel) | platform-reported revenue × incrementality multiplier | platform | Multipliers fixed: Google non-brand 0.65, Google Brand 0.15 (changed 2026-10-19; originally 0.75 and 0.3), Meta acquisition 1.2, Meta returning 0.6 (per user) |
+| iRevenue (channel) | platform-reported revenue × incrementality multiplier | platform | Multipliers fixed: Google non-brand 0.65, Google Brand 0.15 (changed 2026-10-19; originally 0.75 and 0.3), Meta acquisition 1.15 (was 1.2 until 2026-10-19), Meta returning 0.6 (per user) |
 | iROAS | iRevenue / spend | | Matches Statlas tiles to 2 decimals |
 | iCPA | spend / (iRevenue / AOV) | | Verified on Google tiles |
 | Paid iRevenue / ipaMER | Σ channel iRevenue / total spend | | Confirm (Statlas totals don't tie exactly to channel sums) |
@@ -147,7 +147,7 @@ Tokens are stored encrypted server-side only (Supabase Vault or app-level encryp
 ## Decisions confirmed by you (2026-09-29)
 
 - **Revenue definition = Order Revenue** across all clients: gross − discounts + shipping + tax, with returns excluded (Statlas wording: "Total Sales without Returns"). Used for MER, AOV, iROAS and all correlations with platform-reported revenue; refunds are *not* netted on the marketing side. Refunds still appear as a line in the contribution margin P&L.
-- **Incrementality multipliers are editable per client** in settings (an "Incrementality (iROAS)" table in Statlas's store edit dialog); no geo-holdout tests by Apex, some clients run tests elsewhere (e.g. Triple Whale). Defaults are the House-based public benchmarks you gave (Meta acquisition 1.2, Meta returning 0.6, Google non-brand 0.75 seen in Statlas, Google Brand 0.3 seen in Statlas).
+- **Incrementality multipliers are editable per client** in settings (an "Incrementality (iROAS)" table in Statlas's store edit dialog); no geo-holdout tests by Apex, some clients run tests elsewhere (e.g. Triple Whale). Defaults are the House-based public benchmarks you gave (Meta acquisition 1.15 (was 1.2 until 2026-10-19), Meta returning 0.6, Google non-brand 0.75 seen in Statlas, Google Brand 0.3 seen in Statlas).
 - **Google brand = campaign name contains "brand"** (case-insensitive, editable per client; "non-brand" names are excluded).
 - **Meta returning spend** = spend on the existing/customer-defined audience segment.
 - **Seed data first**, Supabase and API connectors afterwards.

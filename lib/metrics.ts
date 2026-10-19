@@ -812,7 +812,7 @@ export function channelMetricDefs(g: ChannelGroup, incremental = true): MetricDe
   ];
 }
 
-/** Label for a channel revenue tile including its factor, e.g. "Meta iRev (x1.2)". */
+/** Label for a channel revenue tile including its factor, e.g. "Meta iRev (x1.15)". */
 export function multiplierLabel(g: ChannelGroup, s: ClientSettings, t: Totals): string {
   const m = groupStats(t, s, g.channels).multiplier;
   return `${g.label} iRev (x${Number(m.toFixed(2))})`;
