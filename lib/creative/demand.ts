@@ -128,3 +128,58 @@ export function neededAds(target: number, current: number, carry: number, perAd:
   // tolerate float noise so 53,000 / 300 stays 177 and an exact 177.0000000001 does not become 178
   return { needed: Math.ceil(gap / perAd - 1e-9), covered: false };
 }
+
+/* ---------- The CTC Modeling page's recommendation (section 05, "How the Recommendation Works") ---------- */
+
+/** The multiplier moves this much for each Creative Score point away from 50 (score 50 = 1.0, 0 = 1.5, 100 = 0.5). CTC gives the direction, not the coefficient. */
+export const HEALTH_PER_POINT = 0.01;
+export const HEALTH_MIN = 0.5;
+export const HEALTH_MAX = 1.5;
+/** Share of the evergreen share that counts as creative carried forward (35% evergreen = 17.5% fewer new ads). Apex calibration. */
+export const EVERGREEN_CARRY_WEIGHT = 0.5;
+/** Year-over-year spend change is limited to a quarter or four times, so one odd month cannot swing the number. */
+export const SPEND_RATIO_MIN = 0.25;
+export const SPEND_RATIO_MAX = 4;
+
+/** Less healthy account (score under 50) = higher multiplier = more new ads; no score yet = 1. */
+export function healthMultiplier(score: number | null): number {
+  if (score === null || !Number.isFinite(score)) return 1;
+  return clamp(1 + (50 - score) * HEALTH_PER_POINT, HEALTH_MIN, HEALTH_MAX);
+}
+
+export interface CtcRecommendation {
+  /** The recommended new ads (after the sanity check). */
+  ads: number;
+  /** Before the sanity check. */
+  fromInputs: number;
+  /** Input 1: ads created in the same month last year. */
+  lastYearAds: number;
+  lastYearSpend: number;
+  /** Input 2: planned spend this month over last year's spend that month. */
+  spendRatio: number;
+  /** Input 3: the Creative Score as a health multiplier. */
+  health: number;
+  /** Input 4: how much existing creative carries forward (1 = nothing carries). */
+  carryForward: number;
+  evergreenShare: number | null;
+  /** The sanity check: fewest ads the spend gap needs even at the top of the Canon's spend-per-ad range. */
+  floor: number;
+  raisedBySanity: boolean;
+}
+
+/**
+ * New ads = ads created the same month last year x planned-spend change year over year x health multiplier x (1 - carried-forward share),
+ * never below what the spend gap needs at the Canon's highest spend per ad ("if last year's ad volume was clearly insufficient for the spend
+ * level, adjust upward rather than anchoring to a bad baseline"). Null without last year's spend for the month (no baseline to scale).
+ * `gap` = target spend minus the spend that carries over, as the Canon computes it.
+ */
+export function ctcRecommendation(a: { lastYearAds: number; lastYearSpend: number; targetSpend: number; score: number | null; evergreenShare: number | null; gap: number }): CtcRecommendation | null {
+  if (!(a.lastYearSpend > 0) || !(a.targetSpend > 0)) return null;
+  const spendRatio = clamp(a.targetSpend / a.lastYearSpend, SPEND_RATIO_MIN, SPEND_RATIO_MAX);
+  const health = healthMultiplier(a.score);
+  const carryForward = 1 - EVERGREEN_CARRY_WEIGHT * clamp(a.evergreenShare ?? 0, 0, 1);
+  const fromInputs = Math.max(0, Math.ceil(a.lastYearAds * spendRatio * health * carryForward - 1e-9));
+  const floor = a.gap > 0 ? Math.ceil(a.gap / SPEND_PER_AD_RANGE[1] - 1e-9) : 0;
+  const ads = Math.max(fromInputs, floor);
+  return { ads, fromInputs, lastYearAds: a.lastYearAds, lastYearSpend: a.lastYearSpend, spendRatio, health, carryForward, evergreenShare: a.evergreenShare, floor, raisedBySanity: floor > fromInputs };
+}

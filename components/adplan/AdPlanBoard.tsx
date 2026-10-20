@@ -57,6 +57,32 @@ function Bar({ label, done, need }: { label: string; done: number; need: number 
   );
 }
 
+/** The four inputs behind a month's number, in the order the CTC Modeling page lists them, with the maths in one line. */
+function RecommendationBreakdown({ c, monthName, year }: { c: NonNullable<CreativeMonth["basis"]["ctc"]>; monthName: string; year: number }) {
+  const pct = (v: number) => `${v >= 1 ? "+" : "−"}${Math.abs(Math.round((v - 1) * 100))}%`;
+  const rows: { label: string; value: string; note: string }[] = [
+    { label: `Ads launched in ${monthName} ${year - 1}`, value: String(c.lastYearAds), note: "the starting point" },
+    { label: "Planned Meta spend vs last year", value: pct(c.spendRatio), note: `against ${monthName} ${year - 1}` },
+    { label: "Creative Score multiplier", value: `× ${c.health.toFixed(2)}`, note: c.health > 1 ? "unhealthy ads: more new ads" : c.health < 1 ? "healthy ads: fewer new ads" : "neutral" },
+    { label: "Evergreen carry-forward", value: `× ${c.carryForward.toFixed(2)}`, note: c.evergreenShare === null ? "no evergreen data" : `${Math.round(c.evergreenShare * 100)}% of ads are evergreen` },
+  ];
+  return (
+    <div className="space-y-1.5 text-xs">
+      <ul className="divide-y divide-border/50 rounded-lg border border-border/60">
+        {rows.map((r) => (
+          <li key={r.label} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
+            <span className="text-text-muted">{r.label}</span>
+            <span className="tabular">
+              <span className="font-medium text-text">{r.value}</span> <span className="text-text-faint">· {r.note}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {c.raisedBySanity && <p className="text-text-muted">Raised from {c.fromInputs} to {c.ads}: last year&apos;s volume was too low for this spend, so the number follows what the spend needs instead.</p>}
+    </div>
+  );
+}
+
 /** A typed override: empty means "let the model decide" (shown as the placeholder). */
 function OverrideField({ label, value, auto, suffix, disabled, onChange }: { label: string; value: number | undefined; auto: string; suffix?: string; disabled?: boolean; onChange: (v: number | undefined) => void }) {
   return (
@@ -152,7 +178,7 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
     return { byMonth, last30 };
   }, [facts, asOf]);
 
-  const computeFor = (m: PlanMonth, overrides: CreativeOverrides) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides, now });
+  const computeFor = (m: PlanMonth, overrides: CreativeOverrides) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides, score: score?.score ?? null, evergreenShare: metrics?.evergreenShare ?? null, now });
 
   const selMonth = months.find((m) => m.month === sel) ?? months[0];
   const saved = blocks[sel];
@@ -177,8 +203,8 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
   /** What Save would write: every month recomputed with the typed overrides, months whose ad plan is locked as saved. */
   const recompute = () => regenerateCreative(months, blocks, (m, saved0) => computeFor(m, draft[m.month] ?? saved0));
   const preview = useMemo(
-    () => regenerateCreative(months, blocks, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides: draft[m.month] ?? o, now })),
-    [months, blocks, data, events, planNonCatalog, metaFacts, draft, now],
+    () => regenerateCreative(months, blocks, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides: draft[m.month] ?? o, score: score?.score ?? null, evergreenShare: metrics?.evergreenShare ?? null, now })),
+    [months, blocks, data, events, planNonCatalog, metaFacts, draft, score, metrics, now],
   );
   const year = useMemo(() => yearTable({ year: plan.year, months, blocks: preview, history: data, facts, settings, lastData }), [plan.year, months, preview, data, facts, settings, lastData]);
 
@@ -229,7 +255,7 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-auto max-w-2xl text-xs text-text-muted">
-          How many new Meta ads each month needs to carry the plan&apos;s Meta spend, and how healthy the account&apos;s creative is. It follows the {plan.year} plan&apos;s Meta spend and the marketing calendar and never changes a plan target.
+          How many new Meta ads each month needs: last year&apos;s launches in that month, scaled by the change in planned Meta spend and by how healthy the account&apos;s creative is (the Creative Score). It follows the {plan.year} plan and the marketing calendar and never changes a plan target.
         </p>
         {dirty && <span className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-xs">Unsaved changes</span>}
         <button className={btnPrimary} onClick={save} disabled={busy || history === "loading"}>
@@ -248,6 +274,7 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
         {months.map((m, i) => (
           <button key={m.month} role="tab" aria-selected={m.month === sel} onClick={() => setSel(m.month)} className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm ${m.month === sel ? "border-accent bg-accent font-semibold text-black" : "border-border text-text-muted hover:text-text"}`}>
             {MONTHS[i]}
+            {preview[m.month] && <span className={`tabular text-xs ${m.month === sel ? "text-black/70" : "text-text-faint"}`}>{preview[m.month].needed}</span>}
             {blocks[m.month] && <span className={`h-1.5 w-1.5 rounded-full ${m.month === sel ? "bg-black" : "bg-accent"}`} title="Saved" />}
           </button>
         ))}
@@ -294,13 +321,14 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
                 </div>
                 {overrides.needed !== undefined ? (
                   <p className="text-xs text-text-muted">You typed {block.needed} new ads for {monthName}; the model on its own gives {block.basis.modelNeeded}. Clear the field to go back to the model.</p>
+                ) : block.basis.ctc ? (
+                  <RecommendationBreakdown c={block.basis.ctc} monthName={monthName} year={plan.year} />
                 ) : block.basis.reason === "covered" ? (
-                  <p className="text-xs text-text-muted">The Meta target ({money(block.basis.targetSpend)}) is already covered by the spend that carries over from last month ({money(block.basis.currentSpend)} × {block.basis.carryRate.toFixed(2)}).</p>
+                  <p className="text-xs text-text-muted">No ads launched in {monthName} last year to build on, so the Canon&apos;s spend arithmetic is used. The Meta target ({money(block.basis.targetSpend)}) is already covered by the spend that carries over from last month ({money(block.basis.currentSpend)} × {block.basis.carryRate.toFixed(2)}).</p>
                 ) : (
                   <p className="text-xs text-text-muted">
-                    Meta target {money(block.basis.targetSpend)} (without catalog) − {money(block.basis.currentSpend)} still running × {block.basis.carryRate.toFixed(2)} = {money(gap)} to cover with new ads at {money(block.basis.spendPerAd)} each.{" "}
+                    There is no Meta spend for {monthName} last year to build on, so the Canon&apos;s spend arithmetic is used: Meta target {money(block.basis.targetSpend)} (without catalog) − {money(block.basis.currentSpend)} still running × {block.basis.carryRate.toFixed(2)} = {money(gap)} to cover with new ads at {money(block.basis.spendPerAd)} each.{" "}
                     <span title="Carry rate and spend per ad come from this account's own history when it has three months of data; otherwise the Canon defaults (0.725 and 295, a US-dollar figure).">{block.basis.source === "account" ? "From this account." : "Canon defaults in use."}</span>
-                    {block.basis.currentSource === "facts" && " Current spend is the campaign-level Meta spend: ad-level data is not available for that period."}
                     {perAd?.outsideRange && perAd.source === "account" && ` Spend per new ad is outside the Canon range (${SPEND_PER_AD_RANGE[0]} to ${SPEND_PER_AD_RANGE[1]}).`}
                   </p>
                 )}
@@ -310,8 +338,8 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
             {selMonth.inputs && block && (
               <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 sm:grid-cols-4">
                 <OverrideField label="Ads needed" value={overrides.needed} auto={String(block.needed)} disabled={monthLocked} onChange={(v) => setOverride({ needed: v })} />
-                <OverrideField label="Carry rate" value={overrides.carryRate} auto={block.basis.carryRate.toFixed(2)} disabled={monthLocked} onChange={(v) => setOverride({ carryRate: v })} />
-                <OverrideField label="Spend per new ad" value={overrides.spendPerAd} auto={String(round2(block.basis.spendPerAd))} disabled={monthLocked} onChange={(v) => setOverride({ spendPerAd: v })} />
+                {block.basis.method !== "ctc" && <OverrideField label="Carry rate" value={overrides.carryRate} auto={block.basis.carryRate.toFixed(2)} disabled={monthLocked} onChange={(v) => setOverride({ carryRate: v })} />}
+                {block.basis.method !== "ctc" && <OverrideField label="Spend per new ad" value={overrides.spendPerAd} auto={String(round2(block.basis.spendPerAd))} disabled={monthLocked} onChange={(v) => setOverride({ spendPerAd: v })} />}
                 <OverrideField label="Moments share" suffix="%" value={overrides.momentsShare === undefined ? undefined : round2(overrides.momentsShare * 100)} auto={String(round2(block.basis.momentsShare * 100))} disabled={monthLocked} onChange={(v) => setOverride({ momentsShare: v === undefined ? undefined : v / 100 })} />
               </div>
             )}
@@ -323,7 +351,7 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
 
       {history !== "loading" && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold">{plan.year} at a glance</h3>
+          <h3 className="text-sm font-semibold">Ads, spend and aMER by month · {plan.year} against {plan.year - 1}</h3>
           <CreativeYearTable rows={year.rows} total={year.total} selected={sel} onSelect={setSel} currency={client.currency} />
         </div>
       )}

@@ -257,7 +257,7 @@ describe("creativeInsights", () => {
     const poor = { score: 40, parts: { zeroRevenue: 10, concentration: 90, roasDegradation: 30, spendDegradation: 40, evergreenShare: 30 }, mode: "provisional" as const };
     const out = creativeInsights(poor, metrics, null);
     expect(out.some((s) => /needs more new ads/i.test(s))).toBe(true);
-    expect(out.some((s) => /no revenue/i.test(s))).toBe(true);
+    expect(out.some((s) => /zero revenue rate/i.test(s))).toBe(true);
     expect(out.length).toBeGreaterThanOrEqual(2);
     expect(out.length).toBeLessThanOrEqual(5);
   });
@@ -293,5 +293,48 @@ describe("creativeInsights", () => {
 describe("creative model settings", () => {
   it("start at a 14-day lead and the calendar rule", () => {
     expect(DEFAULT_CREATIVE).toEqual({ leadDays: 14, momentRule: "calendar" });
+  });
+});
+
+describe("computeCreativeMonth: the CTC Modeling page's four inputs", () => {
+  // September 2025: 80 ads launched at 40,000 non-catalog spend. September 2026 plans 88,000 non-catalog Meta spend (a 2.2x change).
+  const withLastYear = (score: number | null = 50, evergreen: number | null = 0, over: Partial<CreativeHistory> = {}) => ({
+    history: history({ months: [...history().months, monthAgg("2025-09-01", 40000, 0, 0, { video: 50, image: 30 })], ...over }),
+    score,
+    evergreenShare: evergreen,
+  });
+
+  it("is last year's launches x the spend change x the health multiplier x the evergreen carry-forward", () => {
+    const c = compute(withLastYear(50, 0))!;
+    expect(c.basis.method).toBe("ctc");
+    expect(c.basis.ctc).toMatchObject({ lastYearAds: 80, health: 1, carryForward: 1 });
+    expect(c.basis.ctc!.spendRatio).toBeCloseTo(2.2, 10);
+    expect(c.needed).toBe(176);
+    expect(c.basis.modelNeeded).toBe(176);
+  });
+
+  it("a score under 50 asks for more new ads, above 50 for fewer, and evergreen creative carries part of it forward", () => {
+    expect(compute(withLastYear(30, 0))!.needed).toBe(Math.ceil(80 * 2.2 * 1.2 - 1e-9));
+    expect(compute(withLastYear(70, 0))!.needed).toBe(Math.ceil(80 * 2.2 * 0.8 - 1e-9));
+    expect(compute(withLastYear(50, 0.4))!.needed).toBe(Math.ceil(80 * 2.2 * 0.8 - 1e-9));
+  });
+
+  it("is raised when last year's volume is clearly too low for the spend (the page's sanity check) and says so", () => {
+    const c = compute(withLastYear(50, 0, { months: [...history().months, monthAgg("2025-09-01", 40000, 0, 0, { video: 1 })] }))!;
+    expect(c.basis.ctc!.raisedBySanity).toBe(true);
+    expect(c.needed).toBe(Math.ceil((88000 - 50000 * 0.7) / 397 - 1e-9));
+  });
+
+  it("falls back to the Canon arithmetic, and says so, when there is no spend for the month last year", () => {
+    const c = compute({ score: 50, evergreenShare: 0 })!;
+    expect(c.basis.method).toBe("canon");
+    expect(c.basis.ctc).toBeUndefined();
+    expect(c.needed).toBe(177);
+  });
+
+  it("a typed number still replaces the model's", () => {
+    const c = compute({ ...withLastYear(50, 0), overrides: { needed: 12 } })!;
+    expect(c.needed).toBe(12);
+    expect(c.basis.modelNeeded).toBe(176);
   });
 });
