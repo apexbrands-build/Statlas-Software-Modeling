@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { defaultSettings } from "../defaults";
+import { emptyTotals } from "../metrics";
 import type { MarketingEvent } from "../planning/events";
 import { DEFAULT_CREATIVE } from "../planning/models";
 import { blankInputs, type PlanMonth, type PlanMonthInputs } from "../planning/types";
-import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, type CreativeMonth } from "./plan";
+import type { ClientSettings, DailyFact } from "../types";
+import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth } from "./plan";
 import { creativeScore } from "./score";
 import { launchedAd, monthAgg } from "./fixtures";
 import type { CreativeHistory } from "./types";
@@ -189,6 +192,61 @@ describe("launchProgress", () => {
       launchedAd({ adId: "oct", launchDate: "2026-10-20", format: "video" }),
     ];
     expect(launchProgress(ads, events, "2026-11-01", 14)).toEqual({ moments: { video: 1, image: 0 }, evergreen: { video: 0, image: 1 } });
+  });
+});
+
+describe("yearTable", () => {
+  const settings: ClientSettings = { ...defaultSettings("c1"), excludeBrandFromAmer: false, excludeMetaReturningFromAmer: false };
+  const fact = (date: string, metaSpend: number, platformRevenue: number, newRevenue: number): DailyFact => {
+    const channels = emptyTotals().channels;
+    channels.meta_acquisition = { spend: metaSpend, platformRevenue, platformPurchases: 1 };
+    return { clientId: "c1", date, grossSales: 0, discounts: 0, netSales: 0, shippingCollected: 0, tax: 0, newOrderRevenue: newRevenue, returningOrderRevenue: 0, newOrders: 1, returningOrders: 0, refunds: 0, cogs: 0, cogsUnmappedSales: 0, emailRevenue: 0, emailCampaignRevenue: 0, emailFlowRevenue: 0, emailOrders: 0, emailSent: 0, channels };
+  };
+  const h = history({ months: [monthAgg("2025-09-01", 1000, 0, 0, { video: 3, image: 2 }), monthAgg("2026-09-01", 2000, 0, 0, { video: 4 })] });
+  const months: PlanMonth[] = Array.from({ length: 12 }, (_, i) => month(`2026-${String(i + 1).padStart(2, "0")}`, null));
+  months[8] = month("2026-09", inputsFor());
+  const blocks = { "2026-09-01": saved({ needed: 40 }), "2026-11-01": saved({ needed: 50 }) };
+  months[10] = month("2026-11", inputsFor({ spend: 100000, amer: 2.5, platformPct: { meta: 100 } }));
+  const t = yearTable({ year: 2026, months, blocks, history: h, facts: [fact("2025-09-10", 1000, 3000, 2500), fact("2026-09-10", 2000, 5000, 5000)], settings, lastData: "2026-09-30" });
+  const sep = t.rows[8];
+  const nov = t.rows[10];
+
+  it("has twelve rows, January first", () => {
+    expect(t.rows).toHaveLength(12);
+    expect(t.rows[0].month).toBe("2026-01-01");
+  });
+
+  it("an elapsed month shows what happened: launches, Meta spend and aMER, next to last year's", () => {
+    expect(sep).toMatchObject({ target: 40, launchedThisYear: 4, launchedLastYear: 5, metaSpendLastYear: 1000, spendThisYear: 2000, spendIsActual: true });
+    expect(sep.amerLastYear).toBeCloseTo(2.5, 10);
+    expect(sep.roasLastYear).toBeCloseTo(3, 10);
+    expect(sep.amerThisYear).toBeCloseTo(2.5, 10);
+  });
+
+  it("a month still to come shows the plan: its Meta spend and aMER", () => {
+    expect(nov).toMatchObject({ target: 50, spendThisYear: 100000, spendIsActual: false, amerThisYear: 2.5 });
+  });
+
+  it("a month with no launches shows 0, not null, and one with no plan has no target", () => {
+    expect(t.rows[0].launchedThisYear).toBe(0);
+    expect(t.rows[0].launchedLastYear).toBe(0);
+    expect(t.rows[0].target).toBeNull();
+  });
+
+  it("the total row adds up the rows", () => {
+    const sum = (f: (r: (typeof t.rows)[number]) => number | null) => t.rows.reduce((a, r) => a + (f(r) ?? 0), 0);
+    expect(t.total.target).toBe(sum((r) => r.target));
+    expect(t.total.target).toBe(90);
+    expect(t.total.launchedThisYear).toBe(sum((r) => r.launchedThisYear));
+    expect(t.total.launchedLastYear).toBe(sum((r) => r.launchedLastYear));
+    expect(t.total.metaSpendLastYear).toBe(sum((r) => r.metaSpendLastYear));
+    expect(t.total.spendThisYear).toBe(sum((r) => r.spendThisYear));
+  });
+
+  it("works with no ad history at all", () => {
+    const none = yearTable({ year: 2026, months, blocks: {}, history: null, facts: [], settings, lastData: "2026-09-30" });
+    expect(none.rows).toHaveLength(12);
+    expect(none.total.launchedThisYear).toBe(0);
   });
 });
 

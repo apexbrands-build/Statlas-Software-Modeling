@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MONTHS, btn, btnPrimary, inputClass } from "@/components/planning/ui";
 import { catalogShare, metaSpendOf, monthsWithData, SPEND_PER_AD_RANGE, spendPerNewAd } from "@/lib/creative/demand";
 import { scoreMetrics } from "@/lib/creative/metrics";
-import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, type CreativeMonth, type CreativeOverrides } from "@/lib/creative/plan";
+import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth, type CreativeOverrides } from "@/lib/creative/plan";
 import { adPlanResults, readSavedBlocks } from "@/lib/creative/saved";
 import { creativeScore } from "@/lib/creative/score";
 import type { CreativeHistory } from "@/lib/creative/types";
@@ -18,6 +18,7 @@ import { getRepository } from "@/lib/repository";
 import type { Client, ClientSettings, DailyFact, PlanVersion } from "@/lib/types";
 import { CreativeMonthView } from "./CreativeMonthView";
 import { CreativeScoreCard } from "./CreativeScoreCard";
+import { CreativeYearTable } from "./CreativeYearTable";
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -205,6 +206,7 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
     () => regenerateCreative(months, blocks, (m, o) => computeCreativeMonth({ month: m.month, inputs: m.inputs, history: data, events, planNonCatalog, metaFacts, overrides: draft[m.month] ?? o, score: score?.score ?? null, evergreenShare: metrics?.evergreenShare ?? null, now })),
     [months, blocks, data, events, planNonCatalog, metaFacts, draft, score, metrics, now],
   );
+  const year = useMemo(() => yearTable({ year: plan.year, months, blocks: preview, history: data, facts, settings, lastData }), [plan.year, months, preview, data, facts, settings, lastData]);
 
   const regenerate = () => {
     const next = recompute();
@@ -346,6 +348,13 @@ export function AdPlanBoard({ client, settings, plan, months, events, facts, las
       )}
 
       {history !== "loading" && <CreativeMonthView client={client} settings={settings} facts={facts} lastData={lastData} month={sel} history={data} block={block} asOf={asOf} />}
+
+      {history !== "loading" && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Ads, spend and aMER by month · {plan.year} against {plan.year - 1}</h3>
+          <CreativeYearTable rows={year.rows} total={year.total} selected={sel} onSelect={setSel} currency={client.currency} />
+        </div>
+      )}
 
       {insights.length > 0 && (
         <ul className="space-y-1 rounded-xl border border-border bg-surface p-4 text-sm text-text-muted">

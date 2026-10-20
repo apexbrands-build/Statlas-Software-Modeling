@@ -1,7 +1,9 @@
 /** Creative Demand in the plan: what each month needs (stored in the month's inputs), regeneration, the year table and the plain-language insights. */
 import { addDays, addYears, endOfMonth, startOfMonth } from "../dates";
+import { aggregate, METRICS } from "../metrics";
 import type { MarketingEvent } from "../planning/events";
 import type { PlanMonth, PlanMonthInputs } from "../planning/types";
+import type { ClientSettings, DailyFact } from "../types";
 import { carryRate, catalogShare, ctcRecommendation, currentSpend, metaSpendOf, monthsWithData, neededAds, spendPerNewAd, type CtcRecommendation } from "./demand";
 import { SCORE_DEFINITIONS } from "./definitions";
 import { formatEvidence, formatGroup, splitFormats, videoShare, type FormatCount } from "./format";
@@ -179,6 +181,82 @@ export function launchProgress(ads: LaunchedAd[], events: MarketingEvent[], mont
     bucket[formatGroup(a.format)] += 1;
   }
   return out;
+}
+
+export interface YearRow {
+  month: string;
+  /** Ads the plan asks for (the month's creative block); null when the month has none. */
+  target: number | null;
+  launchedThisYear: number;
+  launchedLastYear: number;
+  metaSpendLastYear: number;
+  amerLastYear: number | null;
+  /** Meta's platform-reported ROAS last year (revenue over spend). */
+  roasLastYear: number | null;
+  /** Meta spend: what happened for a completed month, the plan's for the rest. */
+  spendThisYear: number;
+  spendIsActual: boolean;
+  amerThisYear: number | null;
+}
+
+const META_CHANNELS = ["meta_acquisition", "meta_returning"] as const;
+const metaSpendOfFacts = (facts: DailyFact[]) => facts.reduce((s, f) => s + META_CHANNELS.reduce((x, k) => x + (f.channels?.[k]?.spend ?? 0), 0), 0);
+const metaRevenueOfFacts = (facts: DailyFact[]) => facts.reduce((s, f) => s + META_CHANNELS.reduce((x, k) => x + (f.channels?.[k]?.platformRevenue ?? 0), 0), 0);
+const launchedIn = (h: CreativeHistory | null, month: string) => {
+  const row = h?.months.find((m) => m.month === month);
+  return row ? AD_FORMATS.reduce((s, f) => s + (row.launched[f] ?? 0), 0) : 0;
+};
+
+/**
+ * The year by month: per month the ads the plan asks for, the ads launched this year and last, and Meta spend, aMER and ROAS of last year
+ * beside this year (what happened for completed months, the plan for the rest). The total row adds the counts and spend; its aMER columns are
+ * the year's aMER from the facts and, for this year, the Meta-spend-weighted average of the months.
+ */
+export function yearTable(a: { year: number; months: PlanMonth[]; blocks: Record<string, CreativeMonth>; history: CreativeHistory | null; facts: DailyFact[]; settings: ClientSettings; lastData: string }): { rows: YearRow[]; total: YearRow } {
+  const amerOf = (facts: DailyFact[]) => (facts.length ? METRICS.amer.value(aggregate(facts), a.settings) : null);
+  const inMonth = (start: string) => a.facts.filter((f) => f.date >= start && f.date <= endOfMonth(start));
+
+  const rows: YearRow[] = Array.from({ length: 12 }, (_, i) => {
+    const key = `${a.year}-${String(i + 1).padStart(2, "0")}-01`;
+    const lyKey = addYears(key, -1);
+    const plan = a.months.find((m) => m.month === key) ?? null;
+    const lyFacts = inMonth(lyKey);
+    const lySpend = metaSpendOfFacts(lyFacts);
+    const elapsed = endOfMonth(key) <= a.lastData;
+    const facts = inMonth(key);
+    return {
+      month: key,
+      target: a.blocks[key]?.needed ?? null,
+      launchedThisYear: launchedIn(a.history, key),
+      launchedLastYear: launchedIn(a.history, lyKey),
+      metaSpendLastYear: lySpend,
+      amerLastYear: amerOf(lyFacts),
+      roasLastYear: lySpend > 0 ? metaRevenueOfFacts(lyFacts) / lySpend : null,
+      spendThisYear: elapsed ? metaSpendOfFacts(facts) : metaSpendOf(plan?.inputs ?? null),
+      spendIsActual: elapsed,
+      amerThisYear: elapsed ? amerOf(facts) : plan?.inputs && plan.inputs.amer > 0 ? plan.inputs.amer : null,
+    };
+  });
+
+  const sum = (f: (r: YearRow) => number) => rows.reduce((s, r) => s + f(r), 0);
+  const targets = rows.filter((r) => r.target !== null);
+  const lyYearFacts = a.facts.filter((f) => f.date >= addYears(`${a.year}-01-01`, -1) && f.date <= addYears(`${a.year}-12-31`, -1));
+  const lySpendTotal = metaSpendOfFacts(lyYearFacts);
+  const weighted = rows.filter((r) => r.amerThisYear !== null && r.spendThisYear > 0);
+  const weight = weighted.reduce((s, r) => s + r.spendThisYear, 0);
+  const total: YearRow = {
+    month: String(a.year),
+    target: targets.length ? targets.reduce((s, r) => s + (r.target ?? 0), 0) : null,
+    launchedThisYear: sum((r) => r.launchedThisYear),
+    launchedLastYear: sum((r) => r.launchedLastYear),
+    metaSpendLastYear: sum((r) => r.metaSpendLastYear),
+    amerLastYear: amerOf(lyYearFacts),
+    roasLastYear: lySpendTotal > 0 ? metaRevenueOfFacts(lyYearFacts) / lySpendTotal : null,
+    spendThisYear: sum((r) => r.spendThisYear),
+    spendIsActual: false,
+    amerThisYear: weight > 0 ? weighted.reduce((s, r) => s + (r.amerThisYear ?? 0) * r.spendThisYear, 0) / weight : null,
+  };
+  return { rows, total };
 }
 
 const PART_LABEL: Record<MetricKey, string> = Object.fromEntries((Object.keys(SCORE_DEFINITIONS) as MetricKey[]).map((k) => [k, SCORE_DEFINITIONS[k].name])) as Record<MetricKey, string>;
