@@ -9,37 +9,69 @@ import { formatValue } from "@/lib/format";
 import { aggregate, METRICS } from "@/lib/metrics";
 import type { Client, ClientSettings, DailyFact } from "@/lib/types";
 import { getRepository } from "@/lib/repository";
-import { Legend, LineChart } from "@/components/planning/models/charts";
+import { Legend } from "@/components/planning/models/charts";
 import { MONTHS } from "@/components/planning/ui";
 
 const FORMAT_COLOR: Record<AdFormat, string> = { video: "#5eead4", image: "#facc15", carousel: "#fb923c", other: "#94a3b8" };
 const FORMAT_LABEL: Record<AdFormat, string> = { video: "Video", image: "Image", carousel: "Carousel", other: "Other" };
 
-/** Ads launched per day, stacked by format. */
-function LaunchBars({ days }: { days: CreativeDay[] }) {
-  const total = (d: CreativeDay) => AD_FORMATS.reduce((s, f) => s + d.launched[f], 0);
-  const max = Math.max(1, ...days.map(total));
+/** Daily Meta spend and AOV (each on its own scale) with a marker on every day ads launched. */
+function SpendAovChart({ days, spend, aov, launches, money, aovFmt }: { days: string[]; spend: (number | null)[]; aov: (number | null)[]; launches: Map<string, number>; money: (v: number) => string; aovFmt: (v: number) => string }) {
+  const w = 760;
+  const h = 200;
+  const pad = { l: 56, r: 56, t: 16, b: 24 };
+  const max = (xs: (number | null)[]) => Math.max(1e-9, ...xs.map((v) => v ?? 0)) * 1.1;
+  const sMax = max(spend);
+  const aMax = max(aov);
+  const n = Math.max(1, days.length - 1);
+  const X = (i: number) => pad.l + (i / n) * (w - pad.l - pad.r);
+  const Y = (v: number, m: number) => h - pad.b - (v / m) * (h - pad.t - pad.b);
+  const path = (xs: (number | null)[], m: number) => {
+    let d = "";
+    xs.forEach((v, i) => {
+      if (v == null) return;
+      d += `${d && xs[i - 1] != null ? "L" : "M"}${X(i).toFixed(1)},${Y(v, m).toFixed(1)} `;
+    });
+    return d;
+  };
   return (
-    <div>
-      <div className="flex h-24 items-end gap-0.5" role="img" aria-label="Ads launched per day">
-        {days.map((d) => (
-          <div key={d.date} className="flex flex-1 flex-col-reverse" title={`${d.date}: ${total(d)} launched`} style={{ height: `${(total(d) / max) * 100}%` }}>
-            {AD_FORMATS.map((f) => (d.launched[f] > 0 ? <div key={f} style={{ flex: d.launched[f], background: FORMAT_COLOR[f] }} /> : null))}
-          </div>
-        ))}
-      </div>
-      <div className="mt-1 flex gap-0.5 text-[9px] text-text-faint">
-        {days.map((d) => (
-          <span key={d.date} className="flex-1 text-center">
-            {Number(d.date.slice(8, 10)) % 5 === 1 ? Number(d.date.slice(8, 10)) : ""}
-          </span>
-        ))}
-      </div>
-    </div>
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="Daily Meta spend and AOV with the days ads launched">
+      {[0, 0.5, 1].map((t) => (
+        <g key={t}>
+          <line x1={pad.l} x2={w - pad.r} y1={Y(sMax * t, sMax)} y2={Y(sMax * t, sMax)} stroke="currentColor" opacity={0.1} />
+          <text x={pad.l - 6} y={Y(sMax * t, sMax) + 3} textAnchor="end" fontSize={10} fill="#5eead4">
+            {money(sMax * t)}
+          </text>
+          <text x={w - pad.r + 6} y={Y(aMax * t, aMax) + 3} fontSize={10} fill="#facc15">
+            {aovFmt(aMax * t)}
+          </text>
+        </g>
+      ))}
+      {days.map((d, i) => (Number(d.slice(8, 10)) % 5 === 1 ? (
+        <text key={d} x={X(i)} y={h - 8} textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.6}>
+          {Number(d.slice(8, 10))}
+        </text>
+      ) : null))}
+      {days.map((d, i) => {
+        const count = launches.get(d);
+        if (!count) return null;
+        return (
+          <g key={`l-${d}`}>
+            <title>{`${d}: ${count} ad${count === 1 ? "" : "s"} launched`}</title>
+            <line x1={X(i)} x2={X(i)} y1={pad.t} y2={h - pad.b} stroke="#fb923c" strokeWidth={1.5} strokeDasharray="3 3" />
+            <text x={X(i)} y={pad.t - 4} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fb923c">
+              {count}
+            </text>
+          </g>
+        );
+      })}
+      <path d={path(spend, sMax)} fill="none" stroke="#5eead4" strokeWidth={2} />
+      <path d={path(aov, aMax)} fill="none" stroke="#facc15" strokeWidth={2} />
+    </svg>
   );
 }
 
-/** One month in detail: launches by day, daily Meta spend and aMER, the batch's first-week and first-month spend, and the launches themselves. */
+/** One month in detail: how many ads launched, and daily Meta spend next to AOV with the launch days marked. No ad names or per-ad results: the Ad plan plans, Best Creatives analyses. */
 export function CreativeMonthView({ client, settings, facts: allFacts, lastData, month, history, block, asOf }: { client: Client; settings: ClientSettings; facts: DailyFact[]; lastData: string; month: string; history: CreativeHistory | null; block: CreativeMonth | null; asOf: string }) {
   const [loaded, setLoaded] = useState<{ key: string; data: { ads: LaunchedAd[]; days: CreativeDay[] } | null } | null>(null);
   const key = `${client.id}|${month}|${asOf}`;
@@ -67,18 +99,19 @@ export function CreativeMonthView({ client, settings, facts: allFacts, lastData,
   const facts = allFacts.filter((f) => f.date >= from && f.date <= to);
   const factByDate = new Map(facts.map((f) => [f.date, f]));
   const days = Array.from({ length: Number(to.slice(8, 10)) }, (_, i) => `${month.slice(0, 8)}${String(i + 1).padStart(2, "0")}`);
-  const labels = days.map((d) => (Number(d.slice(8, 10)) % 5 === 1 ? String(Number(d.slice(8, 10))) : ""));
-  const metaSpend = days.map((d) => {
+    const metaSpend = days.map((d) => {
     const f = factByDate.get(d);
     return f ? (f.channels.meta_acquisition?.spend ?? 0) + (f.channels.meta_returning?.spend ?? 0) : null;
   });
-  const amer = days.map((d) => {
+  const aov = days.map((d) => {
     const f = factByDate.get(d);
-    return f ? METRICS.amer.value(aggregate([f]), settings) : null;
+    return f ? METRICS.aov.value(aggregate([f]), settings) : null;
   });
 
-  const launched = (data?.ads ?? []).slice().sort((a, b) => (a.launchDate < b.launchDate ? -1 : a.launchDate > b.launchDate ? 1 : a.name.localeCompare(b.name)));
-  const real = launched.filter((a) => !a.isCatalog);
+  const real = (data?.ads ?? []).filter((a) => !a.isCatalog);
+  const launches = new Map<string, number>();
+  for (const a of real) launches.set(a.launchDate, (launches.get(a.launchDate) ?? 0) + 1);
+  const byFormat = AD_FORMATS.map((f) => ({ f, n: real.filter((a) => a.format === f).length })).filter((x) => x.n > 0);
   const spend7 = real.reduce((s, a) => s + a.spend7, 0);
   const spend30 = real.reduce((s, a) => s + a.spend30, 0);
   const future = from > lastData;
@@ -98,65 +131,29 @@ export function CreativeMonthView({ client, settings, facts: allFacts, lastData,
         <div className="h-32 animate-pulse rounded-lg bg-bg" />
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <h4 className="text-xs font-medium text-text-muted">Ads launched per day</h4>
-              {data && data.days.some((d) => AD_FORMATS.some((f) => d.launched[f] > 0)) ? (
-                <>
-                  <LaunchBars days={data.days} />
-                  <Legend items={AD_FORMATS.map((f) => ({ label: FORMAT_LABEL[f], color: FORMAT_COLOR[f] }))} />
-                </>
-              ) : (
-                <p className="text-sm text-text-muted">{future ? "This month has not started." : "No ads launched this month."}</p>
-              )}
-              {real.length > 0 && (
-                <p className="text-xs text-text-muted">
-                  The {real.length} ad{real.length === 1 ? "" : "s"} launched spent {money(spend7)} in their first 7 days and {money(spend30)} in their first 30.
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <h4 className="text-xs font-medium text-text-muted">Daily Meta spend and aMER</h4>
-              {facts.length === 0 ? (
-                <p className="text-sm text-text-muted">{future ? "No actuals yet: the month is still to come." : "No actuals for this month."}</p>
-              ) : (
-                <>
-                  <LineChart series={[{ label: "Meta spend", color: "#5eead4", values: metaSpend }]} labels={labels} yFmt={(v) => formatValue(v, "currency0", client.currency)} height={110} />
-                  <LineChart series={[{ label: "aMER", color: "#facc15", values: amer }]} labels={labels} yFmt={(v) => v.toFixed(1)} height={110} />
-                  <Legend items={[{ label: "Meta spend", color: "#5eead4" }, { label: "aMER", color: "#facc15" }]} />
-                </>
-              )}
-            </div>
+          <div className="space-y-2">
+            <p className="text-sm">
+              <span className="tabular text-2xl font-semibold">{real.length}</span> <span className="text-text-muted">ad{real.length === 1 ? "" : "s"} launched in {name}</span>
+              {byFormat.length > 0 && <span className="text-xs text-text-muted"> · {byFormat.map((x) => `${x.n} ${FORMAT_LABEL[x.f].toLowerCase()}`).join(", ")}</span>}
+            </p>
+            {real.length > 0 && (
+              <p className="text-xs text-text-muted">
+                Together they spent {money(spend7)} in their first 7 days and {money(spend30)} in their first 30.
+              </p>
+            )}
+            {real.length === 0 && <p className="text-sm text-text-muted">{future ? "This month has not started." : "No ads launched this month."}</p>}
           </div>
-
-          {launched.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs text-text-muted">
-                    <th className="px-2 py-2 text-left">Ad</th>
-                    <th className="px-2 py-2 text-left">Format</th>
-                    <th className="px-2 py-2 text-left">Launched</th>
-                    <th className="px-2 py-2 text-right">First 30 days spend</th>
-                    <th className="px-2 py-2 text-right">First 30 days ROAS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {launched.map((a) => (
-                    <tr key={a.adId} className={`border-b border-border/40 ${a.isCatalog ? "text-text-faint" : ""}`}>
-                      <td className="px-2 py-1">
-                        {a.name} {a.isCatalog && <span className="rounded-full border border-border px-1.5 text-[10px]">catalog</span>}
-                      </td>
-                      <td className="px-2 py-1">{FORMAT_LABEL[a.format]}</td>
-                      <td className="px-2 py-1 tabular">{a.launchDate}</td>
-                      <td className="px-2 py-1 text-right tabular">{money(a.spend30)}</td>
-                      <td className="px-2 py-1 text-right tabular">{a.spend30 > 0 ? formatValue(a.revenue30 / a.spend30, "ratio2", client.currency) : "–"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="space-y-2">
+            <h4 className="text-xs font-medium text-text-muted">Daily Meta spend and AOV, with the days ads launched</h4>
+            {facts.length === 0 ? (
+              <p className="text-sm text-text-muted">{future ? "No actuals yet: the month is still to come." : "No actuals for this month."}</p>
+            ) : (
+              <>
+                <SpendAovChart days={days} spend={metaSpend} aov={aov} launches={launches} money={(v) => formatValue(v, "currency0", client.currency)} aovFmt={(v) => formatValue(v, "currency0", client.currency)} />
+                <Legend items={[{ label: "Meta spend (left)", color: "#5eead4" }, { label: "AOV (right)", color: "#facc15" }, { label: "Ads launched that day", color: "#fb923c" }]} />
+              </>
+            )}
+          </div>
         </>
       )}
     </section>

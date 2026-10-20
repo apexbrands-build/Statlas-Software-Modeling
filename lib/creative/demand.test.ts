@@ -11,6 +11,8 @@ import {
   monthsWithData,
   neededAds,
   spendPerNewAd,
+  ctcRecommendation,
+  healthMultiplier,
 } from "./demand";
 import { launchedAd, monthAgg } from "./fixtures";
 
@@ -149,5 +151,34 @@ describe("neededAds", () => {
   it("target 0 gives 0, never negative or NaN", () => {
     expect(neededAds(0, 50_000, 0.7, 300).needed).toBe(0);
     expect(neededAds(10_000, 0, 0.7, 0).needed).toBe(0);
+  });
+});
+
+describe("ctcRecommendation", () => {
+  const base = { lastYearAds: 80, lastYearSpend: 40000, targetSpend: 88000, score: 50, evergreenShare: 0, gap: 0 };
+
+  it("multiplies last year's launches by the spend change, the health multiplier and the carry-forward", () => {
+    expect(ctcRecommendation(base)!.ads).toBe(176);
+    expect(ctcRecommendation({ ...base, score: 0 })!.health).toBeCloseTo(1.5, 10);
+    expect(ctcRecommendation({ ...base, score: 100 })!.health).toBeCloseTo(0.5, 10);
+    expect(ctcRecommendation({ ...base, evergreenShare: 0.4 })!.carryForward).toBeCloseTo(0.8, 10);
+  });
+
+  it("treats a missing score as neutral and limits the spend change to a quarter or four times", () => {
+    expect(healthMultiplier(null)).toBe(1);
+    expect(ctcRecommendation({ ...base, targetSpend: 1000000 })!.spendRatio).toBe(4);
+    expect(ctcRecommendation({ ...base, targetSpend: 100 })!.spendRatio).toBe(0.25);
+  });
+
+  it("has nothing to scale without last year's spend or this month's target", () => {
+    expect(ctcRecommendation({ ...base, lastYearSpend: 0 })).toBeNull();
+    expect(ctcRecommendation({ ...base, targetSpend: 0 })).toBeNull();
+  });
+
+  it("is raised to what the spend gap needs at the Canon's highest spend per ad, and reports it", () => {
+    const r = ctcRecommendation({ ...base, lastYearAds: 5, gap: 53000 })!;
+    expect(r.raisedBySanity).toBe(true);
+    expect(r.ads).toBe(Math.ceil(53000 / 397));
+    expect(r.fromInputs).toBe(11);
   });
 });

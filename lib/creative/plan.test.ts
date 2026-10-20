@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { defaultSettings } from "../defaults";
-import { emptyTotals } from "../metrics";
 import type { MarketingEvent } from "../planning/events";
 import { DEFAULT_CREATIVE } from "../planning/models";
 import { blankInputs, type PlanMonth, type PlanMonthInputs } from "../planning/types";
-import type { ClientSettings, DailyFact } from "../types";
-import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, yearTable, type CreativeMonth } from "./plan";
+import { computeCreativeMonth, creativeInsights, isStale, launchProgress, lockAll, regenerateCreative, type CreativeMonth } from "./plan";
 import { creativeScore } from "./score";
 import { launchedAd, monthAgg } from "./fixtures";
 import type { CreativeHistory } from "./types";
@@ -195,61 +192,6 @@ describe("launchProgress", () => {
   });
 });
 
-describe("yearTable", () => {
-  const settings: ClientSettings = { ...defaultSettings("c1"), excludeBrandFromAmer: false, excludeMetaReturningFromAmer: false };
-  const fact = (date: string, metaSpend: number, platformRevenue: number, newRevenue: number): DailyFact => {
-    const channels = emptyTotals().channels;
-    channels.meta_acquisition = { spend: metaSpend, platformRevenue, platformPurchases: 1 };
-    return { clientId: "c1", date, grossSales: 0, discounts: 0, netSales: 0, shippingCollected: 0, tax: 0, newOrderRevenue: newRevenue, returningOrderRevenue: 0, newOrders: 1, returningOrders: 0, refunds: 0, cogs: 0, cogsUnmappedSales: 0, emailRevenue: 0, emailCampaignRevenue: 0, emailFlowRevenue: 0, emailOrders: 0, emailSent: 0, channels };
-  };
-  const h = history({ months: [monthAgg("2025-09-01", 1000, 0, 0, { video: 3, image: 2 }), monthAgg("2026-09-01", 2000, 0, 0, { video: 4 })] });
-  const months: PlanMonth[] = Array.from({ length: 12 }, (_, i) => month(`2026-${String(i + 1).padStart(2, "0")}`, null));
-  months[8] = month("2026-09", inputsFor());
-  const blocks = { "2026-09-01": saved({ needed: 40 }), "2026-11-01": saved({ needed: 50 }) };
-  months[10] = month("2026-11", inputsFor({ spend: 100000, amer: 2.5, platformPct: { meta: 100 } }));
-  const t = yearTable({ year: 2026, months, blocks, history: h, facts: [fact("2025-09-10", 1000, 3000, 2500), fact("2026-09-10", 2000, 5000, 5000)], settings, lastData: "2026-09-30" });
-  const sep = t.rows[8];
-  const nov = t.rows[10];
-
-  it("has twelve rows, January first", () => {
-    expect(t.rows).toHaveLength(12);
-    expect(t.rows[0].month).toBe("2026-01-01");
-  });
-
-  it("an elapsed month shows what happened: launches, Meta spend and aMER, next to last year's", () => {
-    expect(sep).toMatchObject({ target: 40, launchedThisYear: 4, launchedLastYear: 5, metaSpendLastYear: 1000, spendThisYear: 2000, spendIsActual: true });
-    expect(sep.amerLastYear).toBeCloseTo(2.5, 10);
-    expect(sep.roasLastYear).toBeCloseTo(3, 10);
-    expect(sep.amerThisYear).toBeCloseTo(2.5, 10);
-  });
-
-  it("a month still to come shows the plan: its Meta spend and aMER", () => {
-    expect(nov).toMatchObject({ target: 50, spendThisYear: 100000, spendIsActual: false, amerThisYear: 2.5 });
-  });
-
-  it("a month with no launches shows 0, not null, and one with no plan has no target", () => {
-    expect(t.rows[0].launchedThisYear).toBe(0);
-    expect(t.rows[0].launchedLastYear).toBe(0);
-    expect(t.rows[0].target).toBeNull();
-  });
-
-  it("the total row adds up the rows", () => {
-    const sum = (f: (r: (typeof t.rows)[number]) => number | null) => t.rows.reduce((a, r) => a + (f(r) ?? 0), 0);
-    expect(t.total.target).toBe(sum((r) => r.target));
-    expect(t.total.target).toBe(90);
-    expect(t.total.launchedThisYear).toBe(sum((r) => r.launchedThisYear));
-    expect(t.total.launchedLastYear).toBe(sum((r) => r.launchedLastYear));
-    expect(t.total.metaSpendLastYear).toBe(sum((r) => r.metaSpendLastYear));
-    expect(t.total.spendThisYear).toBe(sum((r) => r.spendThisYear));
-  });
-
-  it("works with no ad history at all", () => {
-    const none = yearTable({ year: 2026, months, blocks: {}, history: null, facts: [], settings, lastData: "2026-09-30" });
-    expect(none.rows).toHaveLength(12);
-    expect(none.total.launchedThisYear).toBe(0);
-  });
-});
-
 describe("creativeInsights", () => {
   const metrics = { zeroRevenue: 0.5, concentration: 0.2, roasDegradation: -0.05, spendDegradation: -0.2, evergreenShare: 0.4 };
 
@@ -257,7 +199,7 @@ describe("creativeInsights", () => {
     const poor = { score: 40, parts: { zeroRevenue: 10, concentration: 90, roasDegradation: 30, spendDegradation: 40, evergreenShare: 30 }, mode: "provisional" as const };
     const out = creativeInsights(poor, metrics, null);
     expect(out.some((s) => /needs more new ads/i.test(s))).toBe(true);
-    expect(out.some((s) => /no revenue/i.test(s))).toBe(true);
+    expect(out.some((s) => /zero revenue rate/i.test(s))).toBe(true);
     expect(out.length).toBeGreaterThanOrEqual(2);
     expect(out.length).toBeLessThanOrEqual(5);
   });
@@ -293,5 +235,48 @@ describe("creativeInsights", () => {
 describe("creative model settings", () => {
   it("start at a 14-day lead and the calendar rule", () => {
     expect(DEFAULT_CREATIVE).toEqual({ leadDays: 14, momentRule: "calendar" });
+  });
+});
+
+describe("computeCreativeMonth: the CTC Modeling page's four inputs", () => {
+  // September 2025: 80 ads launched at 40,000 non-catalog spend. September 2026 plans 88,000 non-catalog Meta spend (a 2.2x change).
+  const withLastYear = (score: number | null = 50, evergreen: number | null = 0, over: Partial<CreativeHistory> = {}) => ({
+    history: history({ months: [...history().months, monthAgg("2025-09-01", 40000, 0, 0, { video: 50, image: 30 })], ...over }),
+    score,
+    evergreenShare: evergreen,
+  });
+
+  it("is last year's launches x the spend change x the health multiplier x the evergreen carry-forward", () => {
+    const c = compute(withLastYear(50, 0))!;
+    expect(c.basis.method).toBe("ctc");
+    expect(c.basis.ctc).toMatchObject({ lastYearAds: 80, health: 1, carryForward: 1 });
+    expect(c.basis.ctc!.spendRatio).toBeCloseTo(2.2, 10);
+    expect(c.needed).toBe(176);
+    expect(c.basis.modelNeeded).toBe(176);
+  });
+
+  it("a score under 50 asks for more new ads, above 50 for fewer, and evergreen creative carries part of it forward", () => {
+    expect(compute(withLastYear(30, 0))!.needed).toBe(Math.ceil(80 * 2.2 * 1.2 - 1e-9));
+    expect(compute(withLastYear(70, 0))!.needed).toBe(Math.ceil(80 * 2.2 * 0.8 - 1e-9));
+    expect(compute(withLastYear(50, 0.4))!.needed).toBe(Math.ceil(80 * 2.2 * 0.8 - 1e-9));
+  });
+
+  it("is raised when last year's volume is clearly too low for the spend (the page's sanity check) and says so", () => {
+    const c = compute(withLastYear(50, 0, { months: [...history().months, monthAgg("2025-09-01", 40000, 0, 0, { video: 1 })] }))!;
+    expect(c.basis.ctc!.raisedBySanity).toBe(true);
+    expect(c.needed).toBe(Math.ceil((88000 - 50000 * 0.7) / 397 - 1e-9));
+  });
+
+  it("falls back to the Canon arithmetic, and says so, when there is no spend for the month last year", () => {
+    const c = compute({ score: 50, evergreenShare: 0 })!;
+    expect(c.basis.method).toBe("canon");
+    expect(c.basis.ctc).toBeUndefined();
+    expect(c.needed).toBe(177);
+  });
+
+  it("a typed number still replaces the model's", () => {
+    const c = compute({ ...withLastYear(50, 0), overrides: { needed: 12 } })!;
+    expect(c.needed).toBe(12);
+    expect(c.basis.modelNeeded).toBe(176);
   });
 });
