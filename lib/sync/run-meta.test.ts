@@ -89,3 +89,28 @@ describe("syncMeta with the ad-level step", () => {
     expect(state.adStep.mock.calls[0][5]).toBe("catalog, dpa, daba");
   });
 });
+
+describe("syncMeta scopes", () => {
+  it("campaign scope loads spend only and never touches the ad-level step", async () => {
+    const r = await syncMeta("i1", { from: "2026-09-01", to: "2026-09-07" }, { scope: "campaign" });
+    expect(r.rows).toBeGreaterThan(0);
+    expect(state.adStep).not.toHaveBeenCalled();
+    expect(state.updates.filter((u) => u.table === "integrations").map((u) => u.values.status)).toEqual(["connected"]);
+  });
+
+  it("ads scope skips the campaign rows, leaves the connection alone and passes refreshDetails through", async () => {
+    state.adStep.mockResolvedValue({ ads: 2, days: 6 });
+    const r = await syncMeta("i1", { from: "2026-09-01", to: "2026-09-07" }, { scope: "ads", refreshDetails: false });
+    expect(r.rows).toBe(0);
+    expect(state.updates.filter((u) => u.table === "integrations")).toEqual([]);
+    expect(state.adStep.mock.calls[0][6]).toMatchObject({ refreshDetails: false });
+    expect(lastRunMessage()).toContain("Ad-level: 2 ads, 6 ad-days");
+  });
+
+  it("ads scope fails visibly on a permission error instead of reporting a finished load", async () => {
+    state.adStep.mockRejectedValue(new Error("Meta: (#200) Requires ads_read permission"));
+    await expect(syncMeta("i1", { from: "2026-09-01", to: "2026-09-07" }, { scope: "ads" })).rejects.toThrow("ads_read");
+    expect(state.updates.filter((u) => u.table === "integrations")).toEqual([]);
+    expect(state.updates.filter((u) => u.table === "sync_runs").at(-1)!.values.status).toBe("error");
+  });
+});
