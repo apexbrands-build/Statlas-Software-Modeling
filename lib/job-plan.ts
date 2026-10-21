@@ -13,7 +13,11 @@ export interface JobRow {
   total_days: number;
   done_days: number;
   attempts: number;
+  /** What the job pulls: everything, campaign-level spend only, or ad-level data only. Missing = "all". */
+  scope?: JobScope;
 }
+
+export type JobScope = "all" | "campaign" | "ads";
 
 interface Window {
   from: string;
@@ -74,3 +78,25 @@ export function shouldCountFailure(kind: JobRow["kind"]): boolean {
 export function selectToKick(waiting: string[], running: number, max: number = MAX_PARALLEL_JOBS): string[] {
   return waiting.slice(0, Math.max(0, max - running));
 }
+
+/** A chunk that finished in less than this share of its time budget leaves room for a bigger one next time. */
+export const FAST_CHUNK_SHARE = 0.4;
+
+/**
+ * Chunk size for the next chunk. A chunk that had to be halved (timeout) used to stay small for the whole job; now a chunk that finished
+ * without a retry and well inside its budget doubles the size again, up to the provider's maximum. A slow chunk keeps its size, so a heavy
+ * period cannot flip between "too big" and "fits".
+ */
+export function nextChunkDays(current: number, max: number, elapsedMs: number, budgetMs: number, attempts = 0): number {
+  if (current >= max) return max;
+  if (attempts > 0 || elapsedMs > budgetMs * FAST_CHUNK_SHARE) return current;
+  return Math.min(max, current * 2);
+}
+
+/** The ad-level load after a campaign-level history load covers at most this many days (13 months, as the creative model needs). */
+export const ADS_HISTORY_DAYS = 395;
+
+/** A queued job nobody has picked up for this long lost its start signal (the next-chunk call failed); it is started again. */
+export const IDLE_QUEUED_MS = 2 * 60_000;
+/** A running job whose last heartbeat is older than this was cut off (a task lasts at most 5 minutes). */
+export const STALLED_RUNNING_MS = 7 * 60_000;

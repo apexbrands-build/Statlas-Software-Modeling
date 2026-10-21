@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AdInsightRow, AdRow } from "./meta-ads";
+import { mapPool } from "./pool";
 
 // Meta Marketing API (read-only). One agency System User token covers every client ad account it is assigned to.
 const VERSION = process.env.META_API_VERSION ?? "v23.0";
@@ -179,11 +180,15 @@ const AD_FIELDS = "id,name,adset_id,campaign{id,name},effective_status,created_t
 /** Without a status filter the ads edge leaves out archived and deleted ads, whose launch date and format stage 2 needs for history. */
 const ALL_STATUSES = ["ACTIVE", "PAUSED", "DELETED", "ARCHIVED", "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED", "PENDING_BILLING_INFO", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "WITH_ISSUES"];
 
-/** The ads behind the given ids (name, campaign, launch date, status, creative type), looked up 50 ids at a time. Past `deadline` it stops with a TIMEOUT. */
+/** How many Graph calls for ad details run at once. Meta rate-limits per ad account, so this stays small. */
+export const AD_DETAIL_CONCURRENCY = 3;
+
+/** The ads behind the given ids (name, campaign, launch date, status, creative type), looked up 50 ids at a time, a few batches in parallel. Past `deadline` it stops with a TIMEOUT. */
 export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: GraphFn = graph, opts: { deadline?: number; sleep?: Sleep } = {}): Promise<AdRow[]> {
+  const batches: string[][] = [];
+  for (let i = 0; i < adIds.length; i += 50) batches.push(adIds.slice(i, i + 50));
   const out: AdRow[] = [];
-  for (let i = 0; i < adIds.length; i += 50) {
-    const batch = adIds.slice(i, i + 50);
+  await mapPool(batches, AD_DETAIL_CONCURRENCY, async (batch) => {
     if (timedOut(opts.deadline)) throw new Error(TIMEOUT_MESSAGE);
     let page = await callWithRetry(
       () =>
@@ -204,7 +209,6 @@ export async function fetchAds(adAccountId: string, adIds: string[], graphImpl: 
       const next = page.paging.next;
       page = await callWithRetry(() => graphImpl<{ data: AdRow[]; paging?: { next?: string } }>(next), opts);
     }
-  }
+  });
   return out;
 }
-

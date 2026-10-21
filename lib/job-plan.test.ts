@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterChunk, chunkWindow, failureCount, MAX_PARALLEL_JOBS, onChunkError, selectToKick, shouldCountFailure, type JobRow } from "./job-plan";
+import { afterChunk, chunkWindow, failureCount, MAX_PARALLEL_JOBS, nextChunkDays, onChunkError, selectToKick, shouldCountFailure, type JobRow } from "./job-plan";
 
 const job = (over: Partial<JobRow> = {}): JobRow => ({
   id: "j1",
@@ -85,5 +85,18 @@ describe("selectToKick", () => {
     expect(MAX_PARALLEL_JOBS).toBe(10);
     const waiting = Array.from({ length: 12 }, (_, i) => `j${i}`);
     expect(selectToKick(waiting, 0)).toHaveLength(10);
+  });
+});
+
+describe("nextChunkDays", () => {
+  it("doubles a chunk that finished quickly, up to the maximum", () => {
+    expect(nextChunkDays(4, 60, 10_000, 240_000)).toBe(8);
+    expect(nextChunkDays(40, 60, 10_000, 240_000)).toBe(60);
+    expect(nextChunkDays(60, 60, 1_000, 240_000)).toBe(60);
+  });
+
+  it("keeps the size when the chunk was slow or needed a retry", () => {
+    expect(nextChunkDays(8, 60, 200_000, 240_000)).toBe(8);
+    expect(nextChunkDays(8, 60, 5_000, 240_000, 1)).toBe(8);
   });
 });
