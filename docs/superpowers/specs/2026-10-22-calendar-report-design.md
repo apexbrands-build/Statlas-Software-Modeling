@@ -26,7 +26,7 @@ Contribution Margin, ECommerce Revenue, Total Spend, Marketing Efficiency Rating
 | Marker | Source | State |
 |---|---|---|
 | Calendar event | `repo.listEvents` (the Calendar page); a multi-day event marks every day it covers | live |
-| Meta launch | ads whose Meta creation date falls on the day (`meta_ads`, via the creative read functions), grouped by campaign name; catalog ads left out | live once ad-level data is loaded |
+| Meta launch | ads whose Meta creation date falls on the day, read from `meta_ads` (`campaign_name`, `created_at`), one entry per distinct campaign per day; catalog ads left out | live once ad-level data is loaded |
 | Email or SMS send | a `MarketingAction` source for Klaviyo and Postscript sends (name = campaign name), added with the messaging sync | later |
 
 All sources produce one shape: `{ date, type: "event" | "email" | "sms" | "meta", name }`. The report only reads that list, so adding a source never touches the report.
