@@ -1,7 +1,8 @@
-import { addDays, endOfMonth, startOfMonth, todayLocal } from "../dates";
+import { addDays, endOfMonth, startOfMonth, todayLocal, type Range } from "../dates";
 import { normalizeQuery, type CreativePage, type CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import { isMissingFunction, mapAdRow, mapFormatRow } from "../creative/map-rows";
+import { mapMetaLaunches, type MetaAdRow, type MetaLaunch } from "./meta-launches";
 import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
@@ -215,6 +216,21 @@ export class SupabaseRepository implements Repository {
     ]);
     if (!ads || !days) return null;
     return { ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay) };
+  }
+
+  async getMetaLaunches(clientId: string, range: Range): Promise<MetaLaunch[] | undefined> {
+    const { data, error } = await this.db
+      .from("meta_ads")
+      .select("campaign_name,created_at,is_catalog")
+      .eq("client_id", clientId)
+      .gte("created_at", `${range.from}T00:00:00Z`)
+      .lte("created_at", `${range.to}T23:59:59Z`)
+      .limit(5000);
+    if (error) {
+      if (isMissingFunction(error) || /meta_ads|relation|schema cache/i.test(error.message)) return undefined;
+      throw new Error(error.message);
+    }
+    return mapMetaLaunches((data ?? []) as MetaAdRow[]);
   }
 
   async getLastAdDate(clientId: string): Promise<string | null | undefined> {

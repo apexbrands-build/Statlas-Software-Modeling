@@ -1,4 +1,5 @@
-import { addDays, dayOfWeek, diffDays, eachDay, todayLocal } from "../dates";
+import { addDays, dayOfWeek, diffDays, eachDay, todayLocal, type Range } from "../dates";
+import { demoMetaLaunches, type MetaLaunch } from "./meta-launches";
 import { aggregateAds, aggregateFormats, type CreativePage, type CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import { demoAdRows, demoCreativeHistory, demoCreativeMonth } from "../creative/demo";
@@ -428,6 +429,10 @@ export class SeedRepository implements Repository {
 
   async getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null> {
     return demoCreativeMonth(clientId, month, asOf);
+  }
+
+  async getMetaLaunches(_clientId: string, range: Range): Promise<MetaLaunch[] | undefined> {
+    return demoMetaLaunches(range);
   }
 
   /** Demo ads end on the last data day, like the rest of the demo data. */
