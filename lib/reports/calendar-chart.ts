@@ -29,3 +29,9 @@ export function chartSeries(rows: CalendarRow[], keys: string[]): ChartSeries[] 
   }
   return out;
 }
+
+/** Where the solid line ends and the dashed (projected) one starts, for `n` days whose first projected day is `firstProj` (-1 = none). A range wholly in the future is all dashed. */
+export function splitProjection(n: number, firstProj: number): { solidTo: number; dashedFrom: number | null } {
+  if (firstProj < 0) return { solidTo: n - 1, dashedFrom: null };
+  return { solidTo: firstProj - 1, dashedFrom: Math.max(0, firstProj - 1) };
+}

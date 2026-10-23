@@ -31,21 +31,27 @@ export function CalendarTable({ rows, total, specs, state, currency }: { rows: C
   const fmt = (spec: MetricSpec, v: number | null) => (v === null ? "–" : formatValue(v, spec.format, currency));
   const sticky = "sticky z-10 bg-surface";
 
+  const show = (el: HTMLElement, row: CalendarRow, g: { type: keyof typeof ACTION_META; names: string[] }) => {
+    const b = el.getBoundingClientRect();
+    setHover({ x: b.right + 8, y: b.top, title: `${ACTION_META[g.type].label}${g.names.length > 1 ? "s" : ""} · ${row.label}`, names: g.names });
+  };
+
   const actionsCell = (row: CalendarRow) => (
     <div className="flex items-center gap-2">
       {groupByType(row.actions).map((g) => (
-        <span
+        <button
+          type="button"
           key={g.type}
-          className="inline-flex cursor-default flex-col items-center leading-none"
-          onMouseEnter={(e) => {
-            const b = e.currentTarget.getBoundingClientRect();
-            setHover({ x: b.right + 8, y: b.top, title: `${ACTION_META[g.type].label}${g.names.length > 1 ? "s" : ""} · ${row.label}`, names: g.names });
-          }}
+          aria-label={`${ACTION_META[g.type].label}${g.names.length > 1 ? "s" : ""}, ${row.label}: ${g.names.join("; ")}`}
+          className="inline-flex cursor-default flex-col items-center rounded leading-none outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          onMouseEnter={(e) => show(e.currentTarget, row, g)}
+          onFocus={(e) => show(e.currentTarget, row, g)}
           onMouseLeave={() => setHover(null)}
+          onBlur={() => setHover(null)}
         >
           <ActionIcon type={g.type} />
           <em className="mt-0.5 text-[9px] not-italic text-text-faint">{g.names.length}</em>
-        </span>
+        </button>
       ))}
     </div>
   );

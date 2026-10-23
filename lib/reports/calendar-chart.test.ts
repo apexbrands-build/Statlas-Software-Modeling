@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CalendarCell, CalendarRow } from "./calendar";
-import { chartSeries } from "./calendar-chart";
+import { chartSeries, splitProjection } from "./calendar-chart";
 
 const cell = (actual: number | null, goal: number | null = null): CalendarCell => ({ actual, goal, tone: "neutral", diff: null });
 const row = (date: string, cells: Record<string, CalendarCell>): CalendarRow => ({ date, label: date, projected: false, actions: [], cells });
@@ -31,5 +31,17 @@ describe("chartSeries", () => {
   it("skips unknown keys and keeps the order asked for", () => {
     expect(chartSeries(rows, ["nope", "rev", "cm"]).map((s) => s.key)).toEqual(["rev", "cm"]);
     expect(chartSeries([], ["cm"])[0].values).toEqual([]);
+  });
+});
+
+describe("splitProjection", () => {
+  it("no projected day: all solid, nothing dashed", () => {
+    expect(splitProjection(5, -1)).toEqual({ solidTo: 4, dashedFrom: null });
+  });
+  it("projection from the middle: solid up to the last actual day, dashed joins from it", () => {
+    expect(splitProjection(5, 3)).toEqual({ solidTo: 2, dashedFrom: 2 });
+  });
+  it("a range entirely in the future: nothing solid, everything dashed", () => {
+    expect(splitProjection(5, 0)).toEqual({ solidTo: -1, dashedFrom: 0 });
   });
 });

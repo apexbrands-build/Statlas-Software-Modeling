@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { formatValue } from "@/lib/format";
 import type { CalendarRow } from "@/lib/reports/calendar";
 import { groupByType } from "@/lib/reports/calendar-actions";
-import type { ChartSeries } from "@/lib/reports/calendar-chart";
+import { splitProjection, type ChartSeries } from "@/lib/reports/calendar-chart";
 import type { Currency } from "@/lib/types";
 import { ACTION_META, ActionIcon } from "./calendar-icons";
 
@@ -27,7 +27,7 @@ export function CalendarChart({ rows, series, currency }: { rows: CalendarRow[];
   const X = (i: number) => PAD.l + (n === 1 ? 0 : (i / (n - 1)) * (W - PAD.l - PAD.r));
   const plotH = PLOT_BOTTOM - PAD.t;
   const firstProj = rows.findIndex((r) => r.projected);
-  const last = firstProj < 0 ? n - 1 : firstProj - 1;
+  const { solidTo: last, dashedFrom } = splitProjection(n, firstProj);
   const path = (vals: (number | null)[], s: ChartSeries, from: number, to: number) => {
     let d = "";
     for (let i = from; i <= to; i++) {
@@ -70,14 +70,14 @@ export function CalendarChart({ rows, series, currency }: { rows: CalendarRow[];
           const day = Number(r.date.slice(8, 10));
           return n <= 40 ? (day % 5 === 1 || i === n - 1 ? <text key={r.date} x={X(i)} y={PLOT_BOTTOM + 16} textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.6}>{r.date.slice(5, 7) + "/" + r.date.slice(8, 10)}</text> : null) : day === 1 ? <text key={r.date} x={X(i)} y={PLOT_BOTTOM + 16} textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.6}>{r.date.slice(0, 7)}</text> : null;
         })}
-        {firstProj > 0 && <rect x={X(firstProj - 0.5)} y={PAD.t} width={W - PAD.r - X(firstProj - 0.5)} height={plotH} fill="currentColor" opacity={0.04} />}
+        {firstProj >= 0 && <rect x={X(firstProj - 0.5)} y={PAD.t} width={W - PAD.r - X(firstProj - 0.5)} height={plotH} fill="currentColor" opacity={0.04} />}
         {series.map((s, si) => {
           const color = SERIES_COLORS[si % SERIES_COLORS.length];
           return (
             <g key={s.key}>
               {si === 0 && <path d={path(s.goals, s, 0, n - 1)} fill="none" stroke="#fbbf24" strokeWidth={1.4} strokeDasharray="2 4" opacity={0.8} />}
               <path d={path(s.values, s, 0, last)} fill="none" stroke={color} strokeWidth={2.2} strokeLinejoin="round" />
-              {firstProj > 0 && <path d={path(s.values, s, firstProj - 1, n - 1)} fill="none" stroke={color} strokeWidth={2} strokeDasharray="5 4" opacity={0.8} />}
+              {dashedFrom !== null && <path d={path(s.values, s, dashedFrom, n - 1)} fill="none" stroke={color} strokeWidth={2} strokeDasharray="5 4" opacity={0.8} />}
             </g>
           );
         })}

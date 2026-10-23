@@ -62,6 +62,13 @@ export function CalendarReport() {
     };
   }, [client, range]);
 
+  useEffect(() => {
+    if (!presets) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPresets(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [presets]);
+
   const shown = useMemo(() => CALENDAR_SPECS.filter((s) => state.cols.includes(s.key)), [state.cols]);
   // Rows carry every column and every graph item, so the chart can plot a metric the table does not show.
   const needed = useMemo(() => CALENDAR_SPECS.filter((s) => state.cols.includes(s.key) || state.graph.includes(s.key)), [state.cols, state.graph]);
@@ -146,6 +153,7 @@ export function CalendarReport() {
             {CALENDAR_PRESETS.map((p) => (
               <div key={p.id} className="grid grid-cols-[150px_1fr] items-center gap-3 text-xs text-text-muted">
                 <button
+                  autoFocus={p.id === "all"}
                   className="rounded-lg border border-border bg-surface px-3 py-1.5 text-left text-sm text-text hover:border-accent"
                   onClick={() => {
                     setState((s) => applyPreset(s, p.id));

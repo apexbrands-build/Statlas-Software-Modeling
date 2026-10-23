@@ -12,12 +12,25 @@ export interface MetaAdRow {
   is_catalog: boolean | null;
 }
 
-export function mapMetaLaunches(rows: MetaAdRow[]): MetaLaunch[] {
+/** The calendar day of a timestamp in a time zone (the store's day, like the creative read functions use), as YYYY-MM-DD. */
+function dayIn(timestamp: string, timeZone: string): string | null {
+  const t = new Date(timestamp);
+  if (Number.isNaN(t.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(t);
+  } catch {
+    return timestamp.slice(0, 10);
+  }
+}
+
+/** Launches by the store's day: a campaign created at 19:00 Pacific on Jan 6 is a Jan 6 launch although its UTC timestamp says Jan 7. Days outside `range` are dropped. */
+export function mapMetaLaunches(rows: MetaAdRow[], timeZone = "UTC", range?: Range): MetaLaunch[] {
   const seen = new Set<string>();
   const out: MetaLaunch[] = [];
   for (const r of rows) {
     if (r.is_catalog || !r.created_at) continue;
-    const date = r.created_at.slice(0, 10);
+    const date = dayIn(r.created_at, timeZone);
+    if (!date || (range && (date < range.from || date > range.to))) continue;
     const campaign = r.campaign_name?.trim() || "Unnamed campaign";
     const key = `${date}|${campaign}`;
     if (seen.has(key)) continue;
