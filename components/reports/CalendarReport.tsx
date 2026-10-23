@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CalendarChart } from "./CalendarChart";
 import { CalendarTable } from "./CalendarTable";
 import { Empty, Loading, ReportFrame, selectClass, useReportRange } from "./ReportFrame";
 import { useApp } from "@/lib/app-context";
 import { useDashboardData } from "@/lib/dashboard-data";
 import { buildCalendarRows } from "@/lib/reports/calendar";
 import { eventActions, metaLaunchActions, type MarketingAction } from "@/lib/reports/calendar-actions";
+import { chartSeries } from "@/lib/reports/calendar-chart";
 import { CALENDAR_PRESETS, CALENDAR_SPECS } from "@/lib/reports/calendar-specs";
 import { applyPreset, DEFAULT_VIEW, readViewState, type CalendarViewState } from "@/lib/reports/calendar-view";
 import { getRepository } from "@/lib/repository";
@@ -61,10 +63,13 @@ export function CalendarReport() {
   }, [client, range]);
 
   const shown = useMemo(() => CALENDAR_SPECS.filter((s) => state.cols.includes(s.key)), [state.cols]);
+  // Rows carry every column and every graph item, so the chart can plot a metric the table does not show.
+  const needed = useMemo(() => CALENDAR_SPECS.filter((s) => state.cols.includes(s.key) || state.graph.includes(s.key)), [state.cols, state.graph]);
   const built = useMemo(() => {
     if (!data) return null;
-    return buildCalendarRows({ data, specs: shown, actions, showProjection: state.projection });
-  }, [data, shown, actions, state.projection]);
+    return buildCalendarRows({ data, specs: needed, actions, showProjection: state.projection });
+  }, [data, needed, actions, state.projection]);
+  const series = useMemo(() => (built ? chartSeries(built.rows, state.graph) : []), [built, state.graph]);
 
   // Without a plan there is nothing to compare with: goal columns, deltas and heat go away rather than showing dashes.
   const view: CalendarViewState = data && !data.hasPlan ? { ...state, goals: "hide", heat: false, deltas: false } : state;
@@ -92,6 +97,17 @@ export function CalendarReport() {
               ))}
             </div>
           </details>
+          <details className="relative">
+            <summary className={`${selectClass} cursor-pointer list-none`}>Graph items: {state.graph.length === 0 ? "None" : `${CALENDAR_SPECS.find((x) => x.key === state.graph[0])?.label ?? ""}${state.graph.length > 1 ? ` +${state.graph.length - 1}` : ""}`}</summary>
+            <div className="absolute right-0 z-30 mt-1 max-h-80 w-64 overflow-auto rounded-lg border border-border bg-surface-raised p-2 text-sm">
+              {CALENDAR_SPECS.map((s) => (
+                <label key={s.key} className="flex items-center gap-2 px-2 py-1">
+                  <input type="checkbox" checked={state.graph.includes(s.key)} onChange={() => set({ graph: state.graph.includes(s.key) ? state.graph.filter((k) => k !== s.key) : [...state.graph, s.key] })} />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+          </details>
           <label className="flex items-center gap-2 text-sm text-text-muted">
             <input type="checkbox" checked={state.projection} onChange={(e) => set({ projection: e.target.checked })} /> Projection
           </label>
@@ -100,6 +116,9 @@ export function CalendarReport() {
           </button>
           <button className={toggleClass(state.deltas)} aria-pressed={state.deltas} onClick={() => set({ deltas: !state.deltas })}>
             Deltas
+          </button>
+          <button className={toggleClass(state.chart)} aria-pressed={state.chart} onClick={() => set({ chart: !state.chart })}>
+            Chart
           </button>
         </>
       }
@@ -111,6 +130,11 @@ export function CalendarReport() {
       ) : (
         <>
           <p className="text-xs text-text-muted">{data?.hasPlan ? `Goals from plan “${data.planName}”, counted for the days with data only. Future days show the plan as the projection.` : "No plan for this client: showing actuals only."}</p>
+          {state.chart && (
+            <section className="rounded-xl border border-border bg-surface p-4" aria-label="Chart">
+              <CalendarChart rows={built.rows} series={series} currency={client.currency} />
+            </section>
+          )}
           <CalendarTable rows={built.rows} total={built.total} specs={shown} state={view} currency={client.currency} />
         </>
       )}
