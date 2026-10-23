@@ -18,7 +18,7 @@ describe("report registry", () => {
   });
 
   it("marks the four new reports and the existing ones ready", () => {
-    for (const slug of ["contribution-margin", "revenue-overview", "new-vs-returning", "aov-histogram", "mer", "pnl", "ads", "first-product"]) expect(status(slug)).toBe("ready");
+    for (const slug of ["contribution-margin", "revenue-overview", "new-vs-returning", "aov-histogram", "mer", "pnl", "ads", "first-product", "calendar"]) expect(status(slug)).toBe("ready");
   });
 
   it("lists Best Creatives, ready, in the Recommended and Visitor groups, right after Paid Media Overview", () => {
@@ -31,7 +31,7 @@ describe("report registry", () => {
   });
 
   it("marks reports without a page as planned", () => {
-    for (const slug of ["facebook-tracker", "google-tracker", "total-net-customer", "variable-costs", "calendar", "ltv-dashboard", "revenue-over-time", "net-active-customers"]) expect(status(slug)).toBe("planned");
+    for (const slug of ["facebook-tracker", "google-tracker", "total-net-customer", "variable-costs", "ltv-dashboard", "revenue-over-time", "net-active-customers"]) expect(status(slug)).toBe("planned");
   });
 
   it("keeps reports that wait for a data source as waiting", () => {
