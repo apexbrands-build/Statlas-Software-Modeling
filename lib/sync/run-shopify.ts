@@ -80,7 +80,7 @@ export async function syncShopify(integrationId: string, opts: ShopifySyncOption
     // 2) Orders in the window (one day of overlap on each side covers timezone edges)
     const a = addDays(range.from, -1);
     const b = addDays(range.to, 1);
-    const search = includeUpdated ? `created_at:>=${a} OR updated_at:>=${a}` : `created_at:>=${a} AND created_at:<=${b}`;
+    const search = includeUpdated ? `created_at:>=${a} OR updated_at:>=${a} OR processed_at:>=${a}` : `(created_at:>=${a} AND created_at:<=${b}) OR (processed_at:>=${a} AND processed_at:<=${b})`;
     const devStore = await fetchIsDevStore(shop, token);
     const { orders: fetched, approximateNewReturning } = await fetchOrders(shop, token, search, opts.deadline, devStore);
 
