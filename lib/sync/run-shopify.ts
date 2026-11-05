@@ -2,7 +2,8 @@ import "server-only";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { freshTokens, saveInstallTokens, type ShopifyTokens } from "@/lib/shopify-installs";
 import { getAdminClient } from "@/lib/supabase/server";
-import { fetchGrantedScopes, fetchOrders, fetchVariantCosts } from "./shopify";
+import { isDtcChannel } from "./dtc";
+import { fetchGrantedScopes, fetchIsDevStore, fetchOrders, fetchVariantCosts } from "./shopify";
 import { resolveRange, type SyncRange } from "./range";
 
 const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
@@ -80,7 +81,8 @@ export async function syncShopify(integrationId: string, opts: ShopifySyncOption
     const a = addDays(range.from, -1);
     const b = addDays(range.to, 1);
     const search = includeUpdated ? `created_at:>=${a} OR updated_at:>=${a}` : `created_at:>=${a} AND created_at:<=${b}`;
-    const { orders: fetched, approximateNewReturning } = await fetchOrders(shop, token, search, opts.deadline);
+    const devStore = await fetchIsDevStore(shop, token);
+    const { orders: fetched, approximateNewReturning } = await fetchOrders(shop, token, search, opts.deadline, devStore);
 
     let lineSales = 0;
     let unmappedSales = 0;
@@ -117,7 +119,7 @@ export async function syncShopify(integrationId: string, opts: ShopifySyncOption
         cogs: round(cogs),
         cogs_unmapped_sales: round(unmapped),
         is_first_order: false, // set by recompute_first_orders below
-        is_dtc: dtc.has(o.channel.toLowerCase()) && !o.tags.some((t) => excludedTags.has(t.toLowerCase())),
+        is_dtc: isDtcChannel(o.channel, dtc, devStore) && !o.tags.some((t) => excludedTags.has(t.toLowerCase())),
       };
     });
     for (let i = 0; i < orderRows.length; i += 500) {
