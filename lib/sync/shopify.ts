@@ -9,6 +9,7 @@ interface Money {
 interface OrderNode {
   id: string;
   createdAt: string;
+  processedAt: string | null;
   cancelledAt: string | null;
   test: boolean;
   tags: string[];
@@ -33,7 +34,7 @@ const num = (m: Money | undefined) => Number(m?.shopMoney.amount ?? 0);
 export const numericId = (gid: string) => gid.split("/").pop() ?? gid;
 
 const orderFields = (withCustomerCount: boolean) => `
-  id createdAt cancelledAt test tags sourceName
+  id createdAt processedAt cancelledAt test tags sourceName
   channelInformation { channelDefinition { channelName } }
   customer { id ${withCustomerCount ? "numberOfOrders" : ""} }
   totalPriceSet { shopMoney { amount } }
@@ -143,7 +144,8 @@ export async function fetchOrders(shop: string, token: string, searchQuery: stri
         orderId: numericId(o.id),
         customerId: o.customer ? numericId(o.customer.id) : null,
         customerLifetimeOrders: o.customer?.numberOfOrders !== undefined ? Number(o.customer.numberOfOrders) : null,
-        createdAt: o.createdAt,
+        // The order's own date: processedAt is the backdated time on imported orders (what Shopify's admin and reports show); createdAt would be the import time.
+        createdAt: o.processedAt ?? o.createdAt,
         channel,
         tags: o.tags,
         // Tax-inclusive stores already have tax inside the subtotal, so it is not added twice.
