@@ -111,7 +111,7 @@ const SOURCE_TO_CHANNEL: Record<string, string> = {
 };
 
 /** Orders matching a Shopify search query. Without the read_all_orders scope Shopify only exposes the last 60 days. */
-export async function fetchOrders(shop: string, token: string, searchQuery: string, deadline?: number): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean }> {
+export async function fetchOrders(shop: string, token: string, searchQuery: string, deadline?: number, includeTest = false): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean }> {
   const out: RawOrder[] = [];
   let withCount = true;
   let approximate = false;
@@ -133,7 +133,8 @@ export async function fetchOrders(shop: string, token: string, searchQuery: stri
       throw e;
     }
     for (const o of data.orders.nodes) {
-      if (o.test || o.cancelledAt) continue;
+      // Test orders are real data on a partner development store (a reviewer's orders are all flagged test); on a live store they are skipped.
+      if ((o.test && !includeTest) || o.cancelledAt) continue;
       const channel = o.channelInformation?.channelDefinition?.channelName ?? SOURCE_TO_CHANNEL[o.sourceName ?? ""] ?? o.sourceName ?? "Unknown";
       const subtotal = num(o.subtotalPriceSet);
       const shipping = num(o.totalShippingPriceSet);
@@ -172,4 +173,14 @@ export async function fetchOrders(shop: string, token: string, searchQuery: stri
 export async function fetchGrantedScopes(shop: string, token: string): Promise<string[]> {
   const data = await shopifyGraphql<{ currentAppInstallation: { accessScopes: { handle: string }[] } }>(shop, token, "{ currentAppInstallation { accessScopes { handle } } }");
   return data.currentAppInstallation.accessScopes.map((s) => s.handle);
+}
+
+/** True for a partner development store (the kind app reviewers and agencies test on). */
+export async function fetchIsDevStore(shop: string, token: string): Promise<boolean> {
+  try {
+    const data = await shopifyGraphql<{ shop: { plan: { partnerDevelopment: boolean } | null } }>(shop, token, "{ shop { plan { partnerDevelopment } } }");
+    return Boolean(data.shop.plan?.partnerDevelopment);
+  } catch {
+    return false;
+  }
 }
