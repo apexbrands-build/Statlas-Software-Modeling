@@ -16,7 +16,7 @@ type Row = Record<string, unknown>;
 const pk = (table: string, r: Row) => (table === "meta_ads" ? `${r.client_id}|${r.ad_id}` : `${r.client_id}|${r.ad_id}|${r.date}`);
 
 /** A small stateful stand-in for the two tables: enforces the primary key like Postgres and applies delete filters. */
-function fakeAdmin(o: { missingTables?: boolean; failInsertAt?: number; rpcError?: string } = {}) {
+function fakeAdmin(o: { missingTables?: boolean; failInsertAt?: number; rpcError?: string; saved?: Row[] } = {}) {
   const log: Rec[] = [];
   const rpcs: { fn: string; args: Row }[] = [];
   const tables: Record<string, Map<string, Row>> = { meta_ads: new Map(), meta_ad_daily: new Map() };
@@ -26,6 +26,7 @@ function fakeAdmin(o: { missingTables?: boolean; failInsertAt?: number; rpcError
     const b: Record<string, unknown> = {
       select: () => ((rec.op = "select"), b),
       limit: () => b,
+      in: (c: string, v: unknown) => (rec.filters.push(['in', c, v]), b),
       delete: () => ((rec.op = "delete"), b),
       eq: (c: string, v: unknown) => (rec.filters.push(["eq", c, v]), b),
       gte: (c: string, v: unknown) => (rec.filters.push(["gte", c, v]), b),
@@ -56,7 +57,7 @@ function fakeAdmin(o: { missingTables?: boolean; failInsertAt?: number; rpcError
         return Promise.resolve({ error: null });
       },
       then: (resolve: (v: unknown) => unknown) => {
-        if (rec.op === "select") return Promise.resolve({ data: [], error: o.missingTables ? { message: 'relation "meta_ads" does not exist' } : null }).then(resolve);
+        if (rec.op === "select") return Promise.resolve({ data: rec.filters.some(([k]) => k === "in") ? (o.saved ?? []) : [], error: o.missingTables ? { message: 'relation "meta_ads" does not exist' } : null }).then(resolve);
         if (rec.op === "delete") {
           for (const [k, r] of tables[table]) {
             const ok = rec.filters.every(([kind, col, v]) => (kind === "eq" ? r[col] === v : kind === "gte" ? String(r[col]) >= String(v) : String(r[col]) <= String(v)));
@@ -292,5 +293,42 @@ describe("syncMetaAds: failures that must make the runner retry", () => {
     expect(isRetryableAdError(err)).toBe(true);
     expect(err.message).toMatch(/connection reset/);
     expect(tables.meta_ad_daily.size).toBe(500);
+  });
+});
+
+describe("syncMetaAds: history loads are lighter", () => {
+  it("does not look up details again for ads that are already saved with a launch date (refreshDetails false)", async () => {
+    const { admin, log } = fakeAdmin({ saved: [{ ad_id: "a1", created_at: "2026-08-01T00:00:00Z" }] });
+    const fetchAds = vi.fn(adsFor);
+    const r = await syncMetaAds(admin, integration, "2026-09-01", "2026-09-07", ["7d_click"], "catalog", { deps: { fetchAdDays: paged([dayRow("a1", "2026-09-01"), dayRow("a2", "2026-09-01")]), fetchAds } as never, refreshDetails: false });
+    expect(fetchAds.mock.calls[0][1]).toEqual(["a2"]);
+    expect(r.ads).toBe(2);
+    // the saved ad gets no new row at all: neither a full upsert nor a minimal one
+    const written = log.filter((l) => l.table === "meta_ads" && l.op === "upsert").flatMap((l) => l.rows!.map((x) => x.ad_id));
+    expect(written).toEqual(["a2"]);
+  });
+
+  it("still looks up every ad by default (the daily sync keeps names and status current)", async () => {
+    const { admin } = fakeAdmin({ saved: [{ ad_id: "a1", created_at: "2026-08-01T00:00:00Z" }] });
+    const fetchAds = vi.fn(adsFor);
+    await run(admin, { fetchAdDays: paged([dayRow("a1", "2026-09-01"), dayRow("a2", "2026-09-01")]), fetchAds });
+    expect((fetchAds.mock.calls[0] as unknown[])[1]).toEqual(["a1", "a2"]);
+  });
+
+  it("asks Meta for a few 7-day windows at once, not more than three", async () => {
+    const { admin } = fakeAdmin();
+    let inFlight = 0;
+    let peak = 0;
+    const fetchAdDays = async (_a: string, since: string, _u: string, _w: string[], _g: unknown, opts?: { onPage?: (rows: Row[]) => void }) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      opts?.onPage?.([dayRow(`ad-${since}`, since)]);
+      inFlight -= 1;
+      return [];
+    };
+    const r = await syncMetaAds(admin, integration, "2026-09-01", "2026-10-05", ["7d_click"], "catalog", { deps: { fetchAdDays, fetchAds: adsFor } as never });
+    expect(peak).toBe(3);
+    expect(r.days).toBe(5);
   });
 });

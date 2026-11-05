@@ -18,7 +18,8 @@ Build all Recommended reports from Statlas **except** DTC Index, Trend Explorer 
 | Revenue Overview | `revenue-overview` | Built 2026-10-12 (added to the approved scope) |
 | New Vs Returning Overview | `new-vs-returning` | Built 2026-10-12 |
 | AOV Histogram | `aov-histogram` | Built 2026-10-12 (added to the approved scope; database functions in migration 0010, applied) |
-| Total Net Customer, Variable Costs Dashboard, Calendar Report | `total-net-customer`, `variable-costs`, `calendar` | Coming soon (status `planned`, no page yet; Calendar needs plan goals and events) |
+| Total Net Customer, Variable Costs Dashboard | `total-net-customer`, `variable-costs` | Coming soon (status `planned`, no page yet) |
+| Calendar Report | `calendar` | **Built 2026-10-22** (`/reporting/calendar`): day-by-day metrics against plan goals, Marketing Actions column (calendar events and Meta launches now; email and SMS when Klaviyo / Postscript sync), line chart with action markers. Spec and plan: `docs/superpowers/specs/2026-10-22-calendar-report-design.md`. |
 | LTV Dashboard, Revenue Over Time, Net Active Customer Detail | `ltv-dashboard`, `revenue-over-time`, `net-active-customers` | Coming soon (status `planned`; cohort data exists since migration 0007) |
 
 Registry status meanings (`lib/reports/registry.ts`): `ready` = the page is built, `waiting` = page and layout built but the data source is not connected, `planned` = no page yet. A test checks that every `ready` report has a case in `ReportRouter`.
@@ -26,7 +27,7 @@ Registry status meanings (`lib/reports/registry.ts`): `ready` = the page is buil
 
 ## Order of work
 1. Forecasting / planning layer (phases A and B built, see `docs/planning-layer.md`; C/D are the statistical models).
-2. Then Facebook/Google Trackers, Total Net Customer, Variable Costs, Calendar, LTV reports, and the waiting-for-data pages.
+2. Then Facebook/Google Trackers, Total Net Customer, Variable Costs, LTV reports, and the waiting-for-data pages.
 
 ## How reports are built
 - Shared pieces: `components/reports/` (`ReportFrame`, `ReportTable` with heat map + CSV, `MetricGoalReport`, `PnlReport`, `PaidMediaReport`, `WaitingForData`, `ReportRouter` maps slug to page) and pure logic with tests in `lib/reports/` (`grouping`, `metric-spec`, `pnl`, `paid-media`).

@@ -27,6 +27,13 @@ describe("sync registry", () => {
     for (const id of Object.keys(PROVIDERS) as ProviderId[]) expect(PROVIDERS[id].syncs).toBe(id in SYNCS);
   });
 
+  it("passes the job's scope to Meta, and only the daily sync refreshes ad details", async () => {
+    await SYNCS.meta!.sync("i2", range, { kind: "history", deadline: 1, firstChunk: false, scope: "ads" });
+    expect(mocks.syncMeta).toHaveBeenLastCalledWith("i2", range, { deadline: 1, scope: "ads", refreshDetails: false });
+    expect(SYNCS.meta!.adsAfterCampaign).toBe(true);
+    expect(SYNCS.meta!.adsChunkDays).toBe(28);
+  });
+
   it("keeps today's chunk sizes", () => {
     expect(SYNCS.shopify!.chunkDays).toBe(14);
     expect(SYNCS.meta!.chunkDays).toBe(60);
@@ -34,14 +41,14 @@ describe("sync registry", () => {
   });
 
   it("passes the recent-sync options to Shopify", async () => {
-    await SYNCS.shopify!.sync("i1", range, { kind: "recent", deadline: 123, firstChunk: false });
+    await SYNCS.shopify!.sync("i1", range, { kind: "recent", deadline: 123, firstChunk: false, scope: "all" });
     expect(mocks.syncShopify).toHaveBeenCalledWith("i1", { body: range, products: true, includeUpdated: true, deadline: 123 });
   });
 
   it("refreshes products on the first history chunk only", async () => {
-    await SYNCS.shopify!.sync("i1", range, { kind: "history", deadline: 1, firstChunk: false });
+    await SYNCS.shopify!.sync("i1", range, { kind: "history", deadline: 1, firstChunk: false, scope: "all" });
     expect(mocks.syncShopify).toHaveBeenLastCalledWith("i1", { body: range, products: false, includeUpdated: false, deadline: 1 });
-    await SYNCS.shopify!.sync("i1", range, { kind: "history", deadline: 1, firstChunk: true });
+    await SYNCS.shopify!.sync("i1", range, { kind: "history", deadline: 1, firstChunk: true, scope: "all" });
     expect(mocks.syncShopify).toHaveBeenLastCalledWith("i1", { body: range, products: true, includeUpdated: false, deadline: 1 });
   });
 
@@ -51,9 +58,9 @@ describe("sync registry", () => {
   });
 
   it("calls the Meta and Google syncs with the range and has no finalize for them", async () => {
-    await SYNCS.meta!.sync("i2", range, { kind: "recent", deadline: 1, firstChunk: false });
-    await SYNCS.google_ads!.sync("i3", range, { kind: "history", deadline: 1, firstChunk: true });
-    expect(mocks.syncMeta).toHaveBeenCalledWith("i2", range, { deadline: 1 });
+    await SYNCS.meta!.sync("i2", range, { kind: "recent", deadline: 1, firstChunk: false, scope: "all" });
+    await SYNCS.google_ads!.sync("i3", range, { kind: "history", deadline: 1, firstChunk: true, scope: "all" });
+    expect(mocks.syncMeta).toHaveBeenCalledWith("i2", range, { deadline: 1, scope: "all", refreshDetails: true });
     expect(mocks.syncGoogle).toHaveBeenCalledWith("i3", range);
     expect(SYNCS.meta!.finalize).toBeUndefined();
     expect(SYNCS.google_ads!.finalize).toBeUndefined();

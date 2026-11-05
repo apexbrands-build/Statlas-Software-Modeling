@@ -569,7 +569,8 @@ interface Job {
 }
 
 const ACTIVE = ["queued", "running"];
-const isStalled = (j: Job) => ACTIVE.includes(j.status) && Date.now() - new Date(j.heartbeat_at).getTime() > 3 * 60_000;
+// A running chunk can last up to 5 minutes without a heartbeat; a queued job waits for a start signal, so 2 minutes of silence means it was lost.
+const isStalled = (j: Job) => ACTIVE.includes(j.status) && Date.now() - new Date(j.heartbeat_at).getTime() > (j.status === "running" ? 7 : 2) * 60_000;
 
 async function latestJob(integrationId: string): Promise<Job | null> {
   const { data } = await getBrowserClient().from("sync_jobs").select("id,integration_id,status,kind,total_days,done_days,message,heartbeat_at").eq("integration_id", integrationId).order("created_at", { ascending: false }).limit(1);
@@ -595,9 +596,15 @@ function HistoryLoader({ row }: { row: Integration }) {
   // Watch the latest job (polls every 3 seconds while this window is open).
   useEffect(() => {
     let alive = true;
+    let lastResume = 0;
     const tick = async () => {
       const j = await latestJob(row.id);
       if (alive) setJob(j);
+      // While this window is open a job that lost its start signal is restarted by itself (the server also does it, but only when another chunk finishes or the hourly check runs).
+      if (alive && j && isStalled(j) && Date.now() - lastResume > 60_000) {
+        lastResume = Date.now();
+        void fetch("/api/jobs/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: j.id }) }).catch(() => {});
+      }
     };
     void tick();
     const t = setInterval(tick, 3000);

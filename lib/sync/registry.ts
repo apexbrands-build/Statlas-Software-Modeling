@@ -14,11 +14,17 @@ export interface SyncContext {
   /** Epoch ms after which the sync should stop fetching so the runner can retry smaller. */
   deadline: number;
   firstChunk: boolean;
+  /** What this job pulls: everything, campaign-level spend only, or ad-level data only (Meta history loads run campaign first, then ads). */
+  scope: "all" | "campaign" | "ads";
 }
 
 /** The server side of a provider. Browser-safe metadata lives in `lib/providers.ts`. */
 export interface ProviderSync {
   chunkDays: number;
+  /** Chunk size of the ad-level job, when it differs (ad-level data is much heavier per day). */
+  adsChunkDays?: number;
+  /** A history load runs campaign-level first and queues the ad-level load as its own job when it ends. */
+  adsAfterCampaign?: boolean;
   sync(integrationId: string, range: SyncRange, ctx: SyncContext): Promise<void>;
   /** Runs once after the last chunk of a job, over the whole job range. */
   finalize?(integrationId: string, range: SyncRange): Promise<void>;
@@ -47,8 +53,10 @@ export const SYNCS: Partial<Record<ProviderId, ProviderSync>> = {
   },
   meta: {
     chunkDays: 60,
+    adsChunkDays: 28,
+    adsAfterCampaign: true,
     async sync(integrationId, range, ctx) {
-      await syncMeta(integrationId, range, { deadline: ctx.deadline });
+      await syncMeta(integrationId, range, { deadline: ctx.deadline, scope: ctx.scope, refreshDetails: ctx.kind === "recent" });
     },
   },
   google_ads: {

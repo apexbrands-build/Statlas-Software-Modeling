@@ -1,7 +1,8 @@
-import { addDays, endOfMonth, startOfMonth, todayLocal } from "../dates";
+import { addDays, endOfMonth, startOfMonth, todayLocal, type Range } from "../dates";
 import { normalizeQuery, type CreativePage, type CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import { isMissingFunction, mapAdRow, mapFormatRow } from "../creative/map-rows";
+import { mapMetaLaunches, type MetaAdRow, type MetaLaunch } from "./meta-launches";
 import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
@@ -215,6 +216,33 @@ export class SupabaseRepository implements Repository {
     ]);
     if (!ads || !days) return null;
     return { ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay) };
+  }
+
+  async getMetaLaunches(clientId: string, range: Range): Promise<MetaLaunch[] | undefined> {
+    // Launch days are the store's days: read the client's time zone, ask one day wider each side and let the mapper cut to the range.
+    const { data: c } = await this.db.from("clients").select("timezone").eq("id", clientId).maybeSingle();
+    const zone = (c as Row | null)?.timezone ? String((c as Row).timezone) : "UTC";
+    const rows: MetaAdRow[] = [];
+    const PAGE = 1000;
+    for (let page = 0; page < 20; page++) {
+      const { data, error } = await this.db
+        .from("meta_ads")
+        .select("campaign_name,created_at,is_catalog")
+        .eq("client_id", clientId)
+        .gte("created_at", `${addDays(range.from, -1)}T00:00:00Z`)
+        .lte("created_at", `${addDays(range.to, 1)}T23:59:59Z`)
+        .order("created_at", { ascending: true })
+        .order("ad_id", { ascending: true })
+        .range(page * PAGE, page * PAGE + PAGE - 1);
+      if (error) {
+        if (isMissingFunction(error) || /meta_ads|relation|schema cache/i.test(error.message)) return undefined;
+        throw new Error(error.message);
+      }
+      const got = (data ?? []) as MetaAdRow[];
+      rows.push(...got);
+      if (got.length < PAGE) break;
+    }
+    return mapMetaLaunches(rows, zone, range);
   }
 
   async getLastAdDate(clientId: string): Promise<string | null | undefined> {

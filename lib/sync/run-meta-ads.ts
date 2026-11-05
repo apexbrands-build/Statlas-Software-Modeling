@@ -2,9 +2,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays } from "../dates";
 import { fetchAdDays, fetchAds } from "./meta";
+import { mapPool } from "./pool";
 import { isCatalogCampaign, isRetryableAdError, mapAd, mapAdDay, RetryableAdError, type AdInsightRow, type AdRow } from "./meta-ads";
 
 const BATCH = 500;
+/** 7-day ad-level windows asked of Meta at once. */
+export const WINDOW_CONCURRENCY = 3;
 
 export interface AdSyncDeps {
   fetchAdDays: typeof fetchAdDays;
@@ -45,7 +48,7 @@ export async function syncMetaAds(
   until: string,
   windows: string[],
   keywords: string,
-  opts: { deps?: AdSyncDeps; deadline?: number } = {},
+  opts: { deps?: AdSyncDeps; deadline?: number; refreshDetails?: boolean } = {},
 ): Promise<{ ads: number; days: number; note?: string }> {
   const { deadline } = opts;
   const deps = opts.deps ?? { fetchAdDays, fetchAds };
@@ -72,18 +75,30 @@ export async function syncMetaAds(
   };
   // One 7-day window at a time: a long ad-level request is what Meta answers with "temporarily unavailable". Any window failing fails the pull
   // before anything is deleted, so a chunk is never half loaded.
-  for (const [from, to] of sevenDayWindows(since, until)) await deps.fetchAdDays(accountId, from, to, windows, undefined, { deadline, onPage });
+  // A few windows run at once; the first one to fail fails the pull (still before anything is deleted).
+  await mapPool(sevenDayWindows(since, until), WINDOW_CONCURRENCY, ([from, to]) => deps.fetchAdDays(accountId, from, to, windows, undefined, { deadline, onPage }));
   const adIds = [...firstSeen.keys()];
+
+  // Ads already saved with their details (launch date, format) are not looked up again in a history load: the creative lookup is the slowest call.
+  // The daily "recent" sync passes refreshDetails so names and status stay current.
+  const complete = new Set<string>();
+  if (opts.refreshDetails === false) {
+    for (let i = 0; i < adIds.length; i += 200) {
+      const { data } = await admin.from("meta_ads").select("ad_id,created_at").eq("client_id", clientId).in("ad_id", adIds.slice(i, i + 200));
+      for (const r of (data ?? []) as { ad_id: string; created_at: string | null }[]) if (r.created_at) complete.add(String(r.ad_id));
+    }
+  }
+  const toLookUp = adIds.filter((id) => !complete.has(id));
 
   let details: AdRow[] = [];
   try {
-    details = await deps.fetchAds(accountId, adIds, undefined, { deadline });
+    details = await deps.fetchAds(accountId, toLookUp, undefined, { deadline });
   } catch (e) {
     const message = e instanceof Error ? e.message : "error";
     if (isRetryableAdError(e)) throw e;
     notes.push(`Ad details unavailable (${message}); ads stored without launch date or format.`);
   }
-  const known = new Set(details.map((a) => a.id));
+  const known = new Set([...details.map((a) => a.id), ...complete]);
 
   // From here on a failure leaves the window cleared or partly written, so it must make the runner redo the chunk.
   try {

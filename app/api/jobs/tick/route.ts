@@ -1,5 +1,5 @@
 import { after, NextResponse } from "next/server";
-import { createJob, kickRunner, kickWaitingJobs, requeueStalled } from "@/lib/jobs";
+import { createJob, findIdleQueued, kickRunner, kickWaitingJobs, requeueStalled } from "@/lib/jobs";
 import { FAILURE_ALERT_AT } from "@/lib/providers";
 import { getAdminClient } from "@/lib/supabase/server";
 import { syncableProviderIds } from "@/lib/sync/registry";
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   const admin = getAdminClient();
   const now = new Date();
-  const stalled = await requeueStalled();
+  const stalled = [...new Set([...(await requeueStalled()), ...(await findIdleQueued())])];
   const { data: integrations } = await admin.from("integrations").select("id,client_id").in("provider", syncableProviderIds()).in("status", ["connected", "error"]);
   const { data: clients } = await admin.from("clients").select("id,timezone");
   const tzOf = new Map((clients ?? []).map((c) => [c.id as string, c.timezone as string | null]));

@@ -2,6 +2,7 @@
 
 import { AovHistogramReport } from "./AovHistogramReport";
 import { BestCreativesReport } from "./BestCreativesReport";
+import { CalendarReport } from "./CalendarReport";
 import { ContributionMarginReport } from "./ContributionMarginReport";
 import { MetricGoalReport } from "./MetricGoalReport";
 import { NewVsReturningReport } from "./NewVsReturningReport";
@@ -21,6 +22,8 @@ export function ReportRouter({ slug }: { slug: string }) {
   const def = getReport(slug);
   if (!def) return <Empty>Unknown report.</Empty>;
   switch (slug) {
+    case "calendar":
+      return <CalendarReport />;
     case "mer":
       return <MetricGoalReport slug="mer" specs={MER_SPECS} />;
     case "ads":
