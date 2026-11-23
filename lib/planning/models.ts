@@ -1,7 +1,7 @@
 import type { DailyFact, ClientSettings } from "../types";
 import { addDays, endOfMonth } from "../dates";
 import { aggregate, cmParts } from "../metrics";
-import type { CurveKind, OptimizeFor } from "./new-customer";
+import type { CurveKind, OptimizeFor, ValueBasis } from "./new-customer";
 
 /** Where a model number comes from: a recent window of the client's data, a cohort estimate, or typed by hand. */
 export type Source = "last30" | "last90" | "last365" | "recommended" | "manual";
@@ -44,6 +44,8 @@ export interface NewCustomerSettings {
   /** Actualize: days from this date count `recentWeight` times as much. Null = full history, equal weight. */
   actualizeFrom: string | null;
   recentWeight: number;
+  /** What the "Max" markers are picked on. Missing = ".com only"; "blended" adds what the ads create on other sales channels (needs halo factors in Store Settings). */
+  valueBasis?: ValueBasis;
   months: Record<string, NewCustomerMonth>;
 }
 

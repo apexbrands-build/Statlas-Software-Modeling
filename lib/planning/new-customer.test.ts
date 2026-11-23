@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "../dates";
-import { buildSpendTable, curveAmer, curveMarginal, evaluateSpend, fitNewCustomerModel, interpolate90, niceStep, optimalSpend, type Curve, type DayPoint, type ModelSettings } from "./new-customer";
+import { buildSpendTable, curveAmer, curveMarginal, evaluateSpend, fitNewCustomerModel, interpolate90, niceStep, optimalSpend, type Curve, type DayPoint, type HaloInput, type ModelSettings } from "./new-customer";
 
 const settings: ModelSettings = {
   newCostPct: 26,
@@ -192,5 +192,71 @@ describe("90-day payback window", () => {
   it("leaves a point out of the 90-day marker when it is below the minimum 90-day CM", () => {
     const t = buildSpendTable(curve, { ...settings, ltv90Multiplier: 1.18, minCm90: 1e12 }, 30, 400000, 5000);
     expect(t.best.cm90).toBeNull();
+  });
+});
+
+describe("halo: the blended value basis", () => {
+  const flat: Curve = { kind: "revenue", a: 0, b: 2, r2: 1 };
+  const s: ModelSettings = { newCostPct: 40, returningCostPct: 40, aov: 50, ltv60Multiplier: 1, ltv90Multiplier: 1, ltv365Multiplier: 1, overModelPct: 0, minCm: 0, minCm60: 0, minCm365: 0, minCm90: 0 };
+  const halo: HaloInput = { share: { amazon: 0.1 }, value: { amazon: { costPct: 65, aov: 30, ltv60: 1, ltv90: 1, ltv365: 1.5 } } };
+
+  it("adds the halo revenue at the other channel's own margin and order value", () => {
+    const p = evaluateSpend(flat, s, 30000, 30, 1, halo);
+    expect(p.newRevenue).toBe(60000);
+    expect(p.cm).toBe(6000);
+    expect(p.haloRevenue).toBeCloseTo(6000, 6);
+    expect(p.haloByChannel.amazon).toBeCloseTo(6000, 6);
+    expect(p.blendedAmer).toBeCloseTo(2.2, 10);
+    expect(p.blendedCm).toBeCloseTo(8100, 6);
+    expect(p.blendedOrders).toBeCloseTo(1400, 6);
+    expect(p.blendedCac).toBeCloseTo(21.4286, 3);
+  });
+  it("counts the other channel's repeat value in the long-term margin", () => {
+    const p = evaluateSpend(flat, s, 30000, 30, 1, halo);
+    expect(p.blendedLtv60Cm).toBeCloseTo(8100, 6);
+    expect(p.blendedLtv365Cm).toBeCloseTo(9150, 6);
+  });
+  it("equals the .com numbers when there is no halo", () => {
+    const p = evaluateSpend(flat, s, 30000, 30);
+    expect(p.haloRevenue).toBe(0);
+    expect(p.haloByChannel).toEqual({});
+    expect(p.blendedAmer).toBe(p.amer);
+    expect(p.blendedCm).toBe(p.cm);
+    expect(p.blendedLtv60Cm).toBe(p.ltv60Cm);
+    expect(p.blendedLtv90Cm).toBe(p.ltv90Cm);
+    expect(p.blendedLtv365Cm).toBe(p.ltv365Cm);
+    expect(p.blendedOrders).toBe(p.orders);
+    expect(p.blendedCac).toBe(p.cac);
+  });
+  it("adds no orders, and does not divide by zero, for a channel with no order value", () => {
+    const p = evaluateSpend(flat, s, 30000, 30, 1, { share: { amazon: 0.1 }, value: { amazon: { costPct: 65, aov: 0, ltv60: 1, ltv90: 1, ltv365: 1 } } });
+    expect(p.blendedOrders).toBe(p.orders);
+    expect(Number.isFinite(p.blendedCac)).toBe(true);
+  });
+  it("ignores a halo share that has no value settings", () => {
+    const p = evaluateSpend(flat, s, 30000, 30, 1, { share: { gone: 0.5 }, value: {} });
+    expect(p.haloRevenue).toBe(0);
+    expect(p.blendedCm).toBe(p.cm);
+  });
+
+  const falling: Curve = { kind: "linear", a: 3, b: -0.001, r2: 1 };
+  it("picks a higher spend for Max CM on the blended basis than on .com alone", () => {
+    const com = buildSpendTable(falling, s, 30, 40000, 1000);
+    const blended = buildSpendTable(falling, s, 30, 40000, 1000, 1, undefined, { halo, basis: "blended" });
+    expect(optimalSpend(com, "cm")).toBe(20000);
+    expect(optimalSpend(blended, "cm")).toBe(21000);
+  });
+  it("keeps the .com markers when the halo is shown but the basis is .com", () => {
+    const shown = buildSpendTable(falling, s, 30, 40000, 1000, 1, undefined, { halo, basis: "com" });
+    expect(optimalSpend(shown, "cm")).toBe(20000);
+    expect(shown.points[0].haloRevenue).toBeGreaterThan(0);
+  });
+  it("on the blended basis the revenue marker counts halo revenue and needs blended CM at break-even or better", () => {
+    const com = buildSpendTable(falling, s, 30, 60000, 1000);
+    const blended = buildSpendTable(falling, s, 30, 60000, 1000, 1, undefined, { halo, basis: "blended" });
+    const c = optimalSpend(com, "revenue")!;
+    const b = optimalSpend(blended, "revenue")!;
+    expect(b).toBeGreaterThanOrEqual(c);
+    expect(blended.points.find((p) => p.spend === b)!.blendedCm).toBeGreaterThanOrEqual(0);
   });
 });

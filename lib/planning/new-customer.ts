@@ -304,6 +304,18 @@ export interface ModelSettings {
   minCm90?: number;
 }
 
+/** What the "Max" markers are picked on: .com alone, or .com plus what the ads create on the other sales channels. */
+export type ValueBasis = "com" | "blended";
+
+/**
+ * The halo of a month's ad mix (built by `haloInput` in halo.ts): halo revenue on each other sales channel as a share of .com new
+ * revenue, and what a dollar there is worth (its variable cost %, order value and repeat multipliers).
+ */
+export interface HaloInput {
+  share: Record<string, number>;
+  value: Record<string, { costPct: number; aov: number; ltv60: number; ltv90: number; ltv365: number }>;
+}
+
 export interface SpendPoint {
   spend: number;
   amer: number;
@@ -319,10 +331,23 @@ export interface SpendPoint {
   ltv90Cm: number;
   ltv365Revenue: number;
   ltv365Cm: number;
+  /** Revenue the same ads create on the other sales channels (0 with no halo), in total and per channel. */
+  haloRevenue: number;
+  haloByChannel: Record<string, number>;
+  /** The .com numbers plus the halo, each halo dollar at its own channel's margin, order value and repeat value. Equal to the .com numbers with no halo. */
+  blendedAmer: number;
+  blendedCm: number;
+  blendedLtv60Cm: number;
+  blendedLtv90Cm: number;
+  blendedLtv365Cm: number;
+  blendedOrders: number;
+  blendedCac: number;
 }
 
-/** Everything the model says about one month spending `monthlySpend` (days = days in that month). */
-export function evaluateSpend(curve: Curve, s: ModelSettings, monthlySpend: number, days: number, seasonIdx = 1): SpendPoint {
+const repeatOf = (m: number) => (Number.isFinite(m) && m > 0 ? m : 1);
+
+/** Everything the model says about one month spending `monthlySpend` (days = days in that month). `halo` adds what the ads create on other sales channels. */
+export function evaluateSpend(curve: Curve, s: ModelSettings, monthlySpend: number, days: number, seasonIdx = 1, halo?: HaloInput): SpendPoint {
   const x = monthlySpend / days;
   const over = (1 + s.overModelPct / 100) * seasonIdx;
   const amer = curveAmer(curve, x) * over;
@@ -336,21 +361,55 @@ export function evaluateSpend(curve: Curve, s: ModelSettings, monthlySpend: numb
     const total = ltvRev(mult);
     return newRevenue * (1 - s.newCostPct / 100) + Math.max(0, total - newRevenue) * (1 - s.returningCostPct / 100) - monthlySpend;
   };
+  const haloByChannel: Record<string, number> = {};
+  let haloRevenue = 0;
+  let haloCm = 0;
+  let haloCm60 = 0;
+  let haloCm90 = 0;
+  let haloCm365 = 0;
+  let haloOrders = 0;
+  for (const [k, share] of Object.entries(halo?.share ?? {})) {
+    const v = halo!.value[k];
+    if (!v || !(share > 0)) continue;
+    const rev = newRevenue * share;
+    const margin = 1 - (Number.isFinite(v.costPct) ? v.costPct : 0) / 100;
+    haloByChannel[k] = rev;
+    haloRevenue += rev;
+    haloCm += rev * margin;
+    haloCm60 += rev * repeatOf(v.ltv60) * margin;
+    haloCm90 += rev * repeatOf(v.ltv90) * margin;
+    haloCm365 += rev * repeatOf(v.ltv365) * margin;
+    if (v.aov > 0) haloOrders += rev / v.aov;
+  }
+  const cac = orders > 0 ? monthlySpend / orders : 0;
+  const blendedOrders = orders + haloOrders;
+  const ltv60Cm = ltvCm(s.ltv60Multiplier);
+  const ltv90Cm = ltvCm(m90);
+  const ltv365Cm = ltvCm(s.ltv365Multiplier);
   return {
     spend: monthlySpend,
     amer,
-    cac: orders > 0 ? monthlySpend / orders : 0,
+    cac,
     incAmer,
     incCac: incAmer > 0 && s.aov > 0 ? s.aov / incAmer : 0,
     orders,
     newRevenue,
     cm,
     ltv60Revenue: ltvRev(s.ltv60Multiplier),
-    ltv60Cm: ltvCm(s.ltv60Multiplier),
+    ltv60Cm,
     ltv90Revenue: ltvRev(m90),
-    ltv90Cm: ltvCm(m90),
+    ltv90Cm,
     ltv365Revenue: ltvRev(s.ltv365Multiplier),
-    ltv365Cm: ltvCm(s.ltv365Multiplier),
+    ltv365Cm,
+    haloRevenue,
+    haloByChannel,
+    blendedAmer: haloRevenue > 0 && monthlySpend > 0 ? (newRevenue + haloRevenue) / monthlySpend : amer,
+    blendedCm: cm + haloCm,
+    blendedLtv60Cm: ltv60Cm + haloCm60,
+    blendedLtv90Cm: ltv90Cm + haloCm90,
+    blendedLtv365Cm: ltv365Cm + haloCm365,
+    blendedOrders,
+    blendedCac: haloOrders > 0 ? monthlySpend / blendedOrders : cac,
   };
 }
 
@@ -373,14 +432,16 @@ export function niceStep(raw: number): number {
 
 /** Spend table from `step` up to `maxSpend`, plus the Max CM / 60-day CM / 90-day CM / 1-year CM / Revenue markers. */
 /** `markerMax`: the Max markers are only picked among rows up to this spend (the range the history supports). */
-export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, maxSpend: number, step: number, seasonIdx = 1, markerMax?: number): SpendTable {
+/** `opts.halo` adds the halo columns to every row; `opts.basis` "blended" picks the markers on them (default ".com only"). */
+export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, maxSpend: number, step: number, seasonIdx = 1, markerMax?: number, opts: { halo?: HaloInput; basis?: ValueBasis } = {}): SpendTable {
+  const blended = opts.basis === "blended";
   const points: SpendPoint[] = [];
-  for (let sp = step; sp <= maxSpend + 1e-9; sp += step) points.push(evaluateSpend(curve, s, sp, days, seasonIdx));
+  for (let sp = step; sp <= maxSpend + 1e-9; sp += step) points.push(evaluateSpend(curve, s, sp, days, seasonIdx, opts.halo));
   const pick = (value: (p: SpendPoint) => number, min: number, breakEven = false) => {
     let bi: number | null = null;
     points.forEach((p, i) => {
       if (min > 0 && value(p) < min) return;
-      if (breakEven && p.cm < 0) return;
+      if (breakEven && (blended ? p.blendedCm : p.cm) < 0) return;
       if (markerMax != null && p.spend > markerMax + 1e-9) return;
       if (bi === null || value(p) > value(points[bi])) bi = i;
     });
@@ -389,11 +450,11 @@ export function buildSpendTable(curve: Curve, s: ModelSettings, days: number, ma
   return {
     points,
     best: {
-      cm: pick((p) => p.cm, s.minCm),
-      cm60: pick((p) => p.ltv60Cm, s.minCm60),
-      cm90: pick((p) => p.ltv90Cm, s.minCm90 ?? 0),
-      cm365: pick((p) => p.ltv365Cm, s.minCm365),
-      revenue: pick((p) => p.newRevenue, 0, true),
+      cm: pick((p) => (blended ? p.blendedCm : p.cm), s.minCm),
+      cm60: pick((p) => (blended ? p.blendedLtv60Cm : p.ltv60Cm), s.minCm60),
+      cm90: pick((p) => (blended ? p.blendedLtv90Cm : p.ltv90Cm), s.minCm90 ?? 0),
+      cm365: pick((p) => (blended ? p.blendedLtv365Cm : p.ltv365Cm), s.minCm365),
+      revenue: pick((p) => (blended ? p.newRevenue + p.haloRevenue : p.newRevenue), 0, true),
     },
   };
 }

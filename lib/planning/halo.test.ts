@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import type { ClientSettings, HaloSettings, OtherChannel } from "../types";
-import { acquisitionShares, blendedAmer, cellValue, channelSpendShares, haloMix, haloOf, haloRevenue, haloSettingsOf, totalFactor } from "./halo";
+import { acquisitionShares, blendedAmer, cellValue, channelSpendShares, haloInput, haloMix, haloOf, haloRevenue, haloSettingsOf, totalFactor } from "./halo";
 
 const amazon: OtherChannel = { key: "amazon", label: "Amazon", kind: "marketplace", costPct: 65, aov: 30 };
 const retail: OtherChannel = { key: "retail", label: "Retail", kind: "retail", costPct: 55, aov: 15, netPct: 50 };
@@ -124,5 +124,23 @@ describe("haloMix: nothing to model", () => {
     const alone = haloMix({ google_nonbrand: 1 }, s);
     expect(both.share.amazon).toBeCloseTo(alone.share.amazon, 10);
     expect(both.w).toBeCloseTo(0.75, 10);
+  });
+});
+
+describe("haloInput: what the New Customer model needs from a month's mix", () => {
+  it("carries each channel's share and what a dollar there is worth", () => {
+    const s = settings(halo({ channels: [{ ...amazon, ltv365: 1.5 }] }));
+    const mix = haloMix({ meta_acquisition: 1 }, s);
+    expect(haloInput(mix, s)).toEqual({ share: { amazon: mix.share.amazon }, value: { amazon: { costPct: 65, aov: 30, ltv60: 1, ltv90: 1, ltv365: 1.5 } } });
+  });
+  it("is undefined when there is nothing to model", () => {
+    const s = settings(undefined);
+    expect(haloInput(haloMix({ meta_acquisition: 1 }, s), s)).toBeUndefined();
+  });
+  it("counts an empty or negative cost or order value as zero", () => {
+    const s = settings(halo({ channels: [{ ...amazon, costPct: Number.NaN, aov: -5 }] }));
+    const v = haloInput(haloMix({ meta_acquisition: 1 }, s), s)!.value.amazon;
+    expect(v.costPct).toBe(0);
+    expect(v.aov).toBe(0);
   });
 });

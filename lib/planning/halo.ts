@@ -1,4 +1,5 @@
 import type { ChannelKey, ClientSettings, HaloCell, HaloSettings, OtherChannel } from "../types";
+import type { HaloInput } from "./new-customer";
 import { PLAN_PLATFORMS, type PlanMonthInputs } from "./types";
 
 /**
@@ -135,4 +136,18 @@ export function haloRevenue(newRevenue: number, mix: HaloMix): Record<string, nu
   const out: Record<string, number> = {};
   for (const [k, s] of Object.entries(mix.share)) out[k] = newRevenue * s;
   return out;
+}
+
+const nonNegative = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0);
+const repeat = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 1);
+
+/** A month's mix in the form the New Customer model takes: each channel's halo share and what a dollar there is worth. Undefined when there is nothing to model. */
+export function haloInput(mix: HaloMix, settings: ClientSettings): HaloInput | undefined {
+  if (!mix.modelled) return undefined;
+  const value: HaloInput["value"] = {};
+  for (const c of haloSettingsOf(settings).channels) {
+    if (!(mix.share[c.key] > 0)) continue;
+    value[c.key] = { costPct: nonNegative(c.costPct), aov: nonNegative(c.aov), ltv60: repeat(c.ltv60), ltv90: repeat(c.ltv90), ltv365: repeat(c.ltv365) };
+  }
+  return { share: { ...mix.share }, value };
 }
