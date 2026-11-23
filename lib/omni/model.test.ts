@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "../dates";
-import { fitChannelModel, modelRevenue, trustOf } from "./model";
+import { blankInputs, type PlanMonth, type PlanMonthInputs } from "../planning/types";
+import { fitChannelModel, modelRevenue, planFill, recentAdSpendPace, trustOf } from "./model";
 
 /** `n` days up to 30 June 2027 on the line revenue = 2,000 + 1.8 x ad spend, with spend moving between 300 and 1,250 a day. */
 const series = (n: number, spendOf: (i: number) => number = (i) => 300 + ((i * 37) % 20) * 50) => {
@@ -62,5 +63,77 @@ describe("trustOf", () => {
     expect(trustOf(0.5)).toBe("Good");
     expect(trustOf(0.25)).toBe("Fair");
     expect(trustOf(0.1)).toBe("Low");
+  });
+});
+
+describe("recentAdSpendPace: the channel's own recent ad spend per day", () => {
+  const upTo = (last: string, n: number, spend = 1000) => {
+    const m = new Map<string, { revenue: number; adSpend: number }>();
+    for (let i = 0; i < n; i++) m.set(addDays(last, -i), { revenue: 5000, adSpend: spend });
+    return m;
+  };
+  it("averages over the days that have sales, ending on the channel's own last day", () => {
+    // 37 days of data ending 30 September: the pace is 1,000 a day, not 37,000 spread over 90 days.
+    expect(recentAdSpendPace(upTo("2026-09-30", 37))).toBeCloseTo(1000, 8);
+  });
+  it("uses the last 90 days only", () => {
+    const days = upTo("2026-09-30", 90, 1000);
+    for (let i = 90; i < 200; i++) days.set(addDays("2026-09-30", -i), { revenue: 5000, adSpend: 9999 });
+    expect(recentAdSpendPace(days)).toBeCloseTo(1000, 8);
+  });
+  it("gives no pace on fewer than 28 days, or with no days at all", () => {
+    expect(recentAdSpendPace(upTo("2026-09-30", 27))).toBeNull();
+    expect(recentAdSpendPace(new Map())).toBeNull();
+  });
+});
+
+describe("planFill: writing a channel's forecast into the plan from its model", () => {
+  const model = fitChannelModel(series(200), "2027-06-30")!;
+  const inputs = (over: Partial<PlanMonthInputs> = {}): PlanMonthInputs => ({ ...blankInputs(), spend: 100000, amer: 1.5, ...over });
+  const month = (m: string, i: PlanMonthInputs | null, locked = false): PlanMonth => ({ month: `${m}-01`, inputs: i, status: "in_progress", locked });
+  const months = [
+    month("2027-06", inputs()), // closed: the month ended on the last day with data
+    month("2027-07", inputs({ other: { amazon: { revenue: 50000 } } })), // a forecast typed by hand
+    month("2027-08", inputs({ other: { amazon: { adSpend: 31000 } } })), // planned ad spend typed
+    month("2027-09", inputs()), // nothing typed
+    month("2027-10", inputs(), true), // locked
+    month("2027-11", null), // not started
+  ];
+  const base = { months, channel: "amazon", model, lastData: "2027-06-30", siteDaily: 2000, paceDaily: 1000 as number | null, replaceTyped: false };
+
+  it("fills the open months that have no forecast yet, and leaves a typed one alone", () => {
+    const r = planFill(base);
+    expect(r.filled).toEqual(["2027-08-01", "2027-09-01"]);
+    expect(r.keptTyped).toEqual(["2027-07-01"]);
+    expect(r.lines["2027-07-01"]).toBeUndefined();
+  });
+  it("uses the planned ad spend of the month, and the model's revenue at that spend", () => {
+    const l = planFill(base).lines["2027-08-01"];
+    expect(l.adSpend).toBe(31000);
+    expect(l.revenue).toBe(Math.round(modelRevenue(model, 31000, "2027-08-01")));
+  });
+  it("uses the recent pace for a month with no planned ad spend, and says which", () => {
+    const r = planFill(base);
+    expect(r.paced).toEqual(["2027-09-01"]);
+    expect(r.lines["2027-09-01"].adSpend).toBe(30000);
+  });
+  it("saves the own-site ad spend of the fitted days as the spend the forecast assumed", () => {
+    expect(planFill(base).lines["2027-08-01"].assumedSpend).toBe(62000);
+    expect(planFill(base).lines["2027-09-01"].assumedSpend).toBe(60000);
+  });
+  it("replaces a typed forecast only when asked to", () => {
+    const r = planFill({ ...base, replaceTyped: true });
+    expect(r.filled).toContain("2027-07-01");
+    expect(r.keptTyped).toEqual([]);
+    expect(r.lines["2027-07-01"].revenue).not.toBe(50000);
+  });
+  it("leaves a month empty when there is neither planned ad spend nor a pace", () => {
+    const r = planFill({ ...base, paceDaily: null });
+    expect(r.filled).toEqual(["2027-08-01"]);
+    expect(r.noSpend).toEqual(["2027-09-01"]);
+  });
+  it("never touches closed, locked or unstarted months", () => {
+    const r = planFill({ ...base, replaceTyped: true });
+    expect(Object.keys(r.lines).sort()).toEqual(["2027-07-01", "2027-08-01", "2027-09-01"]);
   });
 });

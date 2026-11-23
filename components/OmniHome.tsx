@@ -73,8 +73,10 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
     );
   };
 
-  const missing = omni.tableMissing && (
-    <p className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">The sales of other channels cannot be loaded yet: their table is not in the database (migration 0021). Forecasts from the plan are shown; actual sales appear once the table is in place and sales are imported.</p>
+  const missing = omni.loadError ? (
+    <p className="rounded-lg border border-bad/40 bg-surface p-3 text-xs text-bad">The sales of other channels could not be loaded just now, so only forecasts are shown. Reload the page to try again.</p>
+  ) : (
+    omni.tableMissing && <p className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">The database is not ready for other channels&apos; sales yet. Forecasts from the plan are shown; actual sales appear once it is and sales are imported.</p>
   );
 
   /* ---------------- whole business ---------------- */
@@ -82,19 +84,22 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
     const b = omni.business;
     const site = omni.site;
     if (!b || !site) return null;
-    const rev = vs(b.revenue, b.plan?.revenue ?? null, money, "plan");
-    const sp = vs(b.spend, b.plan?.spend ?? null, money, "plan");
+    // Each comparison uses the sales the plan covers: a channel's days with no forecast stay in the totals and out of "vs plan".
+    const rev = vs(b.comparable.revenue, b.plan?.revenue ?? null, money, "plan");
+    const sp = vs(b.comparable.spend, b.plan?.spend ?? null, money, "plan");
     const ratio = (v: number | null) => (v === null ? "–" : v.toFixed(2));
-    const mer = vs(b.mer, b.plan?.mer ?? null, ratio, "plan");
-    const cm = vs(b.contribution, b.plan?.contribution ?? null, money, "plan");
+    const mer = vs(b.comparable.mer, b.plan?.mer ?? null, ratio, "plan");
+    const cm = vs(b.comparable.contribution, b.plan?.contribution ?? null, money, "plan");
     // The chart adds the own site's day to every channel's day, for what happened and for the plan.
     const actual = data.dates.map((d, i) => {
       const f = data.facts.get(d);
       const parts = [f && d <= data.effTo ? f.newOrderRevenue + f.returningOrderRevenue : null, ...omni.views.map((v) => v.actual[i] ?? null)].filter((x): x is number => x !== null);
       return parts.length ? parts.reduce((a, x) => a + x, 0) : null;
     });
+    // A channel's forecast joins the plan line only for the days it has sales for (or for days still to come), so a channel loaded
+    // through an earlier day does not make the bars look short of plan.
     const plan = data.dates.map((d, i) => {
-      const parts = [data.plan.get(d)?.orderRevenue ?? null, ...omni.views.map((v) => v.plan[i] ?? null)].filter((x): x is number => x !== null);
+      const parts = [data.plan.get(d)?.orderRevenue ?? null, ...omni.views.map((v) => (d > data.effTo || (v.lastData !== null && d <= v.lastData) ? (v.plan[i] ?? null) : null))].filter((x): x is number => x !== null);
       return parts.length ? parts.reduce((a, x) => a + x, 0) : null;
     });
     const anyCreated = b.rows.some((r) => r.createdByAds !== null);
@@ -104,6 +109,11 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
           {data.range.from} → {data.range.to} · {data.client.name} · Whole business: the own site plus every other sales channel. Each channel is compared with its forecast over the days that have sales loaded.
         </p>
         {missing}
+        {b.uncoveredRevenue > 0.5 && b.plan && (
+          <p className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">
+            {money(b.uncoveredRevenue)} of other channels&apos; sales fall on days the plan has no forecast for. They are in the totals, and left out of every comparison with the plan.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Tile label="Revenue, all channels" value={money(b.revenue)} sub={rev.sub} tone={rev.tone} />
           <Tile label="Ad spend, all channels" value={money(b.spend)} sub={sp.sub} tone={sp.tone} />
@@ -120,6 +130,7 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
                 <th className="px-2 py-2 text-right font-medium">Forecast</th>
                 <th className="px-2 py-2 text-right font-medium">To forecast</th>
                 <th className="px-2 py-2 text-right font-medium">Share of revenue</th>
+                <th className="px-2 py-2 text-right font-medium">Sales through</th>
                 {anyCreated && <th className="px-2 py-2 text-right font-medium">Created by ads*</th>}
               </tr>
             </thead>
@@ -133,6 +144,7 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
                     <td className="px-2 py-1.5 text-right tabular text-text-muted">{r.forecast === null ? "–" : money(r.forecast)}</td>
                     <td className={`px-2 py-1.5 text-right tabular ${TONE[tone]}`}>{r.pct === null ? "–" : formatValue(r.pct, "percent1", cur)}</td>
                     <td className="px-2 py-1.5 text-right tabular text-text-muted">{r.share === null ? "–" : formatValue(r.share, "percent1", cur)}</td>
+                    <td className="px-2 py-1.5 text-right tabular text-text-muted">{r.key === "site" ? data.effTo : (omni.views.find((x) => x.key === r.key)?.lastData ?? "no sales")}</td>
                     {anyCreated && <td className="px-2 py-1.5 text-right tabular text-text-muted">{r.createdByAds === null ? "–" : money(r.createdByAds)}</td>}
                   </tr>
                 );
@@ -141,8 +153,9 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
                 <td className="px-2 py-1.5">Whole business</td>
                 <td className="px-2 py-1.5 text-right tabular">{money(b.revenue)}</td>
                 <td className="px-2 py-1.5 text-right tabular text-text-muted">{b.plan ? money(b.plan.revenue) : "–"}</td>
-                <td className={`px-2 py-1.5 text-right tabular ${TONE[rev.tone]}`}>{b.plan && b.plan.revenue > 0 ? formatValue(b.revenue / b.plan.revenue, "percent1", cur) : "–"}</td>
+                <td className={`px-2 py-1.5 text-right tabular ${TONE[rev.tone]}`}>{b.plan && b.plan.revenue > 0 ? formatValue(b.comparable.revenue / b.plan.revenue, "percent1", cur) : "–"}</td>
                 <td className="px-2 py-1.5 text-right tabular text-text-muted">{formatValue(1, "percent1", cur)}</td>
+                <td />
                 {anyCreated && <td />}
               </tr>
             </tbody>
@@ -166,9 +179,10 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
   /* ---------------- one other channel ---------------- */
   const v: ChannelView | undefined = omni.views.find((x) => x.key === view);
   if (!v) return <p className="rounded-xl border border-border bg-surface p-8 text-center text-text-muted">This sales channel is no longer in Store Settings.</p>;
-  const rev = vs(v.revenue, v.forecastToDate, money, "forecast");
-  const spendVs = vs(v.adSpend, v.planAdSpendToDate !== null && v.planAdSpendToDate > 0 ? v.planAdSpendToDate : null, money, "planned");
-  const cm = vs(v.contribution, v.planContributionToDate, money, "forecast");
+  // Compared over the days that have a forecast: a month the plan has no line for stays in the totals and out of the comparison.
+  const rev = vs(v.comparable?.revenue ?? null, v.comparable ? v.forecastToDate : null, money, "forecast");
+  const spendVs = vs(v.comparable?.adSpend ?? null, v.comparable && v.planAdSpendToDate !== null && v.planAdSpendToDate > 0 ? v.planAdSpendToDate : null, money, "planned");
+  const cm = vs(v.comparable?.contribution ?? null, v.comparable ? v.planContributionToDate : null, money, "forecast");
   const pace = v.forecastFull !== null && v.projected !== null && v.forecastToDate !== null && v.forecastFull - v.forecastToDate > 1 ? `Period forecast ${money(v.forecastFull)} · heading to ${money(v.projected)}` : v.forecastFull !== null && !v.hasData ? `Period forecast ${money(v.forecastFull)}` : null;
   return (
     <div className="space-y-6">
@@ -180,6 +194,11 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
       {!v.hasData && !omni.tableMissing && (
         <p className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">
           No {v.label} sales are loaded for this period. Import them in Store Settings, Edit, &quot;Other sales channels and halo&quot;.{v.forecastFull !== null ? " The forecast from the plan is shown below." : ""}
+        </p>
+      )}
+      {v.forecastFull !== null && v.uncoveredDays > 0 && (
+        <p className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">
+          The plan has a {v.label} forecast for only part of this period: {v.uncoveredDays} day{v.uncoveredDays === 1 ? "" : "s"} with sales {v.uncoveredDays === 1 ? "has" : "have"} none. Those days are in the totals; the comparisons with the forecast use the other days only.
         </p>
       )}
       {v.forecastFull === null && (

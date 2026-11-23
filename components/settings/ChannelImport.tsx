@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatValue } from "@/lib/format";
-import { parseChannelCsv, type DateFormat, type ImportResult } from "@/lib/omni/import";
+import { parseChannelCsv, type DateFormat, type ImportResult, type NumberFormat } from "@/lib/omni/import";
 import { getRepository } from "@/lib/repository";
 import type { Currency, OtherChannel } from "@/lib/types";
 import { inputCls } from "./ui";
@@ -21,10 +21,11 @@ export function ChannelImport({ clientId, channel, currency }: { clientId: strin
   // The dialog passes the store currency as text; anything the formatter does not know is shown in dollars.
   const cur: Currency = currency === "GBP" || currency === "EUR" ? currency : "USD";
   const [format, setFormat] = useState<DateFormat>("ymd");
+  const [numbers, setNumbers] = useState<NumberFormat>("us");
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
-  const parsed: ImportResult | null = file ? parseChannelCsv(file.text, channel.key, format) : null;
+  const parsed: ImportResult | null = file ? parseChannelCsv(file.text, channel.key, format, numbers) : null;
   const money = (v: number) => formatValue(v, "currency0", cur);
   const days = parsed ? new Set(parsed.rows.map((r) => r.date)).size : 0;
 
@@ -46,7 +47,8 @@ export function ChannelImport({ clientId, channel, currency }: { clientId: strin
     <div className="space-y-2 rounded-lg border border-border/60 p-3">
       <div className="text-xs font-semibold text-text">Import {channel.label} sales from a file</div>
       <p className="text-xs text-text-muted">
-        A CSV with one row per day: a <b>date</b> column and a <b>revenue</b> column, plus <b>orders</b>, <b>units</b>, <b>ad spend</b> and <b>retailer</b> when you have them. The days in the file replace what was loaded before for those days.
+        A CSV with one row per day: a <b>date</b> column and a <b>revenue</b> column, plus <b>orders</b>, <b>units</b>, <b>ad spend</b> and <b>retailer</b> when you have them. The days in the file replace what was loaded before for those days; with a retailer column, only for the retailers
+        in the file. Saving here is immediate: it does not wait for Submit.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-xs text-text-muted">
@@ -57,6 +59,13 @@ export function ChannelImport({ clientId, channel, currency }: { clientId: strin
                 {f.label}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-text-muted">
+          Numbers are written as
+          <select aria-label={`${channel.label} number format`} className={`${inputCls} w-auto`} value={numbers} onChange={(e) => setNumbers(e.target.value as NumberFormat)}>
+            <option value="us">1,234.56 (comma for thousands)</option>
+            <option value="eu">1.234,56 (dot for thousands)</option>
           </select>
         </label>
         <input
@@ -81,6 +90,11 @@ export function ChannelImport({ clientId, channel, currency }: { clientId: strin
           ) : (
             <p className="text-bad">Nothing in {file?.name} could be read.</p>
           )}
+          {parsed.columns.length > 0 && (
+            <p className="text-text-muted">
+              Columns read: {parsed.columns.join(", ")}.{parsed.ignored.length > 0 ? ` Not used: ${parsed.ignored.join(", ")}.` : ""}
+            </p>
+          )}
           {parsed.errors.length > 0 && (
             <div className="rounded-lg border border-bad/40 p-2 text-bad">
               <div className="font-medium">
@@ -95,6 +109,7 @@ export function ChannelImport({ clientId, channel, currency }: { clientId: strin
               </ul>
               {parsed.errors.length > 8 && <div className="mt-1">and {parsed.errors.length - 8} more.</div>}
               {parsed.errors.some((er) => er.message.startsWith("Could not read the date")) && <div className="mt-1 text-text-muted">If the dates look right, pick the other date format above.</div>}
+              {parsed.errors.some((er) => er.message.includes("how numbers are written")) && <div className="mt-1 text-text-muted">If the numbers look right, pick the other number format above.</div>}
             </div>
           )}
           <button type="button" disabled={busy || parsed.rows.length === 0} onClick={save} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">

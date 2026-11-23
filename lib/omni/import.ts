@@ -11,6 +11,9 @@ export interface ImportResult {
   to: string | null;
   revenue: number;
   adSpend: number;
+  /** The columns that were read ("date", "revenue", "orders", "units", "ad spend", "retailer") and the header cells that were not used. */
+  columns: string[];
+  ignored: string[];
 }
 
 const COLUMNS: Record<"date" | "revenue" | "orders" | "units" | "adSpend" | "retailer", string[]> = {
@@ -68,13 +71,31 @@ function readDate(raw: string, format: DateFormat): string | null {
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
-/** A number as a spreadsheet writes it: currency signs, spaces and thousands commas allowed. Null = empty, NaN = unreadable. */
-function readNumber(raw: string): number | null {
-  let s = raw.replace(/[$£€\s]/g, "");
-  if (s === "") return null;
-  if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, "");
-  else if (/^-?\d+,\d{1,2}$/.test(s)) s = s.replace(",", ".");
-  return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : Number.NaN;
+/** How the file writes numbers: "us" = 1,234.56 (comma for thousands), "eu" = 1.234,56 (dot for thousands). */
+export type NumberFormat = "us" | "eu";
+
+type Read = { value: number } | "empty" | "format" | "bad";
+
+/**
+ * A number as a spreadsheet writes it, in the chosen format; currency signs and spaces are allowed. A value that only makes sense in the
+ * other format ("12.345" with a comma for thousands, "1,234.56" with a dot for thousands) is refused as "format" rather than read as a
+ * thousandth or a thousand times what was meant.
+ */
+function readNumber(raw: string, format: NumberFormat): Read {
+  const s = raw.replace(/[$£€\s]/g, "");
+  if (s === "") return "empty";
+  const negative = s.startsWith("-");
+  const body = negative ? s.slice(1) : s;
+  let text: string | null = null;
+  if (format === "us") {
+    if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(body)) text = body.replace(/,/g, "");
+    else if (/^\d{1,3}(\.\d{3})+$/.test(body)) return "format";
+    else if (/^\d+(\.\d+)?$/.test(body)) text = body;
+  } else if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(body)) text = body.replace(/\./g, "").replace(",", ".");
+  else if (/^\d+(,\d+)?$/.test(body)) text = body.replace(",", ".");
+  if (text === null) return /^[\d.,]+$/.test(body) ? "format" : "bad";
+  const value = Number(text) * (negative ? -1 : 1);
+  return Number.isFinite(value) ? { value } : "bad";
 }
 
 /**
@@ -82,8 +103,8 @@ function readNumber(raw: string): number | null {
  * and when known orders, units, ad spend (or spend) and retailer (or store). Comma, semicolon or tab between columns.
  * Lines that cannot be read are reported with their line number and left out; the rest load.
  */
-export function parseChannelCsv(text: string, channel: string, dateFormat: DateFormat = "ymd"): ImportResult {
-  const out: ImportResult = { rows: [], errors: [], from: null, to: null, revenue: 0, adSpend: 0 };
+export function parseChannelCsv(text: string, channel: string, dateFormat: DateFormat = "ymd", numberFormat: NumberFormat = "us"): ImportResult {
+  const out: ImportResult = { rows: [], errors: [], from: null, to: null, revenue: 0, adSpend: 0, columns: [], ignored: [] };
   const lines = text.replace(/^﻿/, "").split(/\r\n|\n|\r/);
   if (lines.every((l) => l.trim() === "")) {
     out.errors.push({ line: 1, message: "The file is empty." });
@@ -92,9 +113,13 @@ export function parseChannelCsv(text: string, channel: string, dateFormat: DateF
   const header = lines[0];
   const count = (d: string) => splitLine(header, d).length;
   const delim = [",", ";", "\t"].reduce((best, d) => (count(d) > count(best) ? d : best), ",");
-  const names = splitLine(header, delim).map(norm);
+  const headerCells = splitLine(header, delim);
+  const names = headerCells.map(norm);
   const col = (k: keyof typeof COLUMNS) => names.findIndex((n) => COLUMNS[k].includes(n));
   const at = { date: col("date"), revenue: col("revenue"), orders: col("orders"), units: col("units"), adSpend: col("adSpend"), retailer: col("retailer") };
+  const labels: [string, number][] = [["date", at.date], ["revenue", at.revenue], ["orders", at.orders], ["units", at.units], ["ad spend", at.adSpend], ["retailer", at.retailer]];
+  out.columns = labels.filter(([, i]) => i >= 0).map(([l]) => l);
+  out.ignored = headerCells.filter((c, i) => c !== "" && !labels.some(([, j]) => j === i));
   if (at.date < 0 || at.revenue < 0) {
     out.errors.push({ line: 1, message: "The file needs a date column and a revenue column." });
     return out;
@@ -112,23 +137,33 @@ export function parseChannelCsv(text: string, channel: string, dateFormat: DateF
       out.errors.push({ line, message: `Could not read the date "${cell(at.date)}".` });
       return;
     }
-    const revenue = readNumber(cell(at.revenue));
-    if (revenue === null) {
-      out.errors.push({ line, message: "No revenue on this line." });
-      return;
-    }
-    const optional: [string, number][] = [
-      ["orders", at.orders],
-      ["units", at.units],
-      ["ad spend", at.adSpend],
+    // Revenue is needed; orders, units and ad spend count as zero when the column or the cell is empty. Orders and units are whole numbers.
+    const fields: [string, number, boolean, boolean][] = [
+      ["revenue", at.revenue, true, false],
+      ["orders", at.orders, false, true],
+      ["units", at.units, false, true],
+      ["ad spend", at.adSpend, false, false],
     ];
-    const values: Record<string, number> = { revenue };
-    for (const [label, idx] of optional) values[label] = idx >= 0 ? (readNumber(cell(idx)) ?? 0) : 0;
-    const bad = Object.entries(values).find(([, v]) => Number.isNaN(v) || v < 0);
-    if (bad) {
-      out.errors.push({ line, message: Number.isNaN(bad[1]) ? `Could not read the ${bad[0]} on this line.` : `The ${bad[0]} is negative.` });
+    const values: Record<string, number> = {};
+    let problem: string | null = null;
+    for (const [label, idx, required, whole] of fields) {
+      const raw = cell(idx);
+      const r = idx >= 0 ? readNumber(raw, numberFormat) : "empty";
+      if (r === "empty") {
+        if (required) problem = "No revenue on this line.";
+        else values[label] = 0;
+      } else if (r === "format") problem = `Could not read the ${label} "${raw}" in this number format. Check how numbers are written, above.`;
+      else if (r === "bad") problem = `Could not read the ${label} on this line.`;
+      else if (r.value < 0) problem = `The ${label} is negative.`;
+      else if (whole && !Number.isInteger(r.value)) problem = `The ${label} must be a whole number.`;
+      else values[label] = r.value;
+      if (problem) break;
+    }
+    if (problem) {
+      out.errors.push({ line, message: problem });
       return;
     }
+    const revenue = values.revenue;
     const retailer = cell(at.retailer);
     const id = `${date}|${retailer}`;
     if (seen.has(id)) {

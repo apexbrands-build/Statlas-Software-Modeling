@@ -224,7 +224,8 @@ export function HaloSettings({
 function ShopifyFeed({ clientId, channel, options, onChange }: { clientId: string; channel: OtherChannel; options: string[]; onChange: (list: string[]) => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const picked = channel.shopifyChannels ?? [];
+  // Only channels still offered here are pulled: one that now counts as the own site would be counted twice.
+  const picked = (channel.shopifyChannels ?? []).filter((p) => options.some((o) => o.toLowerCase() === p.toLowerCase()));
   const pull = async () => {
     setBusy(true);
     setNote(null);

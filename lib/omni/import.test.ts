@@ -95,3 +95,49 @@ describe("shopifyDaysToSales: a channel fed by synced Shopify orders", () => {
     expect(shopifyDaysToSales("tiktok_shop", [{ date: null, revenue: 5, orders: 1 }, { date: "2027-03-01", revenue: "x", orders: 1 }])).toEqual([]);
   });
 });
+
+describe("parseChannelCsv: how the file writes numbers", () => {
+  it("reads a dot for thousands and a comma for decimals when told", () => {
+    const r = parseChannelCsv("Date;Revenue;Orders;Ad spend\n2027-03-01;12.345,50;1.234;1.200\n2027-03-02;€ 2.500;3;12,5\n", "amazon", "ymd", "eu");
+    expect(r.errors).toEqual([]);
+    expect(r.rows[0]).toMatchObject({ revenue: 12345.5, orders: 1234, adSpend: 1200 });
+    expect(r.rows[1]).toMatchObject({ revenue: 2500, adSpend: 12.5 });
+  });
+  it("refuses a number that only makes sense the other way, instead of loading a thousandth of it", () => {
+    const us = parseChannelCsv("Date;Revenue\n2027-03-01;12.345\n2027-03-02;1.234,56\n2027-03-03;12,5\n", "amazon");
+    expect(us.rows).toEqual([]);
+    expect(us.errors.map((e) => e.line)).toEqual([2, 3, 4]);
+    expect(us.errors[0].message).toContain("how numbers are written");
+    const eu = parseChannelCsv("Date;Revenue\n2027-03-01;1,234.56\n2027-03-02;12.5\n", "amazon", "ymd", "eu");
+    expect(eu.rows).toEqual([]);
+    expect(eu.errors.map((e) => e.line)).toEqual([2, 3]);
+  });
+  it("still reads ordinary decimals and thousands commas by default", () => {
+    const r = parseChannelCsv('date,revenue\n2027-03-01,1234.5\n2027-03-02,"1,234.50"\n2027-03-03,12.34\n2027-03-04,1234.567\n', "amazon");
+    expect(r.errors).toEqual([]);
+    expect(r.rows.map((x) => x.revenue)).toEqual([1234.5, 1234.5, 12.34, 1234.567]);
+  });
+  it("needs whole numbers for orders and units", () => {
+    const r = parseChannelCsv("date,revenue,orders,units\n2027-03-01,100,10.5,3\n2027-03-02,100,10,3.2\n2027-03-03,100,10,3\n", "amazon");
+    expect(r.errors.map((e) => e.line)).toEqual([2, 3]);
+    expect(r.rows).toHaveLength(1);
+  });
+  it("refuses a number too large to hold", () => {
+    const r = parseChannelCsv(`date,revenue\n2027-03-01,${"9".repeat(400)}\n`, "amazon");
+    expect(r.rows).toEqual([]);
+    expect(r.errors).toHaveLength(1);
+  });
+});
+
+describe("parseChannelCsv: which columns it used", () => {
+  it("lists the columns it read and the ones it ignored, so a misnamed column is seen", () => {
+    const r = parseChannelCsv("Date,Sales,Cost,Units Ordered\n2027-03-01,100,5,7\n", "amazon");
+    expect(r.columns).toEqual(["date", "revenue"]);
+    expect(r.ignored).toEqual(["Cost", "Units Ordered"]);
+  });
+  it("ignores nothing when every column is known", () => {
+    const r = parseChannelCsv("date,revenue,orders,units,ad spend,retailer\n2027-03-01,100,1,1,1,Target\n", "retail");
+    expect(r.columns).toEqual(["date", "revenue", "orders", "units", "ad spend", "retailer"]);
+    expect(r.ignored).toEqual([]);
+  });
+});

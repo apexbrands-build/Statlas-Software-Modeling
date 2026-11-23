@@ -21,6 +21,8 @@ interface Raw {
   sales: ChannelSale[] | null;
   months: PlanMonth[];
   curve: Curve | null;
+  /** The sales could not be loaded (network, timeout): different from the table not existing. */
+  failed: boolean;
 }
 
 export interface OmniData {
@@ -28,12 +30,14 @@ export interface OmniData {
   ready: boolean;
   /** The sales table is not in the database yet (migration 0021), so only forecasts can be shown. */
   tableMissing: boolean;
+  /** The other channels' sales could not be loaded this time; forecasts are still shown. */
+  loadError: boolean;
   views: ChannelView[];
   site: SiteNumbers | null;
   business: BusinessView | null;
 }
 
-const EMPTY: OmniData = { ready: false, tableMissing: false, views: [], site: null, business: null };
+const EMPTY: OmniData = { ready: false, tableMissing: false, loadError: false, views: [], site: null, business: null };
 
 /**
  * The other sales channels and the whole business for the range Home shows, built on the own-site numbers Home already has.
@@ -51,7 +55,14 @@ export function useOmni(d: DashData | null, enabled: boolean): OmniData {
       // A year of sales before the last day with data gives each channel its weekday pattern.
       const yearAgo = addDays(addYears(d.lastData, -1), 1);
       const from = yearAgo < d.range.from ? yearAgo : d.range.from;
-      const [sales, plans] = await Promise.all([repo.getChannelSales(d.client.id, from, d.range.to).catch(() => null), repo.listPlans(d.client.id)]);
+      let failed = false;
+      const [sales, plans] = await Promise.all([
+        repo.getChannelSales(d.client.id, from, d.range.to).catch(() => {
+          failed = true;
+          return [] as ChannelSale[];
+        }),
+        repo.listPlans(d.client.id),
+      ]);
       const plan = pickPlan(plans, Number(d.range.to.slice(0, 4)), d.planScenario);
       const months = plan ? await repo.getPlanMonths(plan.id).catch(() => [] as PlanMonth[]) : [];
       let curve: Curve | null = null;
@@ -64,7 +75,7 @@ export function useOmni(d: DashData | null, enabled: boolean): OmniData {
           curve = null;
         }
       }
-      if (!cancel) setRaw({ key, sales, months, curve });
+      if (!cancel) setRaw({ key, sales, months, curve, failed });
     })();
     return () => {
       cancel = true;
@@ -94,6 +105,6 @@ export function useOmni(d: DashData | null, enabled: boolean): OmniData {
       amer,
       blendedAmer: amer !== null && mix.modelled ? blendedAmer(amer, mix) : null,
     };
-    return { ready: true, tableMissing: raw.sales === null, views, site, business: businessView(site, views) };
+    return { ready: true, tableMissing: raw.sales === null, loadError: raw.failed, views, site, business: businessView(site, views) };
   }, [d, raw, key]);
 }

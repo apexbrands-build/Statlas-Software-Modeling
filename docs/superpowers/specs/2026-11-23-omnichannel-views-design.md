@@ -24,7 +24,10 @@ The app can now plan the other channels, but it cannot see what they sell. Home 
 
 ### 1. Data in
 - **Table `channel_sales`** (new, additive): one row per client, day, sales channel and retailer, with revenue, orders, units, ad spend and where the row came from.
-- **File import** (Store Settings, in "Other sales channels and halo"): a CSV per channel with date, revenue and, when known, orders, units, ad spend and retailer. The screen shows a preview, lists rows it cannot read, and replaces the days in the file.
+- **File import** (Store Settings, in "Other sales channels and halo"): a CSV per channel with date, revenue and, when known, orders, units, ad spend and retailer.
+  - The user says how the file writes dates and numbers (1,234.56 or 1.234,56). A number that only makes sense the other way is refused, never loaded as a thousandth of what was meant.
+  - The screen shows a preview, the columns it read and the ones it did not use, and the rows it cannot read with their line numbers.
+  - Saving replaces the days in the file. With a retailer column it replaces them for the retailers in the file only, so one file per retailer can be loaded one after another.
 - **Shopify channels:** a channel can name the Shopify sales channels that feed it (for example TikTok Shop orders synced into Shopify). Their orders are then rolled up from what is already synced.
 - **Connectors** (Amazon, TikTok Shop) and a warehouse reader (for a brand that already lands its data with a tool such as Saras Analytics) come once access exists. They write to the same table, so the screens do not change.
 
@@ -40,7 +43,9 @@ The app can now plan the other channels, but it cannot see what they sell. Home 
   - a straight line of revenue on daily ad spend is fitted, and its R² says how far to trust it (Good from 0.5, Fair from 0.25, Low below);
   - a monthly seasonality index is applied once two years of data exist;
   - past the highest spend the channel has run, returns fade (the same guardrail).
-- The plan gets a planned ad spend per channel and month. "Suggest" fills the channel's forecast line from the curve at that spend.
+- The plan gets a planned ad spend per channel and month. "Fill the plan from this model" writes the channel's forecast from the curve at that spend.
+  - It fills only open months that have no forecast yet. A forecast already in the plan is replaced only when the user ticks the box that says so.
+  - A month with no planned ad spend uses the channel's pace: its average daily ad spend over the days with sales in the 90 days up to its own last day. With under 28 such days the month is left empty, and the screen says so.
 - The curve is fitted on a period when the own-site ads ran at a certain level, so that level is saved as the line's assumed ad spend. The halo then moves the forecast only for the difference, and nothing is counted twice.
 - Until 60 days exist, the forecast is typed. Repeat value stays a typed multiplier: the app has no customer-level data for these channels.
 
@@ -70,6 +75,7 @@ aMER (own site) 1.90      Blended aMER (modelled) 2.11
 - **A channel (for example Amazon):** revenue, orders or units, ad spend, ROAS and contribution (revenue × its margin − its ad spend), each against the channel's forecast, with the month's pace and a daily chart of actual against forecast. One line shows how much of it the halo factors credit to the ads.
 - **Whole business:** total revenue, ad spend, MER and contribution against plan, the table by channel above, and own-site aMER beside the blended aMER.
 - Every number is reported sales. The cascade appears only in the "Created by ads" column and the blended aMER, both marked as modelled.
+- A forecast is compared only with the sales of the days it covers. When a range reaches into a month the plan has no line for, those days stay in the totals, are left out of every comparison, and the view says how many there are. The whole-business table shows the day each channel's sales run through.
 - A channel with no data loaded yet shows its forecast and a note on how to load sales.
 
 ### 5. Daily message

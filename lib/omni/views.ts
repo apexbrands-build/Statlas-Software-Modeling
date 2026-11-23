@@ -41,6 +41,13 @@ export interface ChannelView {
   /** Forecast for the whole range; null when the plan has none for it. */
   forecastFull: number | null;
   pctToForecast: number | null;
+  /**
+   * What the forecast is compared with: the sales, ad spend and contribution of the days that have a forecast. A range can reach into a
+   * month the plan has no line for; those days stay in the totals but out of every comparison. Null when no day has a forecast.
+   */
+  comparable: { revenue: number; adSpend: number; contribution: number } | null;
+  /** Days with sales that have no forecast. */
+  uncoveredDays: number;
   /** Sales so far plus the forecast of the days still to come. */
   projected: number | null;
   planAdSpendToDate: number | null;
@@ -65,9 +72,18 @@ export function channelView({ channel, days, forecast, lines, from, to }: Channe
   let adSpend = 0;
   let lastData: string | null = null;
   const byMonth = new Map<string, number>();
+  let coveredRevenue = 0;
+  let coveredSpend = 0;
+  let coveredDays = 0;
+  let uncoveredDays = 0;
   for (const d of dates) {
     const day = days.get(d);
     if (!day) continue;
+    if (forecast.has(d)) {
+      coveredRevenue += day.revenue;
+      coveredSpend += day.adSpend;
+      coveredDays += 1;
+    } else uncoveredDays += 1;
     revenue += day.revenue;
     orders += day.orders;
     units += day.units;
@@ -91,6 +107,7 @@ export function channelView({ channel, days, forecast, lines, from, to }: Channe
   }
   const forecastFull = any ? full : null;
   const forecastToDate = any && hasData ? toDate : null;
+  const comparable = forecastToDate !== null && coveredDays > 0 ? { revenue: coveredRevenue, adSpend: coveredSpend, contribution: coveredRevenue * margin - coveredSpend } : null;
   let planSpend = 0;
   let anyLine = false;
   for (const [key, n] of elapsed) {
@@ -118,7 +135,9 @@ export function channelView({ channel, days, forecast, lines, from, to }: Channe
     contribution: revenue * margin - adSpend,
     forecastToDate,
     forecastFull,
-    pctToForecast: forecastToDate !== null && forecastToDate > 0 ? revenue / forecastToDate : null,
+    pctToForecast: comparable !== null && forecastToDate !== null && forecastToDate > 0 ? comparable.revenue / forecastToDate : null,
+    comparable,
+    uncoveredDays,
     projected: hasData && forecastFull !== null ? revenue + (forecastFull - (forecastToDate ?? 0)) : null,
     planAdSpendToDate,
     planContributionToDate: forecastToDate === null ? null : forecastToDate * margin - (planAdSpendToDate ?? 0),
@@ -147,6 +166,10 @@ export interface BusinessView {
   mer: number | null;
   contribution: number;
   plan: { revenue: number; spend: number; mer: number | null; contribution: number } | null;
+  /** What the plan is compared with: the own site plus, for each channel, the days that have a forecast. */
+  comparable: { revenue: number; spend: number; mer: number | null; contribution: number };
+  /** Sales of other channels on days the plan has no forecast for: in the totals, out of the comparisons. */
+  uncoveredRevenue: number;
   rows: { key: string; label: string; actual: number; forecast: number | null; pct: number | null; share: number | null; createdByAds: number | null }[];
 }
 
@@ -159,11 +182,15 @@ export function businessView(site: SiteNumbers, channels: ChannelView[]): Busine
   const spend = site.spend + sum((c) => c.adSpend);
   const planRevenue = site.plan ? site.plan.revenue + sum((c) => c.forecastToDate) : null;
   const planSpend = site.plan ? site.plan.spend + sum((c) => c.planAdSpendToDate) : null;
+  const cmpRevenue = site.revenue + sum((c) => c.comparable?.revenue ?? 0);
+  const cmpSpend = site.spend + sum((c) => c.comparable?.adSpend ?? 0);
   return {
     revenue,
     spend,
     mer: ratio(revenue, spend),
     contribution: site.cm + sum((c) => c.contribution),
+    comparable: { revenue: cmpRevenue, spend: cmpSpend, mer: ratio(cmpRevenue, cmpSpend), contribution: site.cm + sum((c) => c.comparable?.contribution ?? 0) },
+    uncoveredRevenue: sum((c) => c.revenue - (c.comparable?.revenue ?? 0)),
     plan: site.plan && planRevenue !== null && planSpend !== null ? { revenue: planRevenue, spend: planSpend, mer: ratio(planRevenue, planSpend), contribution: site.plan.cm + sum((c) => c.planContributionToDate) } : null,
     rows: [
       { key: "site", label: "Own site", actual: site.revenue, forecast: site.plan?.revenue ?? null, pct: ratio(site.revenue, site.plan?.revenue ?? null), share: ratio(site.revenue, revenue), createdByAds: null },

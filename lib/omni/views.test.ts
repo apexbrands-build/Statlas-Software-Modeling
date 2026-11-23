@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { eachDay } from "../dates";
 import type { OtherChannel } from "../types";
 import type { MonthLine } from "./forecast";
 import { spreadMonth } from "./forecast";
@@ -101,5 +102,45 @@ describe("businessView: the own site plus every channel", () => {
   });
   it("has no plan when the own site has none", () => {
     expect(businessView({ ...site, plan: null }, [a]).plan).toBeNull();
+  });
+});
+
+describe("channelView: a range the forecast covers only in part", () => {
+  // February 2027 has a forecast (28,000, so 1,000 a day) and planned ad spend; March has neither. Sales run 1,000 a day through 15 March.
+  const feb = spreadMonth(28000, "2027-02-01", null);
+  const days = new Map<string, ChannelDay>();
+  for (const d of eachDay("2027-02-01", "2027-03-15")) days.set(d, day(1000, 100));
+  const v = channelView({ channel: amazon, days, forecast: feb, lines: { "2027-02": { forecast: 28000, created: 0, capped: false, adSpend: 2800, halo: 0 } }, from: "2027-02-01", to: "2027-03-15" });
+  it("keeps every day in the totals", () => {
+    expect(v.revenue).toBe(43000);
+    expect(v.adSpend).toBe(4300);
+  });
+  it("compares only the days that have a forecast, so a month with none does not look like a win", () => {
+    expect(v.forecastToDate).toBeCloseTo(28000, 6);
+    expect(v.comparable!.revenue).toBe(28000);
+    expect(v.comparable!.adSpend).toBe(2800);
+    expect(v.comparable!.contribution).toBeCloseTo(28000 * 0.35 - 2800, 6);
+    expect(v.pctToForecast).toBeCloseTo(1, 8);
+  });
+  it("says how many days with sales have no forecast", () => {
+    expect(v.uncoveredDays).toBe(15);
+  });
+  it("has nothing to compare, and every day uncovered, with no forecast at all", () => {
+    const none = channelView({ channel: amazon, days, forecast: new Map(), lines: {}, from: "2027-02-01", to: "2027-03-15" });
+    expect(none.comparable).toBeNull();
+    expect(none.uncoveredDays).toBe(43);
+  });
+  it("compares everything when the forecast covers every day with sales", () => {
+    const all = channelView({ channel: amazon, days: tenDays, forecast, lines: { "2027-03": line }, from: "2027-03-01", to: "2027-03-31" });
+    expect(all.uncoveredDays).toBe(0);
+    expect(all.comparable!.revenue).toBe(all.revenue);
+  });
+  it("carries into the whole business: the plan is compared with the sales it covers, and the rest is named", () => {
+    const b = businessView({ revenue: 80000, spend: 20000, cm: 16000, plan: { revenue: 78000, spend: 19000, cm: 15000 }, amer: 1.9, blendedAmer: null }, [v]);
+    expect(b.revenue).toBe(123000);
+    expect(b.plan!.revenue).toBeCloseTo(78000 + 28000, 6);
+    expect(b.comparable.revenue).toBeCloseTo(80000 + 28000, 6);
+    expect(b.comparable.spend).toBeCloseTo(20000 + 2800, 6);
+    expect(b.uncoveredRevenue).toBeCloseTo(15000, 6);
   });
 });

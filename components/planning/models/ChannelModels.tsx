@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addDays, endOfMonth } from "@/lib/dates";
+import { endOfMonth } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
 import { aggregate, amerSpend } from "@/lib/metrics";
 import { dailyTotals } from "@/lib/omni/forecast";
-import { fitChannelModel, modelRevenue, type ChannelModel } from "@/lib/omni/model";
+import { fitChannelModel, modelRevenue, planFill, recentAdSpendPace, type ChannelModel } from "@/lib/omni/model";
 import type { ChannelDay, ChannelSale } from "@/lib/omni/types";
 import { haloSettingsOf } from "@/lib/planning/halo";
 import { curveAmer } from "@/lib/planning/new-customer";
@@ -15,7 +15,7 @@ import type { PlanCtx } from "../ctx";
 import { btnPrimary, MONTHS } from "../ui";
 import { ScatterCurve, type ScatterPoint } from "./charts";
 
-const daysIn = (month: string) => Number(endOfMonth(month).slice(8, 10));
+const monthName = (month: string) => MONTHS[Number(month.slice(5, 7)) - 1];
 
 /**
  * Models step, "Other Channels Model": the forecast model of each sales channel that has its own ad spend (Amazon, TikTok Shop).
@@ -25,7 +25,9 @@ export function ChannelModels({ ctx, facts, lastData }: { ctx: PlanCtx; facts: D
   const { client, settings, months, editInputs } = ctx;
   const channels = haloSettingsOf(settings).channels;
   const [sales, setSales] = useState<ChannelSale[] | null | undefined>(undefined);
+  const [failed, setFailed] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [replaceTyped, setReplaceTyped] = useState(false);
 
   useEffect(() => {
     if (!lastData) return;
@@ -33,7 +35,11 @@ export function ChannelModels({ ctx, facts, lastData }: { ctx: PlanCtx; facts: D
     getRepository()
       .getChannelSales(client.id, "2010-01-01", lastData)
       .then((rows) => !cancel && setSales(rows))
-      .catch(() => !cancel && setSales(null));
+      .catch(() => {
+        if (cancel) return;
+        setFailed(true);
+        setSales([]);
+      });
     return () => {
       cancel = true;
     };
@@ -45,35 +51,26 @@ export function ChannelModels({ ctx, facts, lastData }: { ctx: PlanCtx; facts: D
     return <p className="max-w-3xl text-sm text-text-muted">This client has no other sales channels yet. Add Amazon, TikTok Shop or retail in Store Settings, Edit, &quot;Other sales channels and halo&quot;.</p>;
   }
   if (sales === undefined) return <div className="h-64 animate-pulse rounded-xl bg-surface" />;
-  if (sales === null) return <p className="max-w-3xl text-sm text-text-muted">The sales of other channels cannot be read yet: the database table for them is not in place (migration 0021).</p>;
+  if (failed) return <p className="max-w-3xl text-sm text-bad">The sales of other channels could not be loaded just now. Reload the page to try again.</p>;
+  if (sales === null) return <p className="max-w-3xl text-sm text-text-muted">The database is not ready for other channels&apos; sales yet, so there is nothing to fit a model on.</p>;
 
-  /** Fills the channel's forecast for every open month from the model, at the month's planned channel ad spend. */
+  /** Fills the channel's forecast for the open months from the model (`planFill`), and says exactly what it did and what it left alone. */
   const fill = (c: OtherChannel, model: ChannelModel, days: Map<string, ChannelDay>) => {
-    // What the own-site ads spent per day while these channel days happened: the forecast is built on that level, so the halo only moves it for the difference.
-    const window = aggregate(facts.filter((f) => f.date >= model.from && f.date <= model.to));
+    // What the own-site ads spent per day on the very days the model was fitted on: the forecast is built on that level, so the halo
+    // only moves it for the difference.
+    const used = new Set(model.fit.used.map((p) => p.date));
+    const window = aggregate(facts.filter((f) => used.has(f.date)));
     const siteDaily = window.days > 0 ? amerSpend(window, settings) / window.days : 0;
-    // A month with no planned channel ad spend uses the channel's pace of the last 90 days.
-    const recentFrom = addDays(lastData, -89);
-    let recentSpend = 0;
-    for (const [d, v] of days) if (d >= recentFrom && d <= lastData) recentSpend += v.adSpend;
-    const recentDaily = recentSpend / 90;
-    let filled = 0;
-    let paced = 0;
-    for (const m of months) {
-      if (!m.inputs || m.locked || endOfMonth(m.month) <= lastData) continue;
-      const typed = Number(m.inputs.other?.[c.key]?.adSpend);
-      const hasTyped = Number.isFinite(typed) && typed > 0;
-      const adSpend = hasTyped ? typed : Math.round(recentDaily * daysIn(m.month));
-      if (!hasTyped) paced += 1;
-      const revenue = Math.round(modelRevenue(model, adSpend, m.month));
-      editInputs(m.month, (i) => ({ ...i, other: { ...(i.other ?? {}), [c.key]: { ...(i.other?.[c.key] ?? {}), revenue, adSpend, assumedSpend: Math.round(siteDaily * daysIn(m.month)) } } }));
-      filled += 1;
-    }
-    setNote(
-      filled
-        ? `${c.label}: forecast filled for ${filled} open month${filled === 1 ? "" : "s"}${paced ? ` (${paced} with no planned ad spend use the pace of the last 90 days)` : ""}. See them in Details, Other sales channels, and press Save plan to keep them.`
-        : `${c.label}: no open month to fill. Start the months in the plan first.`,
-    );
+    const r = planFill({ months, channel: c.key, model, lastData, siteDaily, paceDaily: recentAdSpendPace(days), replaceTyped });
+    for (const [month, line] of Object.entries(r.lines)) editInputs(month, (i) => ({ ...i, other: { ...(i.other ?? {}), [c.key]: line } }));
+    const list = (ms: string[]) => ms.map(monthName).join(", ");
+    const parts = [
+      r.filled.length ? `forecast filled for ${list(r.filled)}` : "nothing was filled",
+      r.paced.length ? `${list(r.paced)} had no planned ad spend and use${r.paced.length === 1 ? "s" : ""} the channel's pace of its last 90 days` : "",
+      r.keptTyped.length ? `${list(r.keptTyped)} already had a forecast and ${r.keptTyped.length === 1 ? "was" : "were"} left as ${r.keptTyped.length === 1 ? "it was" : "they were"} (tick "Replace forecasts already in the plan" to refill)` : "",
+      r.noSpend.length ? `${list(r.noSpend)} left empty: no planned ad spend, and under 28 recent days of the channel's ad spend to take a pace from` : "",
+    ].filter(Boolean);
+    setNote(`${c.label}: ${parts.join("; ")}.${r.filled.length ? " See the months in Details, Other sales channels, and press Save plan to keep them." : ""}`);
   };
 
   return (
@@ -82,6 +79,10 @@ export function ChannelModels({ ctx, facts, lastData }: { ctx: PlanCtx; facts: D
         One model per sales channel that runs its own ads. It is the same regression as the New Customer model, on the channel&apos;s own daily ad spend and revenue: each day is adjusted for the channel&apos;s weekday pattern, outliers are removed by spend bucket, Black Friday week is
         left out, and a straight line of revenue on ad spend is fitted. R² says how much of the day-to-day change the ad spend explains.
       </p>
+      <label className="flex items-center gap-2 text-xs text-text-muted">
+        <input type="checkbox" checked={replaceTyped} onChange={(e) => setReplaceTyped(e.target.checked)} />
+        Replace forecasts already in the plan when filling (off: only months with no forecast yet are filled)
+      </label>
       {note && <p className="rounded-lg bg-accent/10 p-2 text-xs">{note}</p>}
       {channels.map((c) => (
         <ChannelPanel key={c.key} channel={c} sales={sales} lastData={lastData} money={money} months={months.map((m) => m.month)} planned={(month) => Number(months.find((m) => m.month === month)?.inputs?.other?.[c.key]?.adSpend) || 0} onFill={fill} />
@@ -197,7 +198,7 @@ function ChannelPanel({
               </tr>
             </tbody>
           </table>
-          <p className="mt-1 text-xs text-text-faint">Type the planned ad spend on the channel in Details, Other sales channels. A month left empty is filled at the pace of the last 90 days.</p>
+          <p className="mt-1 text-xs text-text-faint">Type the planned ad spend on the channel in Details, Other sales channels. A month with none is filled at the channel&apos;s pace over its last 90 days of sales.</p>
         </div>
       )}
     </div>

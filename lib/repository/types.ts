@@ -79,7 +79,7 @@ export interface Repository {
    * Null when the table is not there yet (migration 0021).
    */
   getChannelSales(clientId: string, from: string, to: string): Promise<ChannelSale[] | null>;
-  /** Saves one channel's sales, replacing that channel's rows on the days present in `rows` (every retailer of those days). */
+  /** Saves one channel's sales, replacing that channel's rows for the same day and retailer as a row in `rows` (other retailers of those days stay). */
   saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void>;
   /**
    * For a channel fed by Shopify sales channels (for example TikTok Shop orders synced into Shopify): rolls those orders up by day

@@ -656,8 +656,9 @@ export class SeedRepository implements Repository {
 
   async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {
     const key = `${clientId}|${channel}`;
-    const dates = new Set(rows.map((r) => r.date));
-    this.channelStore.set(key, [...(this.channelStore.get(key) ?? []).filter((r) => !dates.has(r.date)), ...rows.map((r) => ({ ...r, channel }))]);
+    // A day is replaced for the retailers in the file only, so one file per retailer can be loaded one after another.
+    const pairs = new Set(rows.map((r) => `${r.date}|${r.retailer ?? ""}`));
+    this.channelStore.set(key, [...(this.channelStore.get(key) ?? []).filter((r) => !pairs.has(`${r.date}|${r.retailer ?? ""}`)), ...rows.map((r) => ({ ...r, channel }))]);
   }
 }
 

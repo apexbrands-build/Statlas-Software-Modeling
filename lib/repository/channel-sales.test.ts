@@ -51,12 +51,22 @@ describe("saving imported sales", () => {
     ]);
     expect(days[1].revenue).toBe(123);
   });
-  it("replaces a day that is imported again, with all its retailers", async () => {
+  it("replaces a day for the retailers in the file and leaves that day's other retailers alone", async () => {
     const repo = new SeedRepository();
     await repo.saveChannelSales("kettle", "retail", [row("2026-03-05", 100, { channel: "retail", retailer: "Target" }), row("2026-03-05", 50, { channel: "retail", retailer: "H-E-B" })]);
     await repo.saveChannelSales("kettle", "retail", [row("2026-03-05", 70, { channel: "retail", retailer: "Target" })]);
     const day = (await repo.getChannelSales("kettle", "2026-03-05", "2026-03-05"))!.filter((r) => r.channel === "retail");
-    expect(day.map((r) => [r.retailer, r.revenue])).toEqual([["Target", 70]]);
+    expect(day.map((r) => [r.retailer, r.revenue])).toEqual([
+      ["H-E-B", 50],
+      ["Target", 70],
+    ]);
+  });
+  it("replaces a day with no retailer when it is imported again", async () => {
+    const repo = new SeedRepository();
+    await repo.saveChannelSales("kettle", "amazon", [row("2026-03-05", 100)]);
+    await repo.saveChannelSales("kettle", "amazon", [row("2026-03-05", 200)]);
+    const day = (await repo.getChannelSales("kettle", "2026-03-05", "2026-03-05"))!.filter((r) => r.channel === "amazon");
+    expect(day.map((r) => r.revenue)).toEqual([200]);
   });
   it("keeps the channel of the import, whatever the rows say", async () => {
     const repo = new SeedRepository();

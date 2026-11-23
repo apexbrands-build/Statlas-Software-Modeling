@@ -587,7 +587,7 @@ export class SupabaseRepository implements Repository {
   async getChannelSales(clientId: string, from: string, to: string): Promise<ChannelSale[] | null> {
     let rows: Row[];
     try {
-      rows = await fetchAll<Row>((a, b) => this.db.from("channel_sales").select("*").eq("client_id", clientId).gte("date", from).lte("date", to).order("date").range(a, b));
+      rows = await fetchAll<Row>((a, b) => this.db.from("channel_sales").select("*").eq("client_id", clientId).gte("date", from).lte("date", to).order("date").order("sales_channel").order("retailer").range(a, b));
     } catch (e) {
       if (CHANNEL_SALES_MISSING.test(e instanceof Error ? e.message : "")) return null;
       throw e;
@@ -609,11 +609,23 @@ export class SupabaseRepository implements Repository {
   }
 
   async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {
-    const fail = (message: string) => new Error(CHANNEL_SALES_MISSING.test(message) || /policy|permission|row-level/i.test(message) ? "Could not save the sales: database migration 0021 has not been applied yet (supabase/migrations/0021_channel_sales.sql)." : message);
-    const dates = [...new Set(rows.map((r) => r.date))];
-    for (let i = 0; i < dates.length; i += 200) {
-      const { error } = await this.db.from("channel_sales").delete().eq("client_id", clientId).eq("sales_channel", channel).in("date", dates.slice(i, i + 200));
-      if (error) throw fail(error.message);
+    const fail = (message: string) =>
+      new Error(
+        CHANNEL_SALES_MISSING.test(message)
+          ? "Could not save the sales: the database is not ready for other channels yet (migration 0021)."
+          : /policy|permission|row-level/i.test(message)
+            ? "Could not save the sales: this login cannot change this client's data."
+            : `Could not save the sales: ${message}`,
+      );
+    // A day is replaced for the retailers in the file only, so one file per retailer can be loaded one after another.
+    const byRetailer = new Map<string, Set<string>>();
+    for (const r of rows) byRetailer.set(r.retailer ?? "", (byRetailer.get(r.retailer ?? "") ?? new Set<string>()).add(r.date));
+    for (const [retailer, set] of byRetailer) {
+      const dates = [...set];
+      for (let i = 0; i < dates.length; i += 200) {
+        const { error } = await this.db.from("channel_sales").delete().eq("client_id", clientId).eq("sales_channel", channel).eq("retailer", retailer).in("date", dates.slice(i, i + 200));
+        if (error) throw fail(error.message);
+      }
     }
     const rec = (r: ChannelSale) => ({ client_id: clientId, date: r.date, sales_channel: channel, retailer: r.retailer ?? "", revenue: r.revenue, orders: r.orders, units: r.units, ad_spend: r.adSpend, source: r.source === "demo" ? "import" : r.source });
     for (let i = 0; i < rows.length; i += 500) {
@@ -624,4 +636,4 @@ export class SupabaseRepository implements Repository {
 }
 
 /** What the database answers when `channel_sales` does not exist yet. */
-const CHANNEL_SALES_MISSING = /channel_sales|PGRST205|42P01|schema cache/i;
+const CHANNEL_SALES_MISSING = /PGRST205|42P01|Could not find the table|relation "?(public\.)?channel_sales"? does not exist/i;
