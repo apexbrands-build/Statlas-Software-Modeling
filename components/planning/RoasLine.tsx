@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { endOfMonth } from "@/lib/dates";
-import { actualPlatformRoas, roasCellValue, roasChannels, roasTarget, rowMethod, withRoas } from "@/lib/planning/roas";
+import { actualPlatformRoas, roasBasis, roasCellValue, roasChannels, roasTarget, rowMethod, withRoas } from "@/lib/planning/roas";
 import { CHANNEL_LABELS, type ChannelKey } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
 import { btnPrimary, inputClass, MONTHS, NumField } from "./ui";
@@ -14,13 +14,18 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
   const { months, settings, history, editInputs } = ctx;
   const [msg, setMsg] = useState<string | null>(null);
   const channels = roasChannels(settings, months);
-  const factorOf = (k: ChannelKey) => settings.multipliers[k] ?? 1;
+  /** Each month's basis: the blended aMER and total factors when the client has halo factors, else the aMER and the plain factor. */
+  const bases = months.map((m) => roasBasis(m.inputs, settings));
+  const factorOf = (k: ChannelKey) => bases[0]?.factorOf(k) ?? settings.multipliers[k] ?? 1;
+  const comFactor = (k: ChannelKey) => settings.multipliers[k] ?? 1;
+  const modelled = bases.some((b) => b.modelled);
+  const benchmark = bases.some((b) => b.benchmark);
 
   const setMethod = (k: ChannelKey, method: "suggested" | "manual") => {
     for (const m of months) {
       if (m.locked || !m.inputs) continue;
       if (method === "suggested") editInputs(m.month, (i) => withRoas(i, k, null));
-      else editInputs(m.month, (i) => withRoas(i, k, (() => { const v = roasTarget(i, k, factorOf(k)).value; return v === null ? null : round2(v); })()));
+      else editInputs(m.month, (i) => withRoas(i, k, (() => { const b = roasBasis(i, settings); const v = roasTarget(i, k, b.factorOf(k), b.amer).value; return v === null ? null : round2(v); })()));
     }
     setMsg(`${CHANNEL_LABELS[k]} set to ${method === "suggested" ? "Suggested" : "Manual"} for the open months (locked months skipped). Press Save plan to keep it.`);
   };
@@ -70,7 +75,9 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
               return (
                 <tr key={k} className="border-b border-border/40">
                   <td className="px-3 py-1">{CHANNEL_LABELS[k]}</td>
-                  <td className="px-2 py-1 text-right tabular text-text-muted">{factorOf(k)}</td>
+                  <td className="px-2 py-1 text-right tabular text-text-muted" title={factorOf(k) !== comFactor(k) ? `.com factor ${comFactor(k)} + halo ${round2(factorOf(k) - comFactor(k))}` : undefined}>
+                    {round2(factorOf(k))}
+                  </td>
                   <td className="px-2 py-1">
                     <select className={`${inputClass} w-28`} aria-label={`${CHANNEL_LABELS[k]} method`} value={method === "mixed" ? "mixed" : method} onChange={(e) => e.target.value !== "mixed" && setMethod(k, e.target.value as "suggested" | "manual")}>
                       <option value="suggested">Suggested</option>
@@ -78,8 +85,8 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
                       {method === "mixed" && <option value="mixed">Mixed</option>}
                     </select>
                   </td>
-                  {months.map((m) => {
-                    const t = roasTarget(m.inputs, k, factorOf(k));
+                  {months.map((m, mi) => {
+                    const t = roasTarget(m.inputs, k, bases[mi].factorOf(k), bases[mi].amer);
                     const shown = roasCellValue(t.value);
                     return (
                       <td key={m.month} className="px-1 py-1 text-right">
@@ -98,6 +105,14 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
           Actualize all YTD
         </button>
         <p className="text-xs text-text-faint">Typed values have an accent border. Returning channels have no target: aMER measures acquisition.</p>
+      </div>
+      <div>
+        {modelled && (
+          <p className="max-w-3xl text-xs text-text-muted">
+            This client has halo factors (Store Settings), so Suggested = the blended aMER ÷ the channel&apos;s total factor (.com + halo). A channel that also sends buyers to other sales channels gets a lower bar; one that does not gets a higher bar.
+            {benchmark ? " Modelled on a benchmark or assumed halo, not the client's own test." : ""}
+          </p>
+        )}
       </div>
       {msg && <p className="text-xs text-text-muted">{msg}</p>}
     </div>

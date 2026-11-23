@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import { blankInputs, type PlanMonth, type PlanMonthInputs } from "./types";
-import { actualPlatformRoas, planRoasTargets, roasCellValue, roasChannels, roasOf, roasTarget, rowMethod, suggestedRoas, withRoas } from "./roas";
-import type { ClientSettings, DailyFact } from "../types";
+import { actualPlatformRoas, planRoasTargets, roasBasis, roasCellValue, roasChannels, roasOf, roasTarget, rowMethod, suggestedRoas, withRoas } from "./roas";
+import type { ClientSettings, DailyFact, HaloSettings, OtherChannel } from "../types";
 
 const settings = (multipliers: ClientSettings["multipliers"]): ClientSettings => ({ ...defaultSettings("c"), multipliers });
 const inputs = (over: Partial<PlanMonthInputs> = {}): PlanMonthInputs => ({ ...blankInputs(), spend: 1000, amer: 2.21, platformPct: { google: 50, meta: 50 }, ...over });
@@ -139,5 +139,55 @@ describe("roasCellValue", () => {
   });
   it("is null when there is no target, never 0", () => {
     expect(roasCellValue(null)).toBeNull();
+  });
+});
+
+describe("halo: ROAS targets from the blended aMER and the total factor", () => {
+  const amazon: OtherChannel = { key: "amazon", label: "Amazon", kind: "marketplace", costPct: 65, aov: 30 };
+  const cells: HaloSettings["cells"] = { meta_acquisition: { amazon: { value: 0.2, source: "benchmark" } } };
+  const mults = { meta_acquisition: 1.2, google_nonbrand: 0.6 };
+  const withHalo = (multipliers: ClientSettings["multipliers"], c: HaloSettings["cells"] = cells): ClientSettings => {
+    const base = defaultSettings("c");
+    return { ...base, multipliers, extra: { ...base.extra, halo: { channels: [amazon], cells: c } } };
+  };
+  const example = (over: Partial<PlanMonthInputs> = {}) => month("2027-03", inputs({ amer: 1.5, platformPct: { meta: 80, google: 20 }, altPct: {}, ...over }));
+
+  it("lowers the bar for the channel with a halo and raises it for the one without (the spec's worked example)", () => {
+    const t = planRoasTargets([example()], withHalo(mults))["2027-03"];
+    expect(t.meta_acquisition).toBeCloseTo(1.2097, 3);
+    expect(t.google_nonbrand).toBeCloseTo(2.8226, 3);
+  });
+  it("equals today's targets when no halo is typed", () => {
+    const t = planRoasTargets([example()], settings(mults))["2027-03"];
+    expect(t.meta_acquisition).toBeCloseTo(1.25, 10);
+    expect(t.google_nonbrand).toBeCloseTo(2.5, 10);
+  });
+  it("keeps a typed target", () => {
+    const t = planRoasTargets([example({ roas: { meta_acquisition: 2 } })], withHalo(mults))["2027-03"];
+    expect(t.meta_acquisition).toBe(2);
+  });
+  it("keeps the same target for a single channel at the same aMER: the halo moves the budget, not this number", () => {
+    const t = planRoasTargets([example({ platformPct: { meta: 100 } })], withHalo(mults))["2027-03"];
+    expect(t.meta_acquisition).toBeCloseTo(1.25, 10);
+  });
+  it("gives no target to a channel whose total factor is zero", () => {
+    const t = planRoasTargets([example()], withHalo({ meta_acquisition: 0, google_nonbrand: 0.6 }, {}))["2027-03"];
+    expect(t.meta_acquisition).toBeUndefined();
+    expect(t.google_nonbrand).toBeCloseTo(2.5, 10);
+  });
+  it("roasBasis reports the blended aMER, the total factors and where the halo comes from", () => {
+    const b = roasBasis(example().inputs, withHalo(mults));
+    expect(b.amer).toBeCloseTo(1.693548, 5);
+    expect(b.factorOf("meta_acquisition")).toBeCloseTo(1.4, 10);
+    expect(b.factorOf("google_nonbrand")).toBe(0.6);
+    expect(b.modelled).toBe(true);
+    expect(b.benchmark).toBe(true);
+  });
+  it("roasBasis is the plain aMER and factor with no halo, and safe with no inputs", () => {
+    const b = roasBasis(example().inputs, settings(mults));
+    expect(b.amer).toBe(1.5);
+    expect(b.factorOf("meta_acquisition")).toBe(1.2);
+    expect(b.modelled).toBe(false);
+    expect(roasBasis(null, withHalo(mults)).modelled).toBe(false);
   });
 });

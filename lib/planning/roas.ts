@@ -1,5 +1,6 @@
 import { RETENTION_CHANNELS } from "../channels";
 import { CHANNEL_KEYS, type ChannelKey, type ClientSettings, type DailyFact } from "../types";
+import { acquisitionShares, blendedAmer, haloMix, totalFactor } from "./halo";
 import { PLAN_PLATFORMS, type PlanMonth, type PlanMonthInputs } from "./types";
 
 /** Channels that are always listed: the core of every client's media plan. */
@@ -24,12 +25,33 @@ export function roasChannels(settings: ClientSettings, months: PlanMonth[]): Cha
   return CHANNEL_KEYS.filter((k) => !RETENTION_CHANNELS.includes(k) && (CORE.includes(k) || settings.multipliers[k] !== undefined || planned.has(k)));
 }
 
-/** A month's target for one channel: the typed value when it is above zero, else the suggested one. */
-export function roasTarget(inputs: PlanMonthInputs | null, channel: ChannelKey, factor: number): { value: number | null; manual: boolean } {
+/**
+ * What a month's suggested targets are built on. With no halo typed: the month's aMER and each channel's incrementality factor.
+ * With halo factors (Store Settings): the blended aMER (new revenue on every sales channel over aMER spend) and each channel's
+ * total factor (.com + halo), so a channel that sends buyers to Amazon or stores gets a lower bar and one that does not gets a higher one.
+ */
+export interface RoasBasis {
+  amer: number;
+  factorOf: (k: ChannelKey) => number;
+  /** True when a halo changes this month's numbers. */
+  modelled: boolean;
+  /** True when a halo factor behind them is a benchmark or an assumption. */
+  benchmark: boolean;
+}
+
+export function roasBasis(inputs: PlanMonthInputs | null, settings: ClientSettings): RoasBasis {
+  const factorOf = (k: ChannelKey) => totalFactor(k, settings);
+  if (!inputs) return { amer: 0, factorOf, modelled: false, benchmark: false };
+  const mix = haloMix(acquisitionShares(inputs, settings), settings);
+  return { amer: blendedAmer(inputs.amer, mix), factorOf, modelled: mix.modelled, benchmark: mix.benchmark };
+}
+
+/** A month's target for one channel: the typed value when it is above zero, else the suggested one (`amer` defaults to the month's aMER; pass the basis's blended aMER and total factor to include the halo). */
+export function roasTarget(inputs: PlanMonthInputs | null, channel: ChannelKey, factor: number, amer?: number): { value: number | null; manual: boolean } {
   if (!inputs) return { value: null, manual: false };
   const typed = inputs.roas?.[channel];
   if (typed !== undefined && Number.isFinite(typed) && typed > 0) return { value: typed, manual: true };
-  return { value: suggestedRoas(inputs.amer, factor), manual: false };
+  return { value: suggestedRoas(amer ?? inputs.amer, factor), manual: false };
 }
 
 /** Platform ROAS targets per month (key YYYY-MM) and channel. */
@@ -41,8 +63,9 @@ export function planRoasTargets(months: PlanMonth[], settings: ClientSettings): 
   for (const m of months) {
     if (!m.inputs) continue;
     const row: Partial<Record<ChannelKey, number>> = {};
+    const basis = roasBasis(m.inputs, settings);
     for (const k of channels) {
-      const v = roasTarget(m.inputs, k, settings.multipliers[k] ?? 1).value;
+      const v = roasTarget(m.inputs, k, basis.factorOf(k), basis.amer).value;
       if (v !== null) row[k] = v;
     }
     out[m.month.slice(0, 7)] = row;

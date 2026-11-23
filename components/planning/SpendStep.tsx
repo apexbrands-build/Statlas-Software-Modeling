@@ -9,7 +9,7 @@ import { dailySpendColumns, defaultSpendMonth } from "@/lib/planning/spend-colum
 import { PLAN_PLATFORMS, type DayOverride, type PlanMonthInputs } from "@/lib/planning/types";
 import { CHANNEL_LABELS, type ChannelKey } from "@/lib/types";
 import { aggregate, aggregatePlan, planAmerSpend, totalSpend } from "@/lib/metrics";
-import { roasChannels, roasTarget } from "@/lib/planning/roas";
+import { roasBasis, roasChannels, roasTarget } from "@/lib/planning/roas";
 import { Legend, LineChart } from "./models/charts";
 import type { PlanCtx } from "./ctx";
 import { FillMenu } from "./FillMenu";
@@ -312,11 +312,12 @@ export function SpendStep({ ctx }: { ctx: PlanCtx }) {
 /** The month's ROAS targets next to the spend that was just allocated: what each channel's planned spend should return. Edited in Details. */
 function RoasPanel({ ctx, inputs, totals, money }: { ctx: PlanCtx; inputs: PlanMonthInputs; totals: ReturnType<typeof aggregatePlan>; money: (v: number | null, f?: "currency0" | "currency2" | "ratio2" | "percent1") => string }) {
   const { settings, months } = ctx;
-  const factorOf = (k: ChannelKey) => settings.multipliers[k] ?? 1;
+  const basis = roasBasis(inputs, settings);
+  const factorOf = (k: ChannelKey) => basis.factorOf(k);
   const rows = roasChannels(settings, months)
     .filter((k) => (totals.spendByChannel[k] ?? 0) > 0)
     .map((k) => {
-      const t = roasTarget(inputs, k, factorOf(k));
+      const t = roasTarget(inputs, k, factorOf(k), basis.amer);
       const spend = totals.spendByChannel[k] ?? 0;
       return { k, spend, factor: factorOf(k), platform: t.value, manual: t.manual, incremental: t.value === null ? null : t.value * factorOf(k), expected: t.value === null ? null : spend * t.value };
     });
@@ -325,7 +326,11 @@ function RoasPanel({ ctx, inputs, totals, money }: { ctx: PlanCtx; inputs: PlanM
   return (
     <section className="space-y-2 rounded-xl border border-border bg-surface p-4">
       <h3 className="text-sm font-semibold">ROAS targets</h3>
-      <p className="text-xs text-text-muted">What the planned spend should return. Platform ROAS target = aMER ÷ the channel&apos;s incrementality factor; the incremental ROAS target is the aMER. Change them in Details, ROAS targets.</p>
+      <p className="text-xs text-text-muted">
+        {basis.modelled
+          ? `What the planned spend should return across every sales channel. Platform ROAS target = blended aMER ÷ the channel's total factor (.com + halo, from Store Settings); the incremental ROAS target is the blended aMER${basis.benchmark ? ", modelled on a benchmark halo" : ""}. Change them in Details, ROAS targets.`
+          : "What the planned spend should return. Platform ROAS target = aMER ÷ the channel's incrementality factor; the incremental ROAS target is the aMER. Change them in Details, ROAS targets."}
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-sm">
           <thead>
@@ -343,7 +348,7 @@ function RoasPanel({ ctx, inputs, totals, money }: { ctx: PlanCtx; inputs: PlanM
               <tr key={r.k} className="border-b border-border/40">
                 <td className="px-2 py-1">{CHANNEL_LABELS[r.k]}</td>
                 <td className="px-2 py-1 text-right tabular">{money(r.spend)}</td>
-                <td className="px-2 py-1 text-right tabular text-text-muted">{r.factor}</td>
+                <td className="px-2 py-1 text-right tabular text-text-muted">{Math.round(r.factor * 100) / 100}</td>
                 <td className="px-2 py-1 text-right tabular">{r.incremental === null ? "–" : money(r.incremental, "ratio2")}</td>
                 <td className={`px-2 py-1 text-right tabular font-medium ${r.manual ? "text-accent" : ""}`}>{r.platform === null ? "–" : money(r.platform, "ratio2")}</td>
                 <td className="px-2 py-1 text-right tabular">{r.expected === null ? "–" : money(r.expected)}</td>
