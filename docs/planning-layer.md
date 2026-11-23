@@ -78,7 +78,8 @@ Its own section in the sidebar, **Ad plan** (`/ad-plan`, moved out of the plan's
 - **Other channels in the plan:** Details > "Other sales channels" holds a typed forecast per channel and month and the ad spend it assumed; the halo is a transfer of credit inside that forecast, never extra revenue. Retail has a simple frame (retailer rows) until a typed number replaces it.
 - **Code:** `lib/planning/halo.ts` (factors, mix, blended aMER), `lib/planning/other-channels.ts` (plan lines, retail frame, guardrails), `evaluateSpend` / `buildSpendTable` / `withHalo` in `lib/planning/new-customer.ts`, `roasBasis` in `lib/planning/roas.ts`.
 - **Limits:** a factor is a slope measured at one spend level and season, valid near that point; second-round effects are not modelled; nothing changes for a client with no halo typed.
-- **Next:** phase B (actuals of the other channels, the Omnichannel report), phase C (connectors).
+- **Phase B, built 2026-11-23** (spec `docs/superpowers/specs/2026-11-23-omnichannel-views-design.md`): the other channels' daily sales live in `channel_sales` (migration 0021), loaded by a CSV import or from synced Shopify orders. Home has a View selector (Own site, Whole business, one per channel): each channel is tracked against its own forecast and the whole business against the plan. The Models step has "Other Channels Model": the New Customer regression on a channel's own ad spend and revenue, which can fill the channel's forecast. Code in `lib/omni/`.
+- **Next:** the daily message, and connectors (Amazon, TikTok Shop, or a reader on the brand's data warehouse) once access exists.
 
 ## Still open
 Backtest for the New/Returning models; the growth diagnostic in `docs/scenarios-and-diagnostic.md`; marketing events from Klaviyo/SMS; apply migrations 0005-0008 in Supabase (SQL editor).
