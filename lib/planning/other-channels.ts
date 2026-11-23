@@ -177,6 +177,8 @@ export interface OtherMonthLine {
   /** What the forecast starts from: the typed number, else the retail frame, else nothing. */
   base: number | null;
   assumedSpend: number | null;
+  /** Planned ad spend on the channel itself (0 when none is typed). */
+  adSpend: number;
   /** Revenue the plan's ads create on this channel at the planned spend. */
   halo: number;
   /** The base moved by the halo on the spend it did not assume (null with no base). */
@@ -227,6 +229,7 @@ export function otherMonth(month: string, inputs: PlanMonthInputs, settings: Cli
       frame,
       base,
       assumedSpend,
+      adSpend: num(line.adSpend),
       halo,
       forecast: moved.forecast,
       created: moved.created,

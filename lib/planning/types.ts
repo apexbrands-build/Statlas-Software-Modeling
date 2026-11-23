@@ -59,6 +59,8 @@ export interface PlanMix {
 export interface OtherLine {
   revenue?: number | null;
   assumedSpend?: number | null;
+  /** Planned ad spend on the channel itself (Amazon Ads, GMV Max, retail media). Counts in the channel's contribution and in whole-business spend. */
+  adSpend?: number | null;
 }
 
 /** What the strategist decides for one month; everything else is derived. */
