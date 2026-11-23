@@ -7,6 +7,7 @@ import { theme } from "@/theme/theme";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { authEnabled, dataMode } from "@/lib/supabase/env";
+import { isBarePage } from "@/lib/public-paths";
 
 type IconName = "home" | "folder" | "target" | "calendar" | "trend" | "gear";
 
@@ -135,12 +136,9 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Pages merchants and Shopify reviewers open without an Apex account: no sidebar, no client loading. */
-const PUBLIC_PATHS = ["/shopify", "/privacy", "/support"];
-
 export function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
-  if (PUBLIC_PATHS.includes(path)) return <>{children}</>;
+  if (isBarePage(path)) return <>{children}</>;
   return (
     <AppProvider>
       <Shell>{children}</Shell>
