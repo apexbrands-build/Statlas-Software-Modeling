@@ -167,6 +167,62 @@ export interface ExtraSettings {
   tiktokGmvCommissionPct: number;
   /** Meta campaigns whose name contains one of these words (comma separated, any case) are catalog ads: left out of the creative demand model and score. */
   catalogKeywords: string;
+  /** Other sales channels (Amazon, TikTok Shop, retail) and the halo factors of each ad channel on them. Absent = nothing typed, every number stays .com only. */
+  halo?: HaloSettings;
+}
+
+/** Where a halo factor comes from. Anything but the client's own test is shown as a benchmark. */
+export type HaloSource = "benchmark" | "own_test" | "assumption";
+
+/** One cell of the halo grid: incremental revenue on another sales channel per $1 of revenue the ad platform reports. */
+export interface HaloCell {
+  value: number;
+  source: HaloSource;
+  /** Date the factor was measured (YYYY-MM-DD). */
+  measuredOn?: string;
+  /** The ad channel's monthly spend when it was measured: the factor only holds near that level. */
+  measuredSpend?: number;
+  note?: string;
+  /** Retail cells only: the value was measured on shelf sales, so it is converted with the channel's net %. */
+  onShelf?: boolean;
+}
+
+/** A retailer in a retail channel's simple frame: doors x units per store per week x shelf price. An expansion is a new row. */
+export interface RetailerRow {
+  retailer: string;
+  /** First month on shelf, YYYY-MM. */
+  launchMonth: string;
+  doors: number;
+  unitsPerStoreWeek: number;
+  shelfPrice: number;
+  /** First stocking order in units, counted once in the launch month. */
+  pipelineUnits?: number;
+}
+
+/** A sales channel other than .com. */
+export interface OtherChannel {
+  key: string;
+  label: string;
+  kind: "marketplace" | "retail";
+  /** Variable costs as % of the channel's net revenue (COGS, fees, fulfilment, trade spend). */
+  costPct: number;
+  aov: number;
+  /** Repeat revenue within 60 / 90 / 365 days as a multiple of the first order. Absent = 1 (no repeat value counted). */
+  ltv60?: number;
+  ltv90?: number;
+  ltv365?: number;
+  /** Retail only: the brand's net revenue as % of the shelf price. */
+  netPct?: number;
+  /** Shopify sales channels that feed this channel. */
+  shopifyChannels?: string[];
+  /** Retail only. */
+  retailers?: RetailerRow[];
+}
+
+export interface HaloSettings {
+  channels: OtherChannel[];
+  /** Ad channel -> sales channel key -> cell. */
+  cells: Partial<Record<ChannelKey, Record<string, HaloCell>>>;
 }
 
 export interface ClientSettings {
