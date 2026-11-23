@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { BrandIcon, channelProvider } from "@/components/BrandIcon";
+import { HaloSettings } from "./HaloSettings";
 import { Accordion, Check, Field, inputCls, Modal, NumberInput, Select, Switch } from "./ui";
 import { PLATFORMS, platformOf } from "@/lib/channels";
 import { channelOptions, type OrderChannel } from "@/lib/order-channels";
+import { haloSettingsOf } from "@/lib/planning/halo";
 import { CHANNEL_KEYS, type ChannelKey, type ClientSettings, type ExtraSettings } from "@/lib/types";
 
 const INDUSTRIES = ["Jewelry & Accessories", "Apparel", "Beauty & Personal Care", "Health & Wellness", "Home & Garden", "Food & Beverage", "Sports & Outdoors", "Electronics", "Pets", "Other"];
@@ -207,6 +209,10 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, chann
           </div>
         </div>
         <p className="text-xs text-text-faint">Platform-reported revenue × factor = incremental revenue. Set per client (for example from a geo-holdout or a third-party incrementality study).</p>
+      </Accordion>
+
+      <Accordion title="Other sales channels and halo" subtitle="Amazon, TikTok Shop, retail: what the ads create there">
+        <HaloSettings value={haloSettingsOf(d)} multipliers={d.multipliers} onChange={(next) => ex("halo", next)} />
       </Accordion>
 
       <Accordion title="aMER/CAC Calculation" subtitle="Exclude campaigns from aMER/CAC calculation">
