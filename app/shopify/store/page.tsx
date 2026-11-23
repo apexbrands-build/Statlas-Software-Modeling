@@ -38,11 +38,21 @@ export default async function StorePage({ searchParams }: { searchParams: Promis
     .limit(1)
     .maybeSingle();
   if (!integration || integration.status !== "connected") {
+    // Installed before installs connected themselves: the refresh call below connects the store, then this page reloads.
+    const { data: install } = await admin.from("shopify_installs").select("ciphertext,uninstalled_at").eq("shop", shop).maybeSingle();
+    const installed = Boolean(install?.ciphertext && !install.uninstalled_at);
     return (
       <PublicPage title={APP_NAME}>
-        <p>
-          <strong>{shop}</strong> is not connected. Open {APP_NAME} from your Shopify admin (Apps → {APP_NAME}) to connect it again.
-        </p>
+        {installed ? (
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <p className="text-text">Connecting {shop} and loading its orders. This page fills in by itself.</p>
+            <StoreRefresher shop={shop} exp={sp.exp!} sig={sp.sig!} importing />
+          </div>
+        ) : (
+          <p>
+            <strong>{shop}</strong> is not connected. Install {APP_NAME} again from your Shopify admin to connect it.
+          </p>
+        )}
       </PublicPage>
     );
   }

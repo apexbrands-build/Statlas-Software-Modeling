@@ -104,6 +104,12 @@ export async function createJob(integrationId: string, opts: { months?: number; 
   return { id: job.id as string, alreadyRunning: false };
 }
 
+/** A connection's job that is still waiting to start (its start signal may have been lost), or null. */
+export async function queuedJobId(integrationId: string): Promise<string | null> {
+  const { data } = await getAdminClient().from("sync_jobs").select("id").eq("integration_id", integrationId).eq("status", "queued").limit(1);
+  return (data?.[0]?.id as string | undefined) ?? null;
+}
+
 /* ---------- connection health ---------- */
 
 /** Updates `integrations.consecutive_failures` after a daily "recent" job ends. Best effort: it runs inside the chunk's try block, so it must never throw. */

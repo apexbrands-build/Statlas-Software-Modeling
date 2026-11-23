@@ -158,3 +158,16 @@ export async function provisionStoreClient(shop: string, tokens: ShopifyTokens):
   if (isNew && integration.account_name) await admin.from("clients").update({ name: integration.account_name }).eq("id", clientId);
   return { clientId, integrationId: integration.id as string };
 }
+
+/** The Shopify connection for a store (the oldest, if an Apex user linked it to more than one client), or null. */
+export async function findStoreIntegration(shop: string): Promise<{ id: string; client_id: string; status: string } | null> {
+  const { data } = await getAdminClient()
+    .from("integrations")
+    .select("id,client_id,status")
+    .eq("provider", "shopify")
+    .eq("account_id", shop)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string; client_id: string; status: string } | null) ?? null;
+}
