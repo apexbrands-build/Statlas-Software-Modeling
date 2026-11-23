@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cellValue, haloGridChannels } from "@/lib/planning/halo";
+import { getRepository } from "@/lib/repository";
 import { CHANNEL_LABELS, type ChannelKey, type HaloCell, type HaloSettings as Halo, type HaloSource, type OtherChannel, type RetailerRow } from "@/lib/types";
 import { ChannelImport } from "./ChannelImport";
 import { Check, Field, inputCls, NumberInput } from "./ui";
@@ -27,7 +28,22 @@ const smallBtn = "rounded-lg border border-border px-3 py-1.5 text-xs text-text-
  * Store Settings > Edit > "Other sales channels and halo": the client's sales channels besides its own site, and how much revenue each
  * ad channel creates on them (the halo factors). Factors are typed from tests run elsewhere; nothing here estimates one.
  */
-export function HaloSettings({ value, multipliers, onChange, clientId, currency }: { value: Halo; multipliers: Partial<Record<ChannelKey, number>>; onChange: (next: Halo) => void; clientId: string; currency: string }) {
+export function HaloSettings({
+  value,
+  multipliers,
+  onChange,
+  clientId,
+  currency,
+  shopifyChannels,
+}: {
+  value: Halo;
+  multipliers: Partial<Record<ChannelKey, number>>;
+  onChange: (next: Halo) => void;
+  clientId: string;
+  currency: string;
+  /** Shopify sales channels found on the store's orders that are not counted as the own site. */
+  shopifyChannels: string[];
+}) {
   const [open, setOpen] = useState<string | null>(null);
   // Channels with a factor, plus any channel that still carries a halo: a cell keeps working after its factor is deleted, so it stays visible.
   const adChannels = haloGridChannels(multipliers, value);
@@ -99,6 +115,7 @@ export function HaloSettings({ value, multipliers, onChange, clientId, currency 
             </div>
             {c.kind === "retail" && <Retailers channel={c} onChange={(rows) => setRetailers(c.key, rows)} />}
             <ChannelImport clientId={clientId} channel={c} currency={currency} />
+            {shopifyChannels.length > 0 && <ShopifyFeed clientId={clientId} channel={c} options={shopifyChannels} onChange={(list) => setChannel(c.key, { shopifyChannels: list })} />}
             <div className="flex justify-end">
               <button type="button" className="text-xs font-semibold text-bad hover:underline" onClick={() => removeChannel(c.key)}>
                 Delete {c.label}
@@ -199,6 +216,39 @@ export function HaloSettings({ value, multipliers, onChange, clientId, currency 
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+/** For a channel whose orders are already synced into Shopify under another sales channel: pick those channels and pull their orders in as the channel's sales. */
+function ShopifyFeed({ clientId, channel, options, onChange }: { clientId: string; channel: OtherChannel; options: string[]; onChange: (list: string[]) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const picked = channel.shopifyChannels ?? [];
+  const pull = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const days = await getRepository().pullChannelSalesFromOrders(clientId, channel.key, picked, "2010-01-01", new Date().toISOString().slice(0, 10));
+      setNote(days === null ? "The database is not ready for this yet (migration 0021)." : days === 0 ? "No orders found on those Shopify channels." : `Pulled ${days} day${days === 1 ? "" : "s"} of orders into ${channel.label}.`);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Could not pull the orders.");
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 p-3">
+      <div className="text-xs font-semibold text-text">Or use orders already synced from Shopify</div>
+      <p className="text-xs text-text-muted">If {channel.label} orders arrive in Shopify under their own sales channel, tick it. Their revenue and orders are then pulled in by day. Shopify knows nothing about ad spend on the channel.</p>
+      <div className="flex flex-wrap gap-x-5 gap-y-1">
+        {options.map((o) => (
+          <Check key={o} checked={picked.some((p) => p.toLowerCase() === o.toLowerCase())} onChange={(v) => onChange(v ? [...picked, o] : picked.filter((p) => p.toLowerCase() !== o.toLowerCase()))} label={o} />
+        ))}
+      </div>
+      <button type="button" disabled={busy || picked.length === 0} onClick={pull} className={`${smallBtn} disabled:opacity-50`}>
+        {busy ? "Pulling…" : "Pull their orders now"}
+      </button>
+      {note && <p className="text-xs text-text-muted">{note}</p>}
     </div>
   );
 }

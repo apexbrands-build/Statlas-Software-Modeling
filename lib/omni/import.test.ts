@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseChannelCsv } from "./import";
+import { parseChannelCsv, shopifyDaysToSales } from "./import";
 
 describe("parseChannelCsv: a plain file", () => {
   const text = "date,revenue,orders,units,ad spend\n2027-03-01,1200.50,40,55,150\n2027-03-02,900,30,41,120\n";
@@ -81,5 +81,17 @@ describe("parseChannelCsv: what it refuses, line by line", () => {
     const r = parseChannelCsv("date,revenue,orders\n2027-03-01,100,\n2027-03-02,,4\n", "amazon");
     expect(r.rows[0].orders).toBe(0);
     expect(r.errors.map((e) => e.line)).toEqual([3]);
+  });
+});
+
+describe("shopifyDaysToSales: a channel fed by synced Shopify orders", () => {
+  it("turns each day of orders into a row for the channel, marked as coming from Shopify", () => {
+    expect(shopifyDaysToSales("tiktok_shop", [{ date: "2027-03-01", revenue: "120.50", orders: 3 }, { date: "2027-03-02", revenue: 80, orders: "2" }])).toEqual([
+      { date: "2027-03-01", channel: "tiktok_shop", retailer: "", revenue: 120.5, orders: 3, units: 0, adSpend: 0, source: "shopify" },
+      { date: "2027-03-02", channel: "tiktok_shop", retailer: "", revenue: 80, orders: 2, units: 0, adSpend: 0, source: "shopify" },
+    ]);
+  });
+  it("leaves out days it cannot read", () => {
+    expect(shopifyDaysToSales("tiktok_shop", [{ date: null, revenue: 5, orders: 1 }, { date: "2027-03-01", revenue: "x", orders: 1 }])).toEqual([]);
   });
 });

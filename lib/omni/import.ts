@@ -147,3 +147,19 @@ export function parseChannelCsv(text: string, channel: string, dateFormat: DateF
   }
   return out;
 }
+
+/**
+ * Days of synced Shopify orders (the `channel_sales_from_orders` database function) as sales rows of a channel. Shopify orders carry
+ * no ad spend and no unit count here, so those stay zero. Days that cannot be read are left out.
+ */
+export function shopifyDaysToSales(channel: string, rows: { date: unknown; revenue: unknown; orders: unknown }[]): ChannelSale[] {
+  const out: ChannelSale[] = [];
+  for (const r of rows) {
+    const date = typeof r.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(r.date) ? r.date.slice(0, 10) : null;
+    const revenue = Number(r.revenue);
+    const orders = Number(r.orders);
+    if (!date || !Number.isFinite(revenue) || revenue < 0) continue;
+    out.push({ date, channel, retailer: "", revenue, orders: Number.isFinite(orders) && orders > 0 ? orders : 0, units: 0, adSpend: 0, source: "shopify" });
+  }
+  return out;
+}

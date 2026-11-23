@@ -6,6 +6,7 @@ import { mapMetaLaunches, type MetaAdRow, type MetaLaunch } from "./meta-launche
 import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
+import { shopifyDaysToSales } from "../omni/import";
 import type { ChannelSale } from "../omni/types";
 import type { OrderChannel } from "../order-channels";
 import { getBrowserClient } from "../supabase/client";
@@ -593,6 +594,18 @@ export class SupabaseRepository implements Repository {
     }
     const source = (v: unknown): ChannelSale["source"] => (v === "shopify" || v === "connector" ? v : "import");
     return rows.map((r) => ({ date: r.date as string, channel: r.sales_channel as string, retailer: (r.retailer as string) ?? "", revenue: n(r.revenue), orders: n(r.orders), units: n(r.units), adSpend: n(r.ad_spend), source: source(r.source) }));
+  }
+
+  async pullChannelSalesFromOrders(clientId: string, channel: string, shopifyChannels: string[], from: string, to: string): Promise<number | null> {
+    if (!shopifyChannels.length) return 0;
+    const { data, error } = await this.db.rpc("channel_sales_from_orders", { p_client: clientId, p_channels: shopifyChannels, p_from: from, p_to: to });
+    if (error) {
+      if (/channel_sales_from_orders|PGRST202|PGRST205|42883/.test(`${error.code} ${error.message}`)) return null;
+      throw new Error(error.message);
+    }
+    const rows = shopifyDaysToSales(channel, (data ?? []) as { date: unknown; revenue: unknown; orders: unknown }[]);
+    if (rows.length) await this.saveChannelSales(clientId, channel, rows);
+    return rows.length;
   }
 
   async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {

@@ -81,4 +81,9 @@ export interface Repository {
   getChannelSales(clientId: string, from: string, to: string): Promise<ChannelSale[] | null>;
   /** Saves one channel's sales, replacing that channel's rows on the days present in `rows` (every retailer of those days). */
   saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void>;
+  /**
+   * For a channel fed by Shopify sales channels (for example TikTok Shop orders synced into Shopify): rolls those orders up by day
+   * and saves them as the channel's sales. Returns the days saved; null when the database function is not there yet (migration 0021).
+   */
+  pullChannelSalesFromOrders(clientId: string, channel: string, shopifyChannels: string[], from: string, to: string): Promise<number | null>;
 }

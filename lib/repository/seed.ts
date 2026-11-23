@@ -649,6 +649,11 @@ export class SeedRepository implements Repository {
     return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : a.retailer < b.retailer ? -1 : 1));
   }
 
+  /** The demo data has no real orders to roll up. */
+  async pullChannelSalesFromOrders(): Promise<number | null> {
+    return 0;
+  }
+
   async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {
     const key = `${clientId}|${channel}`;
     const dates = new Set(rows.map((r) => r.date));
