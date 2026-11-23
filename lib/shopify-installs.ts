@@ -125,3 +125,36 @@ export async function linkInstallToClient(shop: string, clientId: string, tokens
   if (currency && timezone) await admin.from("clients").update({ currency, timezone }).eq("id", clientId);
   return true;
 }
+
+/**
+ * A store installed straight from Shopify (no Apex user linking it to a client): reuse the client this store is already linked to,
+ * or create one named after the store, then connect it. Installing is all a merchant (or an App Store reviewer) has to do.
+ */
+export async function provisionStoreClient(shop: string, tokens: ShopifyTokens): Promise<{ clientId: string; integrationId: string } | null> {
+  const admin = getAdminClient();
+  const { data: existing } = await admin
+    .from("integrations")
+    .select("client_id")
+    .eq("provider", "shopify")
+    .eq("account_id", shop)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  let clientId = existing?.[0]?.client_id as string | undefined;
+  const isNew = !clientId;
+  if (!clientId) {
+    const { data: created, error } = await admin.from("clients").insert({ name: shop }).select("id").single();
+    if (error || !created) return null;
+    clientId = created.id as string;
+  }
+  if (!(await linkInstallToClient(shop, clientId, tokens))) return null;
+  const { data: integration } = await admin
+    .from("integrations")
+    .select("id,account_name")
+    .eq("client_id", clientId)
+    .eq("provider", "shopify")
+    .eq("account_id", shop)
+    .single();
+  if (!integration) return null;
+  if (isNew && integration.account_name) await admin.from("clients").update({ name: integration.account_name }).eq("id", clientId);
+  return { clientId, integrationId: integration.id as string };
+}

@@ -40,6 +40,8 @@ export interface ShopifySyncOptions {
   includeUpdated?: boolean;
   /** Epoch ms after which the order fetch gives up (so a background task can retry smaller). */
   deadline?: number;
+  /** Let the range run to the store's today (the store page, so orders placed minutes ago show). Default: stop at yesterday. */
+  includeToday?: boolean;
 }
 
 /**
@@ -51,10 +53,10 @@ export async function syncShopify(integrationId: string, opts: ShopifySyncOption
   const { admin, integration, token, shop, clientId } = await loadConnection(integrationId);
   const { data: run } = await admin.from("sync_runs").insert({ client_id: clientId, integration_id: integrationId, provider: "shopify" }).select("id").single();
   try {
-    const range = resolveRange(opts.body, 60);
-    const includeUpdated = opts.includeUpdated ?? !(opts.body.from && opts.body.to);
     const { data: client } = await admin.from("clients").select("timezone").eq("id", clientId).single();
     const tz = client?.timezone || "UTC";
+    const range = resolveRange(opts.body, 60, opts.includeToday ? localDate(new Date().toISOString(), tz) : undefined);
+    const includeUpdated = opts.includeUpdated ?? !(opts.body.from && opts.body.to);
     const { data: settings } = await admin.from("client_settings").select("dtc_channels,excluded_order_tags").eq("client_id", clientId).maybeSingle();
     const dtc = new Set(((settings?.dtc_channels as string[]) ?? ["Online Store", "Shop"]).map((c) => c.toLowerCase()));
     const excludedTags = new Set(((settings?.excluded_order_tags as string[]) ?? []).map((t) => t.toLowerCase()));

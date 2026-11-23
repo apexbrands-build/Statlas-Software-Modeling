@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
-import { exchangeCode, linkInstallToClient, saveInstall } from "@/lib/shopify-installs";
+import { after, NextResponse } from "next/server";
+import { createJob, kickRunner } from "@/lib/jobs";
+import { exchangeCode, linkInstallToClient, provisionStoreClient, saveInstall } from "@/lib/shopify-installs";
+import { signStoreLink, storeLinkQuery } from "@/lib/store-link";
 import { normalizeShop, verifyShopifyHmac } from "@/lib/shopify";
 import { getServerClient } from "@/lib/supabase/server";
 
@@ -36,7 +38,19 @@ export async function GET(request: Request) {
   await saveInstall(shop, tokens);
 
   if (!saved.clientId) {
-    const res = NextResponse.redirect(new URL(`/shopify?shop=${encodeURIComponent(shop)}&installed=1`, request.url));
+    // Installed from Shopify: connect the store on its own, start loading its orders, and open the store's own page.
+    let target = `/shopify?shop=${encodeURIComponent(shop)}&installed=1`;
+    const store = await provisionStoreClient(shop, tokens);
+    if (store) {
+      try {
+        const job = await createJob(store.integrationId, { kind: "history", months: 12 });
+        if (!job.alreadyRunning) after(() => kickRunner(job.id));
+      } catch {
+        /* the store page also checks Shopify for orders when it opens */
+      }
+      target = `/shopify/store?${storeLinkQuery(signStoreLink(shop, process.env.SHOPIFY_CLIENT_SECRET!))}`;
+    }
+    const res = NextResponse.redirect(new URL(target, request.url));
     res.cookies.delete({ name: "shopify_oauth", path: "/api/shopify" });
     return res;
   }

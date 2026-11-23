@@ -8,7 +8,7 @@ Field limits below are from memory; Shopify's form shows the real counters, trim
 
 ## 0. Read first: risks
 
-1. **Reviewers expect a merchant-facing app.** Positioned (as decided) as data analytics software; the listing and pages stay truthful that reports are viewed by the Apex team working with the store (do not claim merchants log in to a self-serve dashboard, or that a paid plan exists, until they are built; "planned" wording is fine). Rejection for "no merchant value" is still possible. If it happens, reply with the agency use case; the fallback is custom distribution (one install link per store, in the same Plus org or per store).
+1. **Reviewers expect a merchant-facing app.** Since 2026-11-23 installing opens the store's own page (Total sales breakdown, new vs returning, by day), so the listing may say merchants see their store's sales in the app; the full dashboard (plans, reports, ad channels) stays with the Apex team. Do not claim a paid plan exists. Rejection for "no merchant value" is still possible. If it happens, reply with the agency use case; the fallback is custom distribution (one install link per store, in the same Plus org or per store).
 2. **Protected customer data + `read_all_orders`** both need a request in the Dev Dashboard (section 3). They can take longer than the review itself.
 3. **Install flow (changed 2026-10-15).** The legacy install flow is off: the Shopify CLI refuses app-specific webhooks (the mandatory privacy topics, which the API cannot register) while it is on. Installation is managed by Shopify; the app still gets its token through its own OAuth route (`app/api/shopify/install` + `callback`), which works on the dev store. Webhooks live in [shopify.app.toml](../../shopify.app.toml) and are deployed with `npx @shopify/cli@latest app deploy --allow-updates` (client ID set in the file; never run `config link` or deploy with an empty client ID, the CLI overwrites the file with the live config and drops the webhooks). Active version: `apex-analytics-4`.
 4. Contact email on every public page is `admin@apexbrands.io` (set in `lib/legal.ts`). Change it to a shared mailbox such as support@ before submitting if you have one.
@@ -75,19 +75,21 @@ The screenshots use the built-in demo store ("Northwind Jewellery", fake data), 
 
 ## 5. Test instructions for the reviewer (paste into "Testing instructions")
 
-> Apex Analytics is a read-only data analytics app. Merchants install it; the reports are currently viewed in a separate dashboard by the Apex Brands team working with the store. Direct dashboard access for brands, and a paid subscription for brands outside Apex, are planned and not part of this submission.
->
-> 1. Install the app on your development store from the app listing / install link. You will see Shopify's permission screen (read orders, customers, products, inventory) and land on the app page confirming the store is connected, with what is accessed and how to uninstall. No account is needed for this.
-> 2. To see the reporting dashboard, sign in at https://apex-data-beta.vercel.app/login with the review account: **[email]** / **[password]** (provided in the credentials field, not here). Go to Store Settings → Add Connection → Shopify, enter your store's `.myshopify.com` domain and click Connect: the existing install is linked. Click Edit on the Shopify row → Sync now. Then open Home to see revenue, new vs returning, and contribution margin. The sidebar pages Reporting (report library), Planning (forecast plan with daily targets) and Calendar (marketing events) use the same read-only order data.
-> 3. Uninstall from Settings → Apps. The app receives `app/uninstalled` and stops access; `shop/redact`, `customers/redact` and `customers/data_request` are handled at `/api/shopify/webhooks` (HMAC-verified).
->
-> The app never writes to the store. Privacy policy: /privacy. Support: /support.
+Rewritten 2026-11-23 after the third 2.1.4 pause: the reviewer installed, was told "your Apex Brands contact will link this store", signed in with the review account and saw a different, empty client, so every number was $0. Installing now connects the store by itself and opens that store's own page. No review account is needed any more: leave the credentials field empty and delete `shopify-review@apexbrands.io`.
 
-Before submitting you must create the **review account** (Supabase → Authentication → Add user, email like `shopify-review@apexbrands.io`, a strong password, email auto-confirmed) and give it access to a client for the reviewer's store. Put the credentials only in Shopify's credentials field. Delete or rotate the account after review.
+> Apex Analytics is a free, read-only analytics app. Installing it is all you need to do: no account, no login, no setup.
+>
+> 1. Install the app on your development store and approve the permissions (read orders, customers, products, inventory).
+> 2. You land on your store's own page in Apex Analytics. The app connects the store and loads its orders by itself (a few seconds on a development store; the page fills in on its own while it loads).
+> 3. The page shows your store's **Total sales breakdown** for the last 30 days, today included: gross sales, discounts, returns, net sales, shipping, taxes, total sales and orders, then new vs returning customers and a day-by-day table. Buttons switch to Today, Yesterday, Last 7 days or Month to date. Open Shopify admin → Analytics with the same dates to compare: dates follow the store's time zone, amounts are in the store currency (orders paid in other currencies appear converted, as in Shopify), and returns count on the day of the refund. Cancelled orders are left out.
+> 4. Orders you create while testing appear when you open the app again from Apps → Apex Analytics: every time it opens, the page checks Shopify for new and changed orders.
+> 5. Uninstall from Settings → Apps. The app receives `app/uninstalled` and stops access; `shop/redact`, `customers/redact` and `customers/data_request` are handled at `/api/shopify/webhooks` (HMAC-verified).
+>
+> The app is free (no charges of any kind) and never writes to the store. Privacy policy: /privacy. Support: /support.
 
 ## 6. Screencast (required, English, 2-3 min)
 
-Record: (1) install on a dev store and the permission screen; (2) the confirmation page; (3) sign in with the review account, link the store, sync, open Home and show the metrics, then tour Reporting, Planning and Calendar; (4) show `/privacy`; (5) uninstall from Shopify admin. Use a dev store with sample orders, never a client store.
+Script: `docs/shopify-listing/shopify-screencast-script.md` (rewritten 2026-11-23). Install on a dev store → land on the store page → compare with Shopify Analytics for the same dates → create an order → reopen the app and show it → privacy page → uninstall. Use a dev store with sample orders, never a client store.
 
 ## 7. Dev-store smoke test before submitting (you + me)
 

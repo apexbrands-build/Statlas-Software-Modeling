@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { PublicPage } from "@/components/public/PublicPage";
-import { APP_NAME, COMPANY, SUPPORT_EMAIL } from "@/lib/legal";
+import { APP_NAME, SUPPORT_EMAIL } from "@/lib/legal";
 import { normalizeShop, verifyShopifyHmac } from "@/lib/shopify";
+import { isRecentShopifyRequest, signStoreLink, storeLinkQuery } from "@/lib/store-link";
 import { getAdminClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: `${APP_NAME} for Shopify` };
@@ -29,6 +30,8 @@ export default async function ShopifyLanding({ searchParams }: { searchParams: P
     installed = Boolean(data?.ciphertext && !data.uninstalled_at);
   }
   if (signed && !installed && !sp.installed) redirect(`/api/shopify/install?shop=${encodeURIComponent(shop!)}`);
+  // Opened from the store's Shopify admin (a fresh request signed by Shopify): go straight to that store's own page.
+  if (signed && installed && isRecentShopifyRequest(sp.timestamp)) redirect(`/shopify/store?${storeLinkQuery(signStoreLink(shop!, secret!))}`);
 
   const error = sp.error ? ERRORS[sp.error] ?? "Something went wrong. Please try again or contact support." : null;
   return (
@@ -40,7 +43,7 @@ export default async function ShopifyLanding({ searchParams }: { searchParams: P
             <strong>{shop}</strong> is connected with read-only access. You don&apos;t need to do anything else here.
           </p>
           <p className="mt-2">
-            Your {COMPANY} contact will link this store to your reporting and it will start appearing in your dashboard. Nothing in your store is ever changed.
+            Open {APP_NAME} from your Shopify admin (Apps → {APP_NAME}) to see your store&apos;s numbers. Nothing in your store is ever changed.
           </p>
         </div>
       )}

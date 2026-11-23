@@ -23,9 +23,10 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   // Job routes check their own signature / secret. The Shopify public app needs its landing page, policy pages, install,
   // callback and webhooks reachable without an Apex login (webhooks verify Shopify's HMAC; install with a client checks the user).
+  // The store page and its refresh check their own signed store link (lib/store-link.ts).
   const isPublic =
     path === "/login" || path.startsWith("/auth/") || path === "/api/jobs/run" || path === "/api/jobs/tick" ||
-    ["/shopify", "/privacy", "/support", "/api/shopify/install", "/api/shopify/callback", "/api/shopify/webhooks"].includes(path);
+    ["/shopify", "/shopify/store", "/privacy", "/support", "/api/shopify/install", "/api/shopify/callback", "/api/shopify/webhooks", "/api/shopify/store/refresh"].includes(path);
   if (!data.user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
