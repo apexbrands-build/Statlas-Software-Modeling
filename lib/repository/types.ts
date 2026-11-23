@@ -2,6 +2,7 @@ import type { CreativePage, CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import type { Range } from "../dates";
+import type { ChannelSale } from "../omni/types";
 import type { OrderChannel } from "../order-channels";
 import type { MetaLaunch } from "./meta-launches";
 import type { AovData, AovMode } from "../reports/aov";
@@ -73,4 +74,11 @@ export interface Repository {
   /** Inserts (no id yet) or updates events; returns them with ids. Needs migration 0008 on the live database. */
   saveEvents(clientId: string, events: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]): Promise<MarketingEvent[]>;
   deleteEvent(id: string): Promise<void>;
+  /**
+   * Daily sales of the client's other sales channels (Amazon, TikTok Shop, retail), one row per day, channel and retailer.
+   * Null when the table is not there yet (migration 0021).
+   */
+  getChannelSales(clientId: string, from: string, to: string): Promise<ChannelSale[] | null>;
+  /** Saves one channel's sales, replacing that channel's rows on the days present in `rows` (every retailer of those days). */
+  saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void>;
 }

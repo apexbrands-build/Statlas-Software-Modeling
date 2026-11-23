@@ -18,8 +18,10 @@ import type {
   PlanVersion,
   StretchGoal,
 } from "../types";
-import { CHANNEL_KEYS } from "../types";
+import { CHANNEL_KEYS, type HaloSettings, type OtherChannel } from "../types";
 import { defaultExtra } from "../defaults";
+import type { ChannelSale } from "../omni/types";
+import { haloSettingsOf } from "../planning/halo";
 import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
@@ -102,6 +104,16 @@ const baseSettings = (over: Partial<Omit<ClientSettings, "clientId">> = {}): Omi
   ...over,
 });
 
+/** The demo client that also sells on other channels, so the channel views and the halo layer have something to show. */
+const DEMO_HALO: HaloSettings = {
+  channels: [
+    { key: "amazon", label: "Amazon", kind: "marketplace", costPct: 62, aov: 38, ltv365: 1.6 },
+    { key: "tiktok_shop", label: "TikTok Shop", kind: "marketplace", costPct: 70, aov: 29 },
+    { key: "retail", label: "Retail", kind: "retail", costPct: 55, aov: 14, netPct: 50, retailers: [{ retailer: "Target", launchMonth: "2025-03", doors: 900, unitsPerStoreWeek: 2.4, shelfPrice: 14 }] },
+  ],
+  cells: { meta_acquisition: { amazon: { value: 0.2, source: "benchmark", note: "Public benchmark, not this client's own test" } } },
+};
+
 const PROFILES: Profile[] = [
   {
     client: { id: "northwind", name: "Northwind Jewellery", currency: "GBP", timezone: "Europe/London", podId: "pod-1" },
@@ -139,7 +151,7 @@ const PROFILES: Profile[] = [
     smsListSize: 90_000,
     mix: { google_nonbrand: 0.22, google_brand: 0.08, meta_acquisition: 0.6, meta_returning: 0.1, pinterest: 0 },
     platformRoas: { google_nonbrand: 2.9, google_brand: 8, meta_acquisition: 1.7, meta_returning: 3.4, pinterest: 3 },
-    settings: baseSettings({ otherVariablePct: 8, deliveryCostPerOrder: 2, multipliers: { ...DEFAULT_MULTIPLIERS, meta_acquisition: 1.1 } }),
+    settings: baseSettings({ otherVariablePct: 8, deliveryCostPerOrder: 2, multipliers: { ...DEFAULT_MULTIPLIERS, meta_acquisition: 1.1 }, extra: { ...defaultExtra(), halo: DEMO_HALO } }),
   },
   {
     client: { id: "meridian", name: "Meridian Outdoors", currency: "USD", timezone: "America/Denver", podId: "pod-2" },
@@ -619,4 +631,46 @@ export class SeedRepository implements Repository {
   async deleteEvent(id: string): Promise<void> {
     this.eventStore = this.eventStore.filter((e) => e.id !== id);
   }
+
+  /** Imported sales, per client and channel (memory only, like plans). */
+  private channelStore = new Map<string, ChannelSale[]>();
+
+  /** Imported days as they were saved; every other day up to the last day with data is generated for the channels in the client's settings. */
+  async getChannelSales(clientId: string, from: string, to: string): Promise<ChannelSale[] | null> {
+    const last = await this.getLastDataDate(clientId);
+    const end = to < last ? to : last;
+    const out: ChannelSale[] = [];
+    for (const c of haloSettingsOf(await this.getSettings(clientId)).channels) {
+      const imported = (this.channelStore.get(`${clientId}|${c.key}`) ?? []).filter((r) => r.date >= from && r.date <= to);
+      const have = new Set(imported.map((r) => r.date));
+      out.push(...imported);
+      if (from <= end) for (const d of eachDay(from, end)) if (!have.has(d)) out.push(demoChannelSale(clientId, c, d));
+    }
+    return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : a.retailer < b.retailer ? -1 : 1));
+  }
+
+  async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {
+    const key = `${clientId}|${channel}`;
+    const dates = new Set(rows.map((r) => r.date));
+    this.channelStore.set(key, [...(this.channelStore.get(key) ?? []).filter((r) => !dates.has(r.date)), ...rows.map((r) => ({ ...r, channel }))]);
+  }
+}
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * One generated day for a demo channel, tied to the client's own sales that day. A marketplace sells a base plus what its own ads bring
+ * (so its model has a line to find); retail has no ad spend.
+ */
+function demoChannelSale(clientId: string, c: OtherChannel, date: string): ChannelSale {
+  const f = factFor(clientId, date);
+  const site = f.newOrderRevenue + f.returningOrderRevenue;
+  const k = `${clientId}|${c.key}|${date}`;
+  const retail = c.kind === "retail";
+  const share = /amazon/.test(c.key) ? 0.34 : /tiktok/.test(c.key) ? 0.11 : retail ? 0.07 : 0.05;
+  const spendRate = retail ? 0 : /tiktok/.test(c.key) ? 0.16 : 0.09;
+  const adSpend = site * share * spendRate * noise(`${k}|s`, 0.45);
+  const revenue = retail ? site * share * noise(`${k}|b`, 0.12) : site * share * 0.55 * noise(`${k}|b`, 0.12) + adSpend * (0.45 / spendRate) * noise(`${k}|r`, 0.06);
+  const orders = revenue / (c.aov > 0 ? c.aov : 30);
+  return { date, channel: c.key, retailer: "", revenue: round2(revenue), orders: Math.round(orders), units: Math.round(orders * 1.4), adSpend: round2(adSpend), source: "demo" };
 }

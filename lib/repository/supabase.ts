@@ -6,6 +6,7 @@ import { mapMetaLaunches, type MetaAdRow, type MetaLaunch } from "./meta-launche
 import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
+import type { ChannelSale } from "../omni/types";
 import type { OrderChannel } from "../order-channels";
 import { getBrowserClient } from "../supabase/client";
 import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
@@ -580,4 +581,34 @@ export class SupabaseRepository implements Repository {
     const { error } = await this.db.from("marketing_events").delete().eq("id", id);
     if (error) throw new Error(error.message);
   }
+
+  /** `channel_sales` (migration 0021). A missing table reads as null, so every screen can say "no data" instead of failing. */
+  async getChannelSales(clientId: string, from: string, to: string): Promise<ChannelSale[] | null> {
+    let rows: Row[];
+    try {
+      rows = await fetchAll<Row>((a, b) => this.db.from("channel_sales").select("*").eq("client_id", clientId).gte("date", from).lte("date", to).order("date").range(a, b));
+    } catch (e) {
+      if (CHANNEL_SALES_MISSING.test(e instanceof Error ? e.message : "")) return null;
+      throw e;
+    }
+    const source = (v: unknown): ChannelSale["source"] => (v === "shopify" || v === "connector" ? v : "import");
+    return rows.map((r) => ({ date: r.date as string, channel: r.sales_channel as string, retailer: (r.retailer as string) ?? "", revenue: n(r.revenue), orders: n(r.orders), units: n(r.units), adSpend: n(r.ad_spend), source: source(r.source) }));
+  }
+
+  async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {
+    const fail = (message: string) => new Error(CHANNEL_SALES_MISSING.test(message) || /policy|permission|row-level/i.test(message) ? "Could not save the sales: database migration 0021 has not been applied yet (supabase/migrations/0021_channel_sales.sql)." : message);
+    const dates = [...new Set(rows.map((r) => r.date))];
+    for (let i = 0; i < dates.length; i += 200) {
+      const { error } = await this.db.from("channel_sales").delete().eq("client_id", clientId).eq("sales_channel", channel).in("date", dates.slice(i, i + 200));
+      if (error) throw fail(error.message);
+    }
+    const rec = (r: ChannelSale) => ({ client_id: clientId, date: r.date, sales_channel: channel, retailer: r.retailer ?? "", revenue: r.revenue, orders: r.orders, units: r.units, ad_spend: r.adSpend, source: r.source === "demo" ? "import" : r.source });
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await this.db.from("channel_sales").insert(rows.slice(i, i + 500).map(rec));
+      if (error) throw fail(error.message);
+    }
+  }
 }
+
+/** What the database answers when `channel_sales` does not exist yet. */
+const CHANNEL_SALES_MISSING = /channel_sales|PGRST205|42P01|schema cache/i;
