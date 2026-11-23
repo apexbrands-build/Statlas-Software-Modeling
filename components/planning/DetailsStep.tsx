@@ -8,6 +8,7 @@ import { inputsFromFacts, recencyRange, sourceRange } from "@/lib/planning/histo
 import { mixActual, mixGet, mixSet } from "@/lib/planning/mix";
 import type { PlanMonthInputs } from "@/lib/planning/types";
 import type { PlanCtx } from "./ctx";
+import { OtherChannelsLine } from "./OtherChannelsLine";
 import { RoasLine } from "./RoasLine";
 import { btn, btnPrimary, inputClass, MONTHS, NumField } from "./ui";
 
@@ -130,7 +131,8 @@ const LINES: LineDef[] = [
   { id: "cogs", label: "COGS", unit: "pct", help: "Cost of goods as % of net sales (from Shopify variant costs, or the client's flat rate).", ...rate("cogsPct") },
   { id: "variable", label: "Variable costs", unit: "pct", help: "Other variable costs (cost of delivery, fees) as % of net sales plus shipping.", ...rate("otherVarPct") },
   { id: "sga", label: "SG&A (fixed costs)", unit: "money", help: "Fixed monthly costs. Only used in the Plan P&L, never in contribution margin. Starts from the client's setting.", get: (i) => i.fixedCosts ?? 0, set: (i, v) => ({ ...i, fixedCosts: v }), actual: (x) => (x ? (x.fixedCosts ?? 0) : null) },
-  // The ROAS line has its own table (channels by month); the entry only places it in the menu.
+  // Other sales channels and the ROAS line have their own tables; the entries only place them in the menu.
+  { id: "other", label: "Other sales channels", unit: "revenue", help: "", get: () => 0, set: (i) => i, actual: () => null },
   { id: "roas", label: "ROAS targets", unit: "revenue", help: "", get: () => 0, set: (i) => i, actual: () => null },
 ];
 
@@ -159,7 +161,7 @@ export function DetailsStep({ ctx }: { ctx: PlanCtx }) {
           Next
         </button>
       </div>
-      {def.id === "returning" ? <ReturningLine ctx={ctx} /> : def.id === "roas" ? <RoasLine ctx={ctx} /> : <RateLine ctx={ctx} def={def} />}
+      {def.id === "returning" ? <ReturningLine ctx={ctx} /> : def.id === "roas" ? <RoasLine ctx={ctx} /> : def.id === "other" ? <OtherChannelsLine ctx={ctx} /> : <RateLine ctx={ctx} def={def} />}
       <p className="text-xs text-text-faint">Spend, aMER and returning revenue come from the Models. Email, SMS and organic are shares of order revenue that Home tracks; they do not change the revenue forecast. Returns are one line for now (new and returning customers are not split yet).</p>
     </div>
   );

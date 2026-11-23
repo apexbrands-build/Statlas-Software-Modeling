@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import type { ClientSettings, DailyFact, HaloSettings, OtherChannel, RetailerRow } from "../types";
 import type { Curve } from "./new-customer";
-import { adCreatedReturning, adCreatedUnitsPerStoreWeek, capHalo, haloWarnings, otherChannelsOf, otherForecast, retailFrame, spendRatio, weeksIn } from "./other-channels";
+import { adCreatedReturning, adCreatedUnitsPerStoreWeek, capHalo, haloWarnings, otherChannelsOf, otherForecast, otherMonth, retailFrame, retailNetPrice, spendRatio, weeksIn } from "./other-channels";
 import { blankInputs, type PlanMonthInputs } from "./types";
 
 const amazon: OtherChannel = { key: "amazon", label: "Amazon", kind: "marketplace", costPct: 65, aov: 30 };
@@ -146,5 +146,74 @@ describe("otherChannelsOf: the lines a plan month shows", () => {
   it("gives an empty line for a channel with nothing typed", () => {
     const s = withHalo({ channels: [amazon], cells: {} });
     expect(otherChannelsOf(inputs(), s)[0].line).toEqual({});
+  });
+});
+
+describe("retailNetPrice: the brand's average net price per unit on shelf", () => {
+  const heb: RetailerRow = { retailer: "H-E-B", launchMonth: "2027-04", doors: 500, unitsPerStoreWeek: 2, shelfPrice: 20 };
+  it("weights each retailer's price by the units it sells", () => {
+    expect(retailNetPrice([target, heb], 50, "2027-05-01")).toBeCloseTo(13.3333, 3);
+  });
+  it("is null before any launch", () => {
+    expect(retailNetPrice([target], 50, "2027-02-01")).toBeNull();
+  });
+});
+
+describe("otherMonth: a plan month's other sales channels", () => {
+  const retailCh: OtherChannel = { key: "retail", label: "Retail", kind: "retail", costPct: 55, aov: 15, netPct: 50, retailers: [target] };
+  const s = (cells: HaloSettings["cells"], channels: OtherChannel[] = [amazon]) => withHalo({ channels, cells }, { multipliers: { meta_acquisition: 1.2 } });
+  const own = { value: 0.2, source: "own_test" as const };
+  const month = (other?: PlanMonthInputs["other"]) => inputs({ altPct: {}, other });
+
+  it("gives the month's .com new revenue, the blended aMER and the halo on each channel", () => {
+    const m = otherMonth("2027-04-01", month(), s({ meta_acquisition: { amazon: own } }), null);
+    expect(m.acqSpend).toBe(100000);
+    expect(m.newRevenue).toBeCloseTo(150000, 6);
+    expect(m.blendedAmer).toBeCloseTo(1.75, 10);
+    expect(m.modelled).toBe(true);
+    expect(m.benchmark).toBe(false);
+    expect(m.lines[0].halo).toBeCloseTo(25000, 6);
+  });
+  it("has no forecast for a channel with nothing typed, and does not cap its halo", () => {
+    const l = otherMonth("2027-04-01", month(), s({ meta_acquisition: { amazon: own } }), null).lines[0];
+    expect(l.typed).toBeNull();
+    expect(l.forecast).toBeNull();
+    expect(l.created).toBeCloseTo(25000, 6);
+    expect(l.capped).toBe(false);
+  });
+  it("keeps the typed line when it assumed the planned spend, and adds the halo when it assumed no ads", () => {
+    const cells = { meta_acquisition: { amazon: own } };
+    expect(otherMonth("2027-04-01", month({ amazon: { revenue: 100000 } }), s(cells), null).lines[0].forecast).toBe(100000);
+    expect(otherMonth("2027-04-01", month({ amazon: { revenue: 100000, assumedSpend: 0 } }), s(cells), null).lines[0].forecast).toBeCloseTo(125000, 6);
+    expect(otherMonth("2027-04-01", month({ amazon: { revenue: 100000, assumedSpend: 50000 } }), s(cells), null).lines[0].forecast).toBeCloseTo(112500, 6);
+  });
+  it("caps what the ads created at the channel's forecast", () => {
+    const l = otherMonth("2027-04-01", month({ amazon: { revenue: 20000 } }), s({ meta_acquisition: { amazon: own } }), null).lines[0];
+    expect(l.created).toBe(20000);
+    expect(l.capped).toBe(true);
+  });
+  it("uses the retail frame until a number is typed, and checks the halo against units per store", () => {
+    const cells = { meta_acquisition: { retail: { value: 0.07, source: "assumption" as const } } };
+    const l = otherMonth("2027-04-01", month(), s(cells, [retailCh]), null).lines[0];
+    expect(l.frame).toBeCloseTo(128571.43, 1);
+    expect(l.base).toBeCloseTo(128571.43, 1);
+    expect(l.forecast).toBeCloseTo(128571.43, 1);
+    expect(l.halo).toBeCloseTo(8750, 4);
+    expect(l.doors).toBe(1000);
+    expect(l.unitsPerStoreWeek).toBeCloseTo(0.13611, 4);
+    const typed = otherMonth("2027-04-01", month({ retail: { revenue: 90000 } }), s(cells, [retailCh]), null).lines[0];
+    expect(typed.base).toBe(90000);
+  });
+  it("is plain when the client has channels but no halo", () => {
+    const m = otherMonth("2027-04-01", month({ amazon: { revenue: 100000 } }), s({}), null);
+    expect(m.blendedAmer).toBe(1.5);
+    expect(m.modelled).toBe(false);
+    expect(m.lines[0].halo).toBe(0);
+    expect(m.lines[0].forecast).toBe(100000);
+  });
+  it("treats a negative or non-numeric typed line as nothing typed", () => {
+    const l = otherMonth("2027-04-01", month({ amazon: { revenue: Number.NaN } }), s({ meta_acquisition: { amazon: own } }), null).lines[0];
+    expect(l.typed).toBeNull();
+    expect(otherMonth("2027-04-01", month({ amazon: { revenue: -5 } }), s({}), null).lines[0].typed).toBeNull();
   });
 });

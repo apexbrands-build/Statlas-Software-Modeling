@@ -1,7 +1,8 @@
 import { RETENTION_CHANNELS } from "../channels";
 import { diffDays, endOfMonth } from "../dates";
 import type { ChannelKey, ClientSettings, DailyFact, HaloCell, OtherChannel, RetailerRow } from "../types";
-import { cellValue, channelSpendShares, haloSettingsOf } from "./halo";
+import { acquisitionShares, blendedAmer, cellValue, channelSpendShares, haloMix, haloSettingsOf } from "./halo";
+import { acqShare } from "./models";
 import { curveAmer, type Curve } from "./new-customer";
 import { actualPlatformRoas } from "./roas";
 import type { OtherLine, PlanMonthInputs } from "./types";
@@ -136,4 +137,89 @@ export function haloWarnings(settings: ClientSettings, spendByChannel: Partial<R
 /** The client's other sales channels with what a plan month has typed for each. Lines whose channel was deleted are left out. */
 export function otherChannelsOf(inputs: PlanMonthInputs | null, settings: ClientSettings): { channel: OtherChannel; line: OtherLine }[] {
   return haloSettingsOf(settings).channels.map((channel) => ({ channel, line: inputs?.other?.[channel.key] ?? {} }));
+}
+
+/** The brand's average net price per unit across the retailers on shelf in a month, weighted by the units each sells. Null before any launch. */
+export function retailNetPrice(rows: RetailerRow[], netPct: number, month: string): number | null {
+  const key = month.slice(0, 7);
+  let units = 0;
+  let value = 0;
+  for (const r of rows ?? []) {
+    const u = num(r?.doors) * num(r?.unitsPerStoreWeek);
+    const price = num(r?.shelfPrice);
+    if (!r || typeof r.launchMonth !== "string" || r.launchMonth.slice(0, 7) > key || u <= 0 || price <= 0) continue;
+    units += u;
+    value += u * price;
+  }
+  return units > 0 ? (value / units) * (num(netPct) / 100) : null;
+}
+
+export interface OtherMonthLine {
+  channel: OtherChannel;
+  /** What is typed for the month (null = nothing usable). */
+  typed: number | null;
+  /** Retail only: the frame's net revenue for the month (null before any launch). */
+  frame: number | null;
+  /** What the forecast starts from: the typed number, else the retail frame, else nothing. */
+  base: number | null;
+  assumedSpend: number | null;
+  /** Revenue the plan's ads create on this channel at the planned spend. */
+  halo: number;
+  /** The base moved by the halo on the spend it did not assume (null with no base). */
+  forecast: number | null;
+  /** Of the forecast, the part the ads created (never more than the forecast). */
+  created: number;
+  capped: boolean;
+  /** Retail only: stores on shelf, and the units per store per week the ads would have to create. */
+  doors: number;
+  unitsPerStoreWeek: number | null;
+}
+
+export interface OtherMonth {
+  /** Spend that counts toward aMER and the .com new revenue it brings (spend x aMER). */
+  acqSpend: number;
+  newRevenue: number;
+  blendedAmer: number;
+  modelled: boolean;
+  benchmark: boolean;
+  lines: OtherMonthLine[];
+}
+
+/**
+ * Everything the plan's "Other sales channels" line shows for one month. `curve` is the fitted spend curve (null = a straight line)
+ * and only matters for a line that assumed a different ad spend than the plan's.
+ */
+export function otherMonth(month: string, inputs: PlanMonthInputs, settings: ClientSettings, curve: Curve | null): OtherMonth {
+  const acqSpend = num(inputs.spend) * acqShare(inputs, settings);
+  const newRevenue = acqSpend * num(inputs.amer);
+  const mix = haloMix(acquisitionShares(inputs, settings), settings);
+  const days = Number(endOfMonth(month).slice(8, 10));
+  const lines = haloSettingsOf(settings).channels.map((channel): OtherMonthLine => {
+    const line = inputs.other?.[channel.key] ?? {};
+    const rev = Number(line.revenue);
+    const typed = line.revenue !== null && line.revenue !== undefined && Number.isFinite(rev) && rev >= 0 ? rev : null;
+    const assumed = Number(line.assumedSpend);
+    const assumedSpend = line.assumedSpend !== null && line.assumedSpend !== undefined && Number.isFinite(assumed) && assumed >= 0 ? assumed : null;
+    const retail = channel.kind === "retail" ? retailFrame(channel.retailers ?? [], channel.netPct ?? 0, month) : null;
+    const frame = retail && retail.netRevenue > 0 ? retail.netRevenue : null;
+    const base = typed ?? frame;
+    const halo = newRevenue * (mix.share[channel.key] ?? 0);
+    const forecast = base === null ? null : otherForecast(base, halo, spendRatio(curve, acqSpend / days, assumedSpend === null ? null : assumedSpend / days));
+    const created = capHalo(halo, forecast);
+    const netPrice = retail ? retailNetPrice(channel.retailers ?? [], channel.netPct ?? 0, month) : null;
+    return {
+      channel,
+      typed,
+      frame,
+      base,
+      assumedSpend,
+      halo,
+      forecast,
+      created: created.value,
+      capped: created.capped,
+      doors: retail?.doors ?? 0,
+      unitsPerStoreWeek: retail && netPrice !== null ? adCreatedUnitsPerStoreWeek(created.value, netPrice, retail.doors, retail.weeks) : null,
+    };
+  });
+  return { acqSpend, newRevenue, blendedAmer: blendedAmer(num(inputs.amer), mix), modelled: mix.modelled, benchmark: mix.benchmark, lines };
 }
