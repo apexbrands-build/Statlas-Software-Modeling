@@ -669,7 +669,10 @@ function demoChannelSale(clientId: string, c: OtherChannel, date: string): Chann
   const retail = c.kind === "retail";
   const share = /amazon/.test(c.key) ? 0.34 : /tiktok/.test(c.key) ? 0.11 : retail ? 0.07 : 0.05;
   const spendRate = retail ? 0 : /tiktok/.test(c.key) ? 0.16 : 0.09;
-  const adSpend = site * share * spendRate * noise(`${k}|s`, 0.45);
+  // Ad spend moves on its own (around the client's usual size), not with the day's sales, so the channel's model finds a real line:
+  // a base that follows the business, plus what each dollar of the channel's own ads brings.
+  const p = profileOf(clientId);
+  const adSpend = p.dailyOrders * p.aov * share * spendRate * noise(`${k}|s`, 0.45);
   const revenue = retail ? site * share * noise(`${k}|b`, 0.12) : site * share * 0.55 * noise(`${k}|b`, 0.12) + adSpend * (0.45 / spendRate) * noise(`${k}|r`, 0.06);
   const orders = revenue / (c.aov > 0 ? c.aov : 30);
   return { date, channel: c.key, retailer: "", revenue: round2(revenue), orders: Math.round(orders), units: Math.round(orders * 1.4), adSpend: round2(adSpend), source: "demo" };

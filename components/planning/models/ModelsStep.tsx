@@ -10,6 +10,7 @@ import type { PlanCtx } from "../ctx";
 import { btn, btnPrimary } from "../ui";
 import { BulletGlyph, EventIllustration, GrowthIllustration, RetentionIllustration, type BulletIcon } from "./icons";
 import { NewCustomerModel } from "./NewCustomerModel";
+import { ChannelModels } from "./ChannelModels";
 import { EventModel } from "./EventModel";
 import { ReturningModel } from "./ReturningModel";
 
@@ -40,13 +41,14 @@ export interface ModelCtx {
   savedAt: Partial<Record<ModelKind, string | null>>;
 }
 
-type View = "info" | "new" | "returning" | "event";
+type View = "info" | "new" | "returning" | "event" | "channels";
 
 const SIDE: { id: View; label: string }[] = [
   { id: "info", label: "Info" },
   { id: "new", label: "New Customer Model" },
   { id: "returning", label: "Returning Customer Model" },
   { id: "event", label: "Event Model" },
+  { id: "channels", label: "Other Channels Model" },
 ];
 
 function Card({ title, sub, art, bullets, onOpen, disabled }: { title: string; sub: string; art: React.ReactNode; bullets: { icon: BulletIcon; text: string }[]; onOpen?: () => void; disabled?: boolean }) {
@@ -211,6 +213,7 @@ export function ModelsStep({ ctx }: { ctx: PlanCtx }) {
         {view === "new" && <NewCustomerModel mc={mc} />}
         {view === "returning" && <ReturningModel mc={mc} />}
         {view === "event" && <EventModel ctx={ctx} />}
+        {view === "channels" && <ChannelModels ctx={ctx} facts={facts} lastData={lastData} />}
       </div>
     </div>
   );

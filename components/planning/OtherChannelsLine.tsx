@@ -117,7 +117,7 @@ export function OtherChannelsLine({ ctx }: { ctx: PlanCtx }) {
       <div>
         <h3 className="text-base font-semibold">Other sales channels</h3>
         <p className="max-w-3xl text-sm text-text-muted">
-          A revenue forecast per month for each channel besides the store&apos;s own site, for example the finance team&apos;s number. &quot;Ad spend it assumed&quot; is the acquisition spend that forecast was built on: leave it empty when it assumed this plan&apos;s
+          A revenue forecast per month for each channel besides the store&apos;s own site, for example the finance team&apos;s number. &quot;Own-site ad spend it assumed&quot; is the own-site acquisition spend that forecast was built on: leave it empty when it assumed this plan&apos;s
           spend, type 0 when it assumed no ads. The forecast then moves by what the ads create on the difference. Nothing here changes the .com targets.
         </p>
       </div>
@@ -148,7 +148,22 @@ export function OtherChannelsLine({ ctx }: { ctx: PlanCtx }) {
                   })}
                 </tr>
                 <tr className="border-b border-border/40">
-                  <td className={`${rowLabel} text-text-muted`}>Ad spend it assumed</td>
+                  <td className={`${rowLabel} text-text-muted`} title="Ad spend on the channel itself (for example Amazon Ads or TikTok Shop ads). It counts in the channel's contribution and in whole-business spend.">
+                    Ad spend on {c.label} (planned)
+                  </td>
+                  {months.map((m, mi) => {
+                    const l = data[mi]?.lines[ci];
+                    return (
+                      <td key={m.month} className={td}>
+                        {l ? <OptionalNum label={`${c.label} channel ad spend ${MONTHS[mi]}`} value={l.adSpend > 0 ? l.adSpend : null} disabled={m.locked} onCommit={(v) => setLine(m.month, c.key, { adSpend: v })} /> : dash}
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr className="border-b border-border/40">
+                  <td className={`${rowLabel} text-text-muted`} title="The own-site ad spend that this forecast was built on. Empty = this plan's spend; 0 = no ads.">
+                    Own-site ad spend it assumed
+                  </td>
                   {months.map((m, mi) => {
                     const l = data[mi]?.lines[ci];
                     return (
