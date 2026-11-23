@@ -13,7 +13,8 @@ Flow: build and commit on `development` -> merge `development` into `preview`, c
 ## Rules for Claude
 - Start every session with `git branch --show-current`. If it is `main` or `preview`, switch to `development` before touching anything (`git switch development`). Uncommitted work travels with the switch.
 - Commit only on `development`, named files only (see the repo rule about never staging `docs` wholesale). Never commit on `main` or `preview`, and never merge into them unless the strategist asks in that message.
-- Claude cannot push; the strategist pushes with GitHub Desktop. A new branch must be published once (Branch > Publish branch).
+- Claude can push from this machine (checked 2026-11-23) and does so when the strategist asks; the strategist can also push with GitHub Desktop. A new branch must be published once (Branch > Publish branch).
+- A release by Claude, when the strategist asks for one: fast-forward `preview` to `development`, then `main` to `preview`, push the three branches, switch back to `development`, and check the production deployment on Vercel.
 - A change that took production down is undone by reverting on `development` and promoting again, not by editing `main` directly. A hotfix on `main` is allowed only when the strategist asks for one, and is merged back into `development` the same day.
 
 ## Releasing (strategist, GitHub Desktop)

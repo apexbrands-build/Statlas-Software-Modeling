@@ -72,6 +72,14 @@ Its own section in the sidebar, **Ad plan** (`/ad-plan`, moved out of the plan's
 - **Data:** ad-level Meta tables of migration 0012 (applied) read through the functions of migration 0013 (`creative_launch`, `creative_ads`, `creative_months`, `creative_days`, `creative_score_ads`; applied 2026-10-14; checked on synthetic rows). Before 0013 the screen says there is no ad history and the demand model runs on the Canon defaults.
 - **Screen (components/adplan/):** score card, the month's ring and moment/evergreen bars with launches so far, four typed overrides (ads needed, carry rate, spend per ad, moments share), a month detail (launches per day, Meta spend and aMER, the batch's first-week and first-month spend, the launch list), a year table, and plain-language insights. The ad sync now also saves every ACTIVE ad even without spend (`refreshActiveAds`, when a window reaches the present; migration 0017 `creative_active_ads` reads them, applied after the strategist's go-ahead). Stage 1 gave no row for an ad that never spent, so "ads that never delivered" is 0 on live data.
 
+## Halo layer (phase A built 2026-11-23, spec `docs/superpowers/specs/2026-11-20-halo-layer-design.md`)
+- **Idea:** a grid of ad channels (rows) by sales channels (columns). A halo factor is the incremental revenue an ad channel creates on another sales channel per $1 the platform reports, so it adds to the channel's incrementality factor. Factors are typed in Store Settings from tests run elsewhere.
+- **Where it acts:** when the plan is made. The New Customer model can pick each month's spend on blended contribution (`valueBasis`), and suggested ROAS targets use the blended aMER and total factors. Daily tracking stays on .com aMER and reported numbers.
+- **Other channels in the plan:** Details > "Other sales channels" holds a typed forecast per channel and month and the ad spend it assumed; the halo is a transfer of credit inside that forecast, never extra revenue. Retail has a simple frame (retailer rows) until a typed number replaces it.
+- **Code:** `lib/planning/halo.ts` (factors, mix, blended aMER), `lib/planning/other-channels.ts` (plan lines, retail frame, guardrails), `evaluateSpend` / `buildSpendTable` / `withHalo` in `lib/planning/new-customer.ts`, `roasBasis` in `lib/planning/roas.ts`.
+- **Limits:** a factor is a slope measured at one spend level and season, valid near that point; second-round effects are not modelled; nothing changes for a client with no halo typed.
+- **Next:** phase B (actuals of the other channels, the Omnichannel report), phase C (connectors).
+
 ## Still open
 Backtest for the New/Returning models; the growth diagnostic in `docs/scenarios-and-diagnostic.md`; marketing events from Klaviyo/SMS; apply migrations 0005-0008 in Supabase (SQL editor).
 
