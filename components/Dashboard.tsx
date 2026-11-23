@@ -6,9 +6,13 @@ import { DailyChart, type ChartSeries } from "./DailyChart";
 import { DateRangePicker } from "./DateRangePicker";
 import { MetricModal } from "./MetricModal";
 import { MetricTile } from "./MetricTile";
+import { OmniHome } from "./OmniHome";
 import { theme } from "@/theme/theme";
 import { useApp } from "@/lib/app-context";
 import { compareSource, COMPARE_LABEL, defaultCompareMode, tileNumbers, tilePace, useDashboardData, type DashData, type Pace } from "@/lib/dashboard-data";
+import { useOmni } from "@/lib/omni/use-omni";
+import { BUSINESS_VIEW, readViewChoice, SITE_VIEW, writeViewChoice } from "@/lib/omni/view-choice";
+import { haloSettingsOf } from "@/lib/planning/halo";
 import { readScenarioChoice, writeScenarioChoice } from "@/lib/planning/scenarios";
 import type { PlanScenario } from "@/lib/types";
 import {
@@ -79,6 +83,19 @@ export function Dashboard() {
   const refreshing = !fresh && data !== null;
   const mode = defaultCompareMode(chosenMode, data?.hasPlan ?? false);
 
+  // Which view Home shows: the own site (as always), the whole business, or one other sales channel. Only for clients that have other channels.
+  const otherChannels = useMemo(() => (settings ? haloSettingsOf(settings).channels : []), [settings]);
+  const validViews = useMemo(() => [SITE_VIEW, BUSINESS_VIEW, ...otherChannels.map((c) => c.key)], [otherChannels]);
+  const [pickedView, setPickedView] = useState<Record<string, string>>({});
+  const remembered = client && otherChannels.length ? (pickedView[client.id] ?? readViewChoice(client.id, validViews)) : SITE_VIEW;
+  const view = validViews.includes(remembered) ? remembered : SITE_VIEW;
+  const chooseView = (v: string) => {
+    if (!client) return;
+    setPickedView((p) => ({ ...p, [client.id]: v }));
+    writeViewChoice(client.id, v);
+  };
+  const omni = useOmni(data, view !== SITE_VIEW);
+
   if (!mounted || !client || !settings || !activeRange) return <Skeleton />;
 
   return (
@@ -94,6 +111,9 @@ export function Dashboard() {
         setScenario={chooseScenario}
         cmpRange={cmpRange}
         setCmpRange={setCustomCmp}
+        view={view}
+        setView={chooseView}
+        views={otherChannels.length ? [{ id: SITE_VIEW, label: "Own site" }, { id: BUSINESS_VIEW, label: "Whole business" }, ...otherChannels.map((c) => ({ id: c.key, label: c.label }))] : []}
       />
       {!data ? (
         <Skeleton />
@@ -103,7 +123,11 @@ export function Dashboard() {
         </div>
       ) : (
         <div className={refreshing ? "opacity-60 transition-opacity" : undefined} aria-busy={refreshing}>
+          {view !== SITE_VIEW ? (
+            <OmniHome data={data} omni={omni} view={view} />
+          ) : (
           <Body data={data} mode={mode} breakout={breakout} setBreakout={setBreakout} roasMode={roasMode ?? (settings.extra.showIncrementalByDefault ? "iroas" : "roas")} setRoasMode={setRoasMode} chartType={chartType} setChartType={setChartType} setOpen={setOpen} />
+          )}
         </div>
       )}
       {open && data && <MetricModal def={open.def} title={open.title} data={data} mode={mode} onClose={() => setOpen(null)} />}
@@ -136,24 +160,43 @@ function Controls(props: {
   setScenario: (s: PlanScenario) => void;
   cmpRange: Range | null;
   setCmpRange: (r: Range) => void;
+  /** The Home view and the views this client has (empty = own site only, no selector). */
+  view: string;
+  setView: (v: string) => void;
+  views: { id: string; label: string }[];
 }) {
-  const { range, setRange, mode, setMode, hasPlan, hasStretch, scenario, setScenario, cmpRange, setCmpRange } = props;
+  const { range, setRange, mode, setMode, hasPlan, hasStretch, scenario, setScenario, cmpRange, setCmpRange, view, setView, views } = props;
+  const ownSite = views.length === 0 || view === views[0].id;
   const sel = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-accent";
   return (
     <div className="flex flex-wrap items-center gap-3">
       <h1 className="mr-auto text-xl font-semibold" style={{ fontFamily: "var(--apex-font-heading)" }}>
         Home
       </h1>
+      {views.length > 0 && (
+        <label className="flex items-center gap-2 text-sm text-text-muted">
+          View
+          <select aria-label="View" className={sel} value={view} onChange={(e) => setView(e.target.value)}>
+            {views.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <DateRangePicker value={range} onChange={setRange} />
-      <label className="flex items-center gap-2 text-sm text-text-muted">
-        Compare
-        <select aria-label="Compare" className={sel} value={mode} onChange={(e) => setMode(e.target.value as CompareModeName)}>
-          {hasPlan && <option value="plan">Plan</option>}
-          <option value="yoy">Last year (YoY)</option>
-          <option value="prev">Previous period</option>
-          <option value="custom">Custom period</option>
-        </select>
-      </label>
+      {ownSite && (
+        <label className="flex items-center gap-2 text-sm text-text-muted">
+          Compare
+          <select aria-label="Compare" className={sel} value={mode} onChange={(e) => setMode(e.target.value as CompareModeName)}>
+            {hasPlan && <option value="plan">Plan</option>}
+            <option value="yoy">Last year (YoY)</option>
+            <option value="prev">Previous period</option>
+            <option value="custom">Custom period</option>
+          </select>
+        </label>
+      )}
       {hasStretch && (
         <label className="flex items-center gap-2 text-sm text-text-muted">
           Plan
@@ -163,7 +206,7 @@ function Controls(props: {
           </select>
         </label>
       )}
-      {mode === "custom" && cmpRange && (
+      {ownSite && mode === "custom" && cmpRange && (
         <div className="flex items-center gap-1.5 text-sm text-text-muted">
           <input aria-label="Comparison from" type="date" className={sel} value={cmpRange.from} max={cmpRange.to} onChange={(e) => e.target.value && setCmpRange({ from: e.target.value, to: cmpRange.to })} />
           →
