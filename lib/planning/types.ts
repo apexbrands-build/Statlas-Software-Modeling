@@ -51,6 +51,16 @@ export interface PlanMix {
   organicPct?: number;
 }
 
+/**
+ * One other sales channel's line in a plan month. `revenue` is the typed forecast (for example the CFO's retail number).
+ * `assumedSpend` is the acquisition spend that forecast was built on: empty = the plan's own spend (the halo only moves credit),
+ * 0 = no ads (the line is the base and the halo comes on top), anything else = the forecast moves by the halo on the difference.
+ */
+export interface OtherLine {
+  revenue?: number | null;
+  assumedSpend?: number | null;
+}
+
 /** What the strategist decides for one month; everything else is derived. */
 export interface PlanMonthInputs {
   /** Total ad spend for the month. */
@@ -77,6 +87,8 @@ export interface PlanMonthInputs {
   mix?: PlanMix;
   /** Platform ROAS targets the strategist typed for this month, per channel. Absent = the suggested value (aMER / incrementality factor). */
   roas?: Partial<Record<ChannelKey, number>>;
+  /** Revenue lines of the client's other sales channels (Amazon, TikTok Shop, retail), by channel key. Absent = nothing typed. */
+  other?: Record<string, OtherLine>;
   source?: "manual" | "last_year" | "recent" | "actuals";
 }
 
