@@ -1,4 +1,5 @@
-import type { ChannelKey, ClientSettings, HaloCell, HaloSettings, OtherChannel } from "../types";
+import { BRAND_CHANNELS, RETENTION_CHANNELS } from "../channels";
+import type { ChannelKey, ClientSettings, DailyFact, HaloCell, HaloSettings, OtherChannel } from "../types";
 import type { HaloInput } from "./new-customer";
 import { PLAN_PLATFORMS, type PlanMonthInputs } from "./types";
 
@@ -84,6 +85,28 @@ export function acquisitionShares(inputs: Split, settings: Pick<ClientSettings, 
   const out: Partial<Record<ChannelKey, number>> = {};
   if (sum <= 0) return out;
   for (const [k, v] of Object.entries(kept)) out[k as ChannelKey] = (v ?? 0) / sum;
+  return out;
+}
+
+/**
+ * The mix a client really ran over some days: each channel's share of the spend that counts toward aMER (same rule as `amerSpend`).
+ * Used for a month that has no planned platform split yet.
+ */
+export function actualAcquisitionShares(facts: DailyFact[], settings: Pick<ClientSettings, "excludeBrandFromAmer" | "excludeMetaReturningFromAmer">): Partial<Record<ChannelKey, number>> {
+  const left = new Set<ChannelKey>([...(settings.excludeBrandFromAmer ? BRAND_CHANNELS : []), ...(settings.excludeMetaReturningFromAmer ? RETENTION_CHANNELS : [])]);
+  const spend: Partial<Record<ChannelKey, number>> = {};
+  let sum = 0;
+  for (const f of facts) {
+    for (const [k, c] of Object.entries(f.channels ?? {}) as [ChannelKey, { spend: number } | undefined][]) {
+      const v = Number(c?.spend);
+      if (left.has(k) || !Number.isFinite(v) || v <= 0) continue;
+      spend[k] = (spend[k] ?? 0) + v;
+      sum += v;
+    }
+  }
+  const out: Partial<Record<ChannelKey, number>> = {};
+  if (sum <= 0) return out;
+  for (const [k, v] of Object.entries(spend)) out[k as ChannelKey] = (v ?? 0) / sum;
   return out;
 }
 

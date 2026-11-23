@@ -361,32 +361,11 @@ export function evaluateSpend(curve: Curve, s: ModelSettings, monthlySpend: numb
     const total = ltvRev(mult);
     return newRevenue * (1 - s.newCostPct / 100) + Math.max(0, total - newRevenue) * (1 - s.returningCostPct / 100) - monthlySpend;
   };
-  const haloByChannel: Record<string, number> = {};
-  let haloRevenue = 0;
-  let haloCm = 0;
-  let haloCm60 = 0;
-  let haloCm90 = 0;
-  let haloCm365 = 0;
-  let haloOrders = 0;
-  for (const [k, share] of Object.entries(halo?.share ?? {})) {
-    const v = halo!.value[k];
-    if (!v || !(share > 0)) continue;
-    const rev = newRevenue * share;
-    const margin = 1 - (Number.isFinite(v.costPct) ? v.costPct : 0) / 100;
-    haloByChannel[k] = rev;
-    haloRevenue += rev;
-    haloCm += rev * margin;
-    haloCm60 += rev * repeatOf(v.ltv60) * margin;
-    haloCm90 += rev * repeatOf(v.ltv90) * margin;
-    haloCm365 += rev * repeatOf(v.ltv365) * margin;
-    if (v.aov > 0) haloOrders += rev / v.aov;
-  }
   const cac = orders > 0 ? monthlySpend / orders : 0;
-  const blendedOrders = orders + haloOrders;
   const ltv60Cm = ltvCm(s.ltv60Multiplier);
   const ltv90Cm = ltvCm(m90);
   const ltv365Cm = ltvCm(s.ltv365Multiplier);
-  return {
+  const base: SpendPoint = {
     spend: monthlySpend,
     amer,
     cac,
@@ -401,15 +380,56 @@ export function evaluateSpend(curve: Curve, s: ModelSettings, monthlySpend: numb
     ltv90Cm,
     ltv365Revenue: ltvRev(s.ltv365Multiplier),
     ltv365Cm,
+    haloRevenue: 0,
+    haloByChannel: {},
+    blendedAmer: amer,
+    blendedCm: cm,
+    blendedLtv60Cm: ltv60Cm,
+    blendedLtv90Cm: ltv90Cm,
+    blendedLtv365Cm: ltv365Cm,
+    blendedOrders: orders,
+    blendedCac: cac,
+  };
+  return halo ? withHalo(base, halo) : base;
+}
+
+/**
+ * Puts a month's halo on a point: halo revenue per channel and the blended numbers, from the point's own .com numbers. Used by the
+ * model and for a closed month's actuals. Any halo already on the point is replaced; with no halo the blended numbers equal the .com ones.
+ */
+export function withHalo(p: SpendPoint, halo?: HaloInput): SpendPoint {
+  const haloByChannel: Record<string, number> = {};
+  let haloRevenue = 0;
+  let haloCm = 0;
+  let haloCm60 = 0;
+  let haloCm90 = 0;
+  let haloCm365 = 0;
+  let haloOrders = 0;
+  for (const [k, share] of Object.entries(halo?.share ?? {})) {
+    const v = halo!.value[k];
+    if (!v || !(share > 0)) continue;
+    const rev = p.newRevenue * share;
+    const margin = 1 - (Number.isFinite(v.costPct) ? v.costPct : 0) / 100;
+    haloByChannel[k] = rev;
+    haloRevenue += rev;
+    haloCm += rev * margin;
+    haloCm60 += rev * repeatOf(v.ltv60) * margin;
+    haloCm90 += rev * repeatOf(v.ltv90) * margin;
+    haloCm365 += rev * repeatOf(v.ltv365) * margin;
+    if (v.aov > 0) haloOrders += rev / v.aov;
+  }
+  const blendedOrders = p.orders + haloOrders;
+  return {
+    ...p,
     haloRevenue,
     haloByChannel,
-    blendedAmer: haloRevenue > 0 && monthlySpend > 0 ? (newRevenue + haloRevenue) / monthlySpend : amer,
-    blendedCm: cm + haloCm,
-    blendedLtv60Cm: ltv60Cm + haloCm60,
-    blendedLtv90Cm: ltv90Cm + haloCm90,
-    blendedLtv365Cm: ltv365Cm + haloCm365,
+    blendedAmer: haloRevenue > 0 && p.spend > 0 ? (p.newRevenue + haloRevenue) / p.spend : p.amer,
+    blendedCm: p.cm + haloCm,
+    blendedLtv60Cm: p.ltv60Cm + haloCm60,
+    blendedLtv90Cm: p.ltv90Cm + haloCm90,
+    blendedLtv365Cm: p.ltv365Cm + haloCm365,
     blendedOrders,
-    blendedCac: haloOrders > 0 ? monthlySpend / blendedOrders : cac,
+    blendedCac: haloOrders > 0 ? p.spend / blendedOrders : p.cac,
   };
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
-import type { ClientSettings, HaloSettings, OtherChannel } from "../types";
-import { acquisitionShares, blendedAmer, cellValue, channelSpendShares, haloInput, haloMix, haloOf, haloRevenue, haloSettingsOf, totalFactor } from "./halo";
+import type { ClientSettings, DailyFact, HaloSettings, OtherChannel } from "../types";
+import { acquisitionShares, actualAcquisitionShares, blendedAmer, cellValue, channelSpendShares, haloInput, haloMix, haloOf, haloRevenue, haloSettingsOf, totalFactor } from "./halo";
 
 const amazon: OtherChannel = { key: "amazon", label: "Amazon", kind: "marketplace", costPct: 65, aov: 30 };
 const retail: OtherChannel = { key: "retail", label: "Retail", kind: "retail", costPct: 55, aov: 15, netPct: 50 };
@@ -142,5 +142,24 @@ describe("haloInput: what the New Customer model needs from a month's mix", () =
     const v = haloInput(haloMix({ meta_acquisition: 1 }, s), s)!.value.amazon;
     expect(v.costPct).toBe(0);
     expect(v.aov).toBe(0);
+  });
+});
+
+describe("actualAcquisitionShares: the mix a client really ran", () => {
+  const day = (channels: Record<string, number>): DailyFact => ({ clientId: "c", date: "2026-11-01", channels: Object.fromEntries(Object.entries(channels).map(([k, spend]) => [k, { spend, platformRevenue: 0, platformPurchases: 0 }])) }) as unknown as DailyFact;
+  const facts = [day({ meta_acquisition: 700, meta_returning: 100, google_nonbrand: 150, google_brand: 50 }), day({ meta_acquisition: 20, google_nonbrand: 0 })];
+  it("shares of the spend that counts toward aMER", () => {
+    const s = actualAcquisitionShares(facts, settings(halo(), { excludeBrandFromAmer: true, excludeMetaReturningFromAmer: true }));
+    expect(Object.keys(s).sort()).toEqual(["google_nonbrand", "meta_acquisition"]);
+    expect(s.meta_acquisition).toBeCloseTo(720 / 870, 10);
+    expect(s.google_nonbrand).toBeCloseTo(150 / 870, 10);
+  });
+  it("keeps brand and returning spend when the client counts them", () => {
+    const s = actualAcquisitionShares(facts, settings(halo(), { excludeBrandFromAmer: false, excludeMetaReturningFromAmer: false }));
+    expect(s.google_brand).toBeCloseTo(50 / 1020, 10);
+    expect(s.meta_returning).toBeCloseTo(100 / 1020, 10);
+  });
+  it("is empty with no spend", () => {
+    expect(actualAcquisitionShares([], settings(halo()))).toEqual({});
   });
 });

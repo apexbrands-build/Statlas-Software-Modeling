@@ -5,6 +5,7 @@ import { useApp } from "@/lib/app-context";
 import { addDays, addYears, endOfMonth, todayLocal } from "@/lib/dates";
 import { formatValue } from "@/lib/format";
 import { aggregate, amerSpend } from "@/lib/metrics";
+import { acquisitionShares, actualAcquisitionShares, haloInput, haloMix, haloSettingsOf, type HaloMix } from "@/lib/planning/halo";
 import {
   acqShare,
   BEYOND_LABELS,
@@ -24,9 +25,12 @@ import {
   OPTIMIZE_LABELS,
   optimalSpend,
   CURVE_LABELS,
+  withHalo,
   type DayPoint,
+  type HaloInput,
   type ModelSettings,
   type OptimizeFor,
+  type ValueBasis,
 } from "@/lib/planning/new-customer";
 import { defaultNewCustomerMonth, monthModelSettings, resolveNewCustomerMonth, type MonthModelCtx } from "@/lib/planning/month-model";
 import { dayPoints, fitFromPoints } from "@/lib/planning/plan-fit";
@@ -111,6 +115,25 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
 
   const resolve = (m: NewCustomerMonth) => resolveNewCustomerMonth(m, mctx);
 
+  /* ---- halo: what the same ads create on the client's other sales channels (Store Settings) ---- */
+  const haloChannels = useMemo(() => {
+    const h = haloSettingsOf(settings);
+    const used = new Set<string>();
+    for (const row of Object.values(h.cells)) for (const [key, cell] of Object.entries(row ?? {})) if (Number(cell?.value) > 0) used.add(key);
+    return h.channels.filter((c) => used.has(c.key));
+  }, [settings]);
+  const hasHalo = haloChannels.length > 0;
+  const basis: ValueBasis = hasHalo && S.valueBasis === "blended" ? "blended" : "com";
+  /** The mix the client ran over the last 90 days, for months that have no planned platform split yet. */
+  const recentShares = useMemo(() => (hasHalo && lastData ? actualAcquisitionShares(facts.filter((f) => f.date > addDays(lastData, -90) && f.date <= lastData), settings) : {}), [hasHalo, facts, lastData, settings]);
+  const haloOfMonth = (key: string): { mix: HaloMix | null; input: HaloInput | undefined } => {
+    if (!hasHalo) return { mix: null, input: undefined };
+    const inputs = months.find((m) => m.month === key)?.inputs ?? null;
+    const planned = inputs ? acquisitionShares(inputs, settings) : {};
+    const mix = haloMix(Object.keys(planned).length ? planned : recentShares, settings);
+    return { mix, input: haloInput(mix, settings) };
+  };
+
   /* ---- the plan table ---- */
   const markerRows: { label: string; key: Exclude<OptimizeFor, "other"> }[] = [
     { label: "Max CM", key: "cm" },
@@ -125,6 +148,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
     const idx = seasonIdx(key);
     const ms: ModelSettings = monthModelSettings(m, e);
     const closed = lastData !== "" && endOfMonth(key) <= lastData;
+    const halo = haloOfMonth(key);
     let table = null as ReturnType<typeof buildSpendTable> | null;
     let spend = m.spend;
     let point = null as ReturnType<typeof evaluateSpend> | null;
@@ -137,12 +161,12 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
       cap = (daily[Math.min(daily.length - 1, Math.floor(daily.length * 0.95))] ?? 0) * days;
       const top = Math.max(cap * 3, m.optimizeFor === "other" && !closed ? m.spend * 1.1 : 0, 1000);
       const step = niceStep(top / 30);
-      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step, idx);
+      table = buildSpendTable(fit.curve, ms, days, Math.ceil(top / step) * step, step, idx, undefined, { halo: halo.input, basis });
       if (m.optimizeFor !== "other" && !closed) {
         const t = optimalSpend(table, m.optimizeFor);
         if (t != null) spend = t;
       }
-      point = evaluateSpend(fit.curve, ms, spend, days, idx);
+      point = evaluateSpend(fit.curve, ms, spend, days, idx, halo.input);
     }
     if (closed) {
       // Closed month: the numbers are what happened, not what the model says.
@@ -153,16 +177,16 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
         const base = point ?? evaluateSpend({ kind: "revenue", a: 0, b: 0, r2: 0 }, ms, sp, days);
         const ltvCm = (mult: number) => rev * (1 - e.nc / 100) + Math.max(0, rev * mult - rev) * (1 - e.rc / 100) - sp;
         spend = sp;
-        point = { ...base, spend: sp, amer: rev / sp, newRevenue: rev, orders: t.newOrders, cac: t.newOrders > 0 ? sp / t.newOrders : 0, cm: rev * (1 - e.nc / 100) - sp, ltv60Revenue: rev * e.m60, ltv60Cm: ltvCm(e.m60), ltv90Revenue: rev * e.m90, ltv90Cm: ltvCm(e.m90), ltv365Revenue: rev * e.m365, ltv365Cm: ltvCm(e.m365) };
+        point = withHalo({ ...base, spend: sp, amer: rev / sp, newRevenue: rev, orders: t.newOrders, cac: t.newOrders > 0 ? sp / t.newOrders : 0, cm: rev * (1 - e.nc / 100) - sp, ltv60Revenue: rev * e.m60, ltv60Cm: ltvCm(e.m60), ltv90Revenue: rev * e.m90, ltv90Cm: ltvCm(e.m90), ltv365Revenue: rev * e.m365, ltv365Cm: ltvCm(e.m365) }, halo.input);
       }
     }
-    return { key, m, e, days, ms, table, spend, point, idx, cap, closed };
+    return { key, m, e, days, ms, table, spend, point, idx, cap, closed, halo };
   };
   const rows = monthKeys.map((key) => buildRow(key));
   const cur = rows.find((r) => r.key === sel) ?? rows[0];
   const totals = rows.reduce(
-    (a, r) => ({ spend: a.spend + (r.point ? r.spend : 0), rev: a.rev + (r.point?.newRevenue ?? 0), orders: a.orders + (r.point?.orders ?? 0), cm: a.cm + (r.point?.cm ?? 0) }),
-    { spend: 0, rev: 0, orders: 0, cm: 0 },
+    (a, r) => ({ spend: a.spend + (r.point ? r.spend : 0), rev: a.rev + (r.point?.newRevenue ?? 0), orders: a.orders + (r.point?.orders ?? 0), cm: a.cm + (r.point?.cm ?? 0), halo: a.halo + (r.point?.haloRevenue ?? 0), blendedCm: a.blendedCm + (r.point?.blendedCm ?? 0) }),
+    { spend: 0, rev: 0, orders: 0, cm: 0, halo: 0, blendedCm: 0 },
   );
 
   /* ---- last year's aMER for the selected month ---- */
@@ -473,6 +497,21 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
           </label>
           <span className="text-text-faint">Total spend, MER and the daily spend plan always include all spend. These are the Store Settings switches, so Home and the reports follow them. Save the model again to update the plan months.</span>
         </div>
+        {hasHalo && (
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
+            <label className="flex items-center gap-2">
+              <span className="font-medium text-text">Pick the spend on:</span>
+              <select className={inputClass} aria-label="Value basis" value={basis} onChange={(e) => setNewSettings((x) => ({ ...x, valueBasis: e.target.value as ValueBasis }))}>
+                <option value="com">.com only</option>
+                <option value="blended">Blended (with halo)</option>
+              </select>
+            </label>
+            <span className="text-text-faint">
+              Blended adds what the same ads create on {haloChannels.map((c) => c.label).join(", ")} (halo factors in Store Settings), each dollar at that channel&apos;s own margin. It usually picks a higher spend, so the .com aMER target is lower. The halo is modelled, not
+              measured here{rows.some((r) => r.halo.mix?.benchmark) ? ", and rests on a benchmark or assumed factor" : ""}.
+            </span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[960px] border-collapse text-xs">
             <thead>
@@ -482,8 +521,11 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 <th className={th}>Spend</th>
                 <th className={th}>aMER</th>
                 <th className={th}>New order revenue</th>
+                {hasHalo && <th className={th}>Halo revenue</th>}
+                {hasHalo && <th className={th}>Blended aMER</th>}
                 <th className={th}>AOV</th>
                 <th className={th}>CM</th>
+                {hasHalo && <th className={th}>Blended CM</th>}
                 <th className={th}>60-day LTV</th>
                 <th className={th}>90-day LTV</th>
                 <th className={th}>1-year LTV</th>
@@ -504,8 +546,11 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                   <td className={td}>{money(r.spend)}</td>
                   <td className={td}>{r.point ? r.point.amer.toFixed(2) : "–"}</td>
                   <td className={td}>{money(r.point?.newRevenue ?? 0)}</td>
+                  {hasHalo && <td className={td}>{money(r.point?.haloRevenue ?? 0)}</td>}
+                  {hasHalo && <td className={td}>{r.point ? r.point.blendedAmer.toFixed(2) : "–"}</td>}
                   <td className={td}>{r.e.aov.toFixed(2)}</td>
                   <td className={td}>{money(r.point?.cm ?? 0)}</td>
+                  {hasHalo && <td className={td}>{money(r.point?.blendedCm ?? 0)}</td>}
                   <td className={td}>{(r.e.aov * r.e.m60).toFixed(2)}</td>
                   <td className={td}>{(r.e.aov * r.e.m90).toFixed(2)}</td>
                   <td className={td}>{(r.e.aov * r.e.m365).toFixed(2)}</td>
@@ -521,9 +566,12 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 <td className={td}>{money(totals.spend)}</td>
                 <td className={td}>{totals.spend > 0 ? (totals.rev / totals.spend).toFixed(2) : "–"}</td>
                 <td className={td}>{money(totals.rev)}</td>
+                {hasHalo && <td className={td}>{money(totals.halo)}</td>}
+                {hasHalo && <td className={td}>{totals.spend > 0 ? ((totals.rev + totals.halo) / totals.spend).toFixed(2) : "–"}</td>}
                 <td className={td}>{totals.orders > 0 ? (totals.rev / totals.orders).toFixed(2) : "–"}</td>
                 <td className={td}>{money(totals.cm)}</td>
-                <td colSpan={5} />
+                {hasHalo && <td className={td}>{money(totals.blendedCm)}</td>}
+                <td colSpan={6} />
               </tr>
             </tbody>
           </table>
@@ -620,6 +668,13 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             <div className="text-2xl font-semibold text-accent tabular">{cur.point ? cur.point.amer.toFixed(2) : "–"}</div>
             {lyAmer != null && <div className="text-[11px] text-text-faint">vs LY {lyAmer.toFixed(2)}</div>}
           </div>
+          {hasHalo && cur.point && (
+            <div className="mb-3 text-center">
+              <div className="text-[11px] text-text-muted">Blended aMER</div>
+              <div className="text-2xl font-semibold tabular">{cur.point.blendedAmer.toFixed(2)}</div>
+              <div className="text-[11px] text-text-faint">modelled{cur.halo.mix?.benchmark ? " · benchmark halo" : ""}</div>
+            </div>
+          )}
         </div>
         <p className="mb-1 text-xs text-text-faint">Grey dots are past days scaled to a monthly pace ({cur.days} days). The dotted line is the model; right of the dashed line the client has never spent, so returns are an assumption. Click the coloured points to plan that spend.</p>
         <ScatterCurve points={scatter} curve={curve} xFmt={(v) => formatValue(v, "currency0", client.currency)} refX={cur.cap > 0 ? { x: cur.cap, label: "highest spend seen" } : undefined} />
@@ -657,6 +712,9 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                 <th className={th}>Orders</th>
                 <th className={th}>New order revenue</th>
                 <th className={th}>CM</th>
+                {hasHalo && <th className={th}>Halo revenue</th>}
+                {hasHalo && <th className={th}>Blended aMER</th>}
+                {hasHalo && <th className={th}>Blended CM</th>}
                 <th className={th}>60-day revenue</th>
                 <th className={th}>60-day CM</th>
                 <th className={th}>90-day revenue</th>
@@ -680,7 +738,10 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
                     <td className={td}>{p.incCac ? money(p.incCac) : "–"}</td>
                     <td className={td}>{Math.round(p.orders).toLocaleString()}</td>
                     <td className={`${td} ${hl("revenue")}`}>{money(p.newRevenue)}</td>
-                    <td className={`${td} ${hl("cm")}`}>{money(p.cm)}</td>
+                    <td className={`${td} ${basis === "com" ? hl("cm") : ""}`}>{money(p.cm)}</td>
+                    {hasHalo && <td className={td}>{money(p.haloRevenue)}</td>}
+                    {hasHalo && <td className={td}>{p.blendedAmer.toFixed(2)}</td>}
+                    {hasHalo && <td className={`${td} ${basis === "blended" ? hl("cm") : ""}`}>{money(p.blendedCm)}</td>}
                     <td className={td}>{money(p.ltv60Revenue)}</td>
                     <td className={`${td} ${hl("cm60")}`}>{money(p.ltv60Cm)}</td>
                     <td className={td}>{money(p.ltv90Revenue)}</td>
@@ -693,7 +754,7 @@ export function NewCustomerModel({ mc }: { mc: ModelCtx }) {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 90-day CM within 90 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the spend the history has seen (the 95th-percentile day, sustained all month): returns are an assumption there.</p>
+        <p className="mt-2 text-xs text-text-faint">Click a row to use that spend. Max CM pays back on the first order; Max 60-day CM is the spend that still pays back within 60 days; Max 90-day CM within 90 days; Max 1-year CM within a year; Max Revenue at break-even is the most new revenue you can buy while the first order still covers its costs. Greyed italic rows are above the spend the history has seen (the 95th-percentile day, sustained all month): returns are an assumption there.{hasHalo ? (basis === "blended" ? " The markers are picked on the blended numbers: the .com columns plus the halo, each halo dollar at its own channel's margin and repeat value." : " The markers are picked on .com alone; the halo columns are shown for reference.") : ""}</p>
       </Panel>
 
       <Panel title="How to read this">

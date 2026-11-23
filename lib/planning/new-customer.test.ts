@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "../dates";
-import { buildSpendTable, curveAmer, curveMarginal, evaluateSpend, fitNewCustomerModel, interpolate90, niceStep, optimalSpend, type Curve, type DayPoint, type HaloInput, type ModelSettings } from "./new-customer";
+import { buildSpendTable, curveAmer, curveMarginal, evaluateSpend, fitNewCustomerModel, interpolate90, niceStep, optimalSpend, withHalo, type Curve, type DayPoint, type HaloInput, type ModelSettings } from "./new-customer";
 
 const settings: ModelSettings = {
   newCostPct: 26,
@@ -258,5 +258,19 @@ describe("halo: the blended value basis", () => {
     const b = optimalSpend(blended, "revenue")!;
     expect(b).toBeGreaterThanOrEqual(c);
     expect(blended.points.find((p) => p.spend === b)!.blendedCm).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("withHalo: the halo on any point, such as a closed month's actuals", () => {
+  const flat: Curve = { kind: "revenue", a: 0, b: 2, r2: 1 };
+  const s: ModelSettings = { newCostPct: 40, returningCostPct: 40, aov: 50, ltv60Multiplier: 1, ltv90Multiplier: 1, ltv365Multiplier: 1, overModelPct: 0, minCm: 0, minCm60: 0, minCm365: 0, minCm90: 0 };
+  const halo: HaloInput = { share: { amazon: 0.1 }, value: { amazon: { costPct: 65, aov: 30, ltv60: 1, ltv90: 1, ltv365: 1.5 } } };
+  it("gives the same numbers as the model does with the halo", () => {
+    expect(withHalo(evaluateSpend(flat, s, 30000, 30), halo)).toEqual(evaluateSpend(flat, s, 30000, 30, 1, halo));
+  });
+  it("replaces a halo already on the point instead of adding to it", () => {
+    const once = evaluateSpend(flat, s, 30000, 30, 1, halo);
+    expect(withHalo(once, halo)).toEqual(once);
+    expect(withHalo(once, undefined)).toEqual(evaluateSpend(flat, s, 30000, 30));
   });
 });
