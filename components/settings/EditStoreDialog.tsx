@@ -212,7 +212,7 @@ export function EditStoreDialog({ clientName, currency, timezone, initial, chann
       </Accordion>
 
       <Accordion title="Other sales channels and halo" subtitle="Amazon, TikTok Shop, retail: what the ads create there">
-        <HaloSettings value={haloSettingsOf(d)} multipliers={d.multipliers} onChange={(next) => ex("halo", next)} />
+        <HaloSettings value={haloSettingsOf(d)} multipliers={d.multipliers} onChange={(next) => ex("halo", next)} clientId={d.clientId} currency={currency} />
       </Accordion>
 
       <Accordion title="aMER/CAC Calculation" subtitle="Exclude campaigns from aMER/CAC calculation">

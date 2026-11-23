@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cellValue, haloGridChannels } from "@/lib/planning/halo";
 import { CHANNEL_LABELS, type ChannelKey, type HaloCell, type HaloSettings as Halo, type HaloSource, type OtherChannel, type RetailerRow } from "@/lib/types";
+import { ChannelImport } from "./ChannelImport";
 import { Check, Field, inputCls, NumberInput } from "./ui";
 
 const SOURCES: { id: HaloSource; label: string }[] = [
@@ -26,7 +27,7 @@ const smallBtn = "rounded-lg border border-border px-3 py-1.5 text-xs text-text-
  * Store Settings > Edit > "Other sales channels and halo": the client's sales channels besides its own site, and how much revenue each
  * ad channel creates on them (the halo factors). Factors are typed from tests run elsewhere; nothing here estimates one.
  */
-export function HaloSettings({ value, multipliers, onChange }: { value: Halo; multipliers: Partial<Record<ChannelKey, number>>; onChange: (next: Halo) => void }) {
+export function HaloSettings({ value, multipliers, onChange, clientId, currency }: { value: Halo; multipliers: Partial<Record<ChannelKey, number>>; onChange: (next: Halo) => void; clientId: string; currency: string }) {
   const [open, setOpen] = useState<string | null>(null);
   // Channels with a factor, plus any channel that still carries a halo: a cell keeps working after its factor is deleted, so it stays visible.
   const adChannels = haloGridChannels(multipliers, value);
@@ -97,6 +98,7 @@ export function HaloSettings({ value, multipliers, onChange }: { value: Halo; mu
               )}
             </div>
             {c.kind === "retail" && <Retailers channel={c} onChange={(rows) => setRetailers(c.key, rows)} />}
+            <ChannelImport clientId={clientId} channel={c} currency={currency} />
             <div className="flex justify-end">
               <button type="button" className="text-xs font-semibold text-bad hover:underline" onClick={() => removeChannel(c.key)}>
                 Delete {c.label}
