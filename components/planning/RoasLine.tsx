@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { endOfMonth } from "@/lib/dates";
+import { totalFactor } from "@/lib/planning/halo";
 import { actualPlatformRoas, roasBasis, roasCellValue, roasChannels, roasTarget, rowMethod, withRoas } from "@/lib/planning/roas";
 import { CHANNEL_LABELS, type ChannelKey } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
@@ -16,9 +17,11 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
   const channels = roasChannels(settings, months);
   /** Each month's basis: the blended aMER and total factors when the client has halo factors, else the aMER and the plain factor. */
   const bases = months.map((m) => roasBasis(m.inputs, settings));
-  const factorOf = (k: ChannelKey) => bases[0]?.factorOf(k) ?? settings.multipliers[k] ?? 1;
   const comFactor = (k: ChannelKey) => settings.multipliers[k] ?? 1;
   const modelled = bases.some((b) => b.modelled);
+  /** What the Factor column shows: the total factor once any month is modelled on the halo, else the plain factor exactly as saved. */
+  const factorOf = (k: ChannelKey) => (modelled ? totalFactor(k, settings) : comFactor(k));
+  const round3 = (v: number) => Math.round(v * 1000) / 1000;
   const benchmark = bases.some((b) => b.benchmark);
 
   const setMethod = (k: ChannelKey, method: "suggested" | "manual") => {
@@ -75,8 +78,8 @@ export function RoasLine({ ctx }: { ctx: PlanCtx }) {
               return (
                 <tr key={k} className="border-b border-border/40">
                   <td className="px-3 py-1">{CHANNEL_LABELS[k]}</td>
-                  <td className="px-2 py-1 text-right tabular text-text-muted" title={factorOf(k) !== comFactor(k) ? `.com factor ${comFactor(k)} + halo ${round2(factorOf(k) - comFactor(k))}` : undefined}>
-                    {round2(factorOf(k))}
+                  <td className="px-2 py-1 text-right tabular text-text-muted" title={factorOf(k) !== comFactor(k) ? `.com factor ${comFactor(k)} + halo ${round3(factorOf(k) - comFactor(k))}` : undefined}>
+                    {factorOf(k) !== comFactor(k) ? round3(factorOf(k)) : comFactor(k)}
                   </td>
                   <td className="px-2 py-1">
                     <select className={`${inputClass} w-28`} aria-label={`${CHANNEL_LABELS[k]} method`} value={method === "mixed" ? "mixed" : method} onChange={(e) => e.target.value !== "mixed" && setMethod(k, e.target.value as "suggested" | "manual")}>

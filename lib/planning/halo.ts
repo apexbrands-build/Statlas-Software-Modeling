@@ -1,5 +1,5 @@
 import { BRAND_CHANNELS, RETENTION_CHANNELS } from "../channels";
-import type { ChannelKey, ClientSettings, DailyFact, HaloCell, HaloSettings, OtherChannel } from "../types";
+import { CHANNEL_KEYS, type ChannelKey, type ClientSettings, type DailyFact, type HaloCell, type HaloSettings, type OtherChannel } from "../types";
 import type { HaloInput } from "./new-customer";
 import { PLAN_PLATFORMS, type PlanMonthInputs } from "./types";
 
@@ -28,10 +28,20 @@ export function cellValue(cell: HaloCell | undefined, channel: OtherChannel): nu
   const v = Number(cell?.value);
   if (!Number.isFinite(v) || v <= 0) return 0;
   if (channel.kind === "retail" && cell?.onShelf) {
-    const net = Number(channel.netPct ?? 100);
+    // Without the brand's net share a shelf-sales factor cannot be converted, so it counts as nothing rather than at full shelf value.
+    const net = Number(channel.netPct);
     return Number.isFinite(net) && net > 0 ? (v * net) / 100 : 0;
   }
   return v;
+}
+
+/**
+ * The ad channels the halo grid lists: every channel with an incrementality factor, plus any channel that already carries a halo.
+ * A cell keeps working when its channel's factor is deleted, so it must stay visible to be seen and cleared.
+ */
+export function haloGridChannels(multipliers: Partial<Record<ChannelKey, number>>, halo: HaloSettings): ChannelKey[] {
+  const typed = (k: ChannelKey) => halo.channels.some((c) => cellValue(halo.cells[k]?.[c.key], c) > 0);
+  return CHANNEL_KEYS.filter((k) => multipliers[k] !== undefined || typed(k));
 }
 
 /** The halo factors of an ad channel, per existing sales channel (zeros and deleted channels left out). */
@@ -124,13 +134,18 @@ export interface HaloMix {
 /**
  * What a month's channel mix creates beyond .com. Each channel is assumed to deliver the same whole-business return, so its
  * .com part is share x IF / F and its halo part on sales channel k is share x halo_k / F (F = total factor).
- * Channels with a total factor of zero create nothing and are skipped.
+ * Channels with a total factor of zero create nothing and are skipped. Retention channels keep their place in the spend but bring no
+ * halo here: aMER measures acquisition, and what retention ads create is reported apart (`adCreatedReturning`).
  */
 export function haloMix(shares: Partial<Record<ChannelKey, number>>, settings: ClientSettings): HaloMix {
   const none: HaloMix = { w: 1, share: {}, modelled: false, benchmark: false };
   const { cells } = haloSettingsOf(settings);
   const rows = (Object.entries(shares) as [ChannelKey, number][])
-    .map(([k, s]) => ({ k, s: Number(s), halo: haloOf(k, settings), f: totalFactor(k, settings), com: settings.multipliers[k] ?? 1 }))
+    .map(([k, s]) => {
+      const com = settings.multipliers[k] ?? 1;
+      const halo = RETENTION_CHANNELS.includes(k) ? {} : haloOf(k, settings);
+      return { k, s: Number(s), halo, f: com + Object.values(halo).reduce((a, b) => a + b, 0), com };
+    })
     .filter((r) => Number.isFinite(r.s) && r.s > 0 && Number.isFinite(r.f) && r.f > 0);
   const norm = rows.reduce((a, r) => a + r.s, 0);
   if (norm <= 0) return none;

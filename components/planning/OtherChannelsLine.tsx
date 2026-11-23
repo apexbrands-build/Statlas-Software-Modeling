@@ -85,7 +85,8 @@ export function OtherChannelsLine({ ctx }: { ctx: PlanCtx }) {
   }
 
   const data = months.map((m) => (m.inputs ? otherMonth(m.month, m.inputs, settings, curve) : null));
-  const returning = months.map((m) => (m.inputs ? adCreatedReturning(m.inputs, settings, recent).revenue : null));
+  const returning = months.map((m) => (m.inputs ? adCreatedReturning(m.inputs, settings, recent) : null));
+  const retentionHalo = returning.some((r) => (r?.haloRevenue ?? 0) > 0);
   const setLine = (month: string, key: string, patch: Partial<OtherLine>) => editInputs(month, (i) => ({ ...i, other: { ...(i.other ?? {}), [key]: { ...(i.other?.[key] ?? {}), ...patch } } }));
 
   // One sentence per factor and problem, with the months it applies to.
@@ -173,7 +174,11 @@ export function OtherChannelsLine({ ctx }: { ctx: PlanCtx }) {
                   {months.map((m, mi) => {
                     const l = data[mi]?.lines[ci];
                     return (
-                      <td key={m.month} className={`${td} ${l?.capped ? "text-bad" : ""}`} title={l?.capped ? "The halo is larger than this channel's forecast, so it is capped. Lower the halo factor in Store Settings." : undefined}>
+                      <td
+                        key={m.month}
+                        className={`${td} ${l?.capped ? "text-bad" : ""}`}
+                        title={l?.capped ? "The factor says the ads created more than this channel's whole forecast, so the credit is cut to fit. Lower the halo factor in Store Settings." : l && l.halo > 0 && l.forecast === null ? "No forecast is typed for this channel, so nothing caps this number." : undefined}
+                      >
                         {l && l.halo > 0 ? money(l.created) : dash}
                       </td>
                     );
@@ -205,19 +210,29 @@ export function OtherChannelsLine({ ctx }: { ctx: PlanCtx }) {
             <tr className="border-b border-border/40">
               <td className={rowLabel}>Blended aMER (modelled)</td>
               {months.map((m, mi) => (
-                <td key={m.month} className={`${td} font-medium`}>
+                <td key={m.month} className={`${td} font-medium ${data[mi]?.lines.some((l) => l.capped) ? "text-bad" : ""}`} title={data[mi]?.lines.some((l) => l.capped) ? "Uses the full halo factor, which is larger than a channel's forecast allows. Lower the factor in Store Settings." : undefined}>
                   {data[mi]?.modelled ? data[mi]!.blendedAmer.toFixed(2) : dash}
                 </td>
               ))}
             </tr>
-            <tr>
+            <tr className={retentionHalo ? "border-b border-border/40" : ""}>
               <td className={rowLabel}>Returning revenue created by retention ads</td>
               {months.map((m, mi) => (
                 <td key={m.month} className={td}>
-                  {returning[mi] ? money(returning[mi]) : dash}
+                  {returning[mi]?.revenue ? money(returning[mi]!.revenue) : dash}
                 </td>
               ))}
             </tr>
+            {retentionHalo && (
+              <tr>
+                <td className={rowLabel}>Created by retention ads on other channels</td>
+                {months.map((m, mi) => (
+                  <td key={m.month} className={td} title="Kept out of the blended aMER, which measures acquisition.">
+                    {returning[mi]?.haloRevenue ? money(returning[mi]!.haloRevenue) : dash}
+                  </td>
+                ))}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -226,7 +241,11 @@ export function OtherChannelsLine({ ctx }: { ctx: PlanCtx }) {
           The part created by ads is a transfer of credit, never extra revenue: it is counted once, inside the channel&apos;s forecast. {anyModelled ? "It comes from the halo factors in Store Settings, so it is modelled, not measured here." : "No halo factor is typed in Store Settings yet, so nothing is credited to the ads."}
         </p>
         <p>Returning revenue created by retention ads = planned retention spend × that channel&apos;s platform ROAS over the last 90 days × its factor. It is already inside the Returning model&apos;s forecast at the past level of spend; the line shows how much of it depends on the ads.</p>
-        {anyCapped && <p className="text-bad">In red: the halo is larger than the channel&apos;s forecast, so it is capped. Lower the halo factor in Store Settings.</p>}
+        {anyCapped && (
+          <p className="text-bad">
+            In red: the factor says the ads created more than a channel&apos;s whole forecast, so the credit on that line is cut to fit. The blended aMER and the ROAS targets still use the full factor until you lower it in Store Settings.
+          </p>
+        )}
         {[...warnings.values()].map((w) => (
           <p key={`${w.channel}|${w.salesChannel}|${w.kind}`} className="text-text-muted">
             {CHANNEL_LABELS[w.channel]} on {labelOf(w.salesChannel)}: {WARNING_TEXT[w.kind](w.months.join(", "))}

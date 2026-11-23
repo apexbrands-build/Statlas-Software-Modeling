@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import type { ClientSettings, DailyFact, HaloSettings, OtherChannel } from "../types";
-import { acquisitionShares, actualAcquisitionShares, blendedAmer, cellValue, channelSpendShares, haloInput, haloMix, haloOf, haloRevenue, haloSettingsOf, totalFactor } from "./halo";
+import { acquisitionShares, actualAcquisitionShares, blendedAmer, cellValue, channelSpendShares, haloGridChannels, haloInput, haloMix, haloOf, haloRevenue, haloSettingsOf, totalFactor } from "./halo";
 
 const amazon: OtherChannel = { key: "amazon", label: "Amazon", kind: "marketplace", costPct: 65, aov: 30 };
 const retail: OtherChannel = { key: "retail", label: "Retail", kind: "retail", costPct: 55, aov: 15, netPct: 50 };
@@ -161,5 +161,25 @@ describe("actualAcquisitionShares: the mix a client really ran", () => {
   });
   it("is empty with no spend", () => {
     expect(actualAcquisitionShares([], settings(halo()))).toEqual({});
+  });
+});
+
+
+describe("review fixes", () => {
+  it("cannot convert a shelf-sales factor without the retail channel's net share", () => {
+    expect(cellValue({ value: 0.3, source: "own_test", onShelf: true }, { ...retail, netPct: undefined })).toBe(0);
+  });
+  it("lists every ad channel that has a factor or a typed halo, so no cell works unseen", () => {
+    const h = halo({ cells: { tiktok: { amazon: { value: 0.2, source: "assumption" } }, youtube: { amazon: { value: 0, source: "assumption" } } } });
+    expect(haloGridChannels({ meta_acquisition: 1.2 }, h)).toEqual(["meta_acquisition", "tiktok"]);
+    expect(haloGridChannels({}, halo({ cells: {} }))).toEqual([]);
+  });
+  it("keeps a retention channel's halo out of the blended aMER", () => {
+    const only = settings(halo({ cells: { meta_returning: { amazon: { value: 0.5, source: "own_test" } } } }), { multipliers: { meta_acquisition: 1.2, meta_returning: 0.6 } });
+    const mix = haloMix({ meta_acquisition: 0.8, meta_returning: 0.2 }, only);
+    expect(mix.modelled).toBe(false);
+    expect(mix.w).toBe(1);
+    const both = settings(halo({ cells: { meta_acquisition: { amazon: { value: 0.2, source: "own_test" } }, meta_returning: { amazon: { value: 0.5, source: "own_test" } } } }), { multipliers: { meta_acquisition: 1.2, meta_returning: 0.6 } });
+    expect(haloMix({ meta_acquisition: 0.8, meta_returning: 0.2 }, both).share.amazon).toBeCloseTo(0.129032, 5);
   });
 });

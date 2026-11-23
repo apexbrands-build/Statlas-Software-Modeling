@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import type { ClientSettings, DailyFact, HaloSettings, OtherChannel, RetailerRow } from "../types";
 import type { Curve } from "./new-customer";
-import { adCreatedReturning, adCreatedUnitsPerStoreWeek, capHalo, haloWarnings, otherChannelsOf, otherForecast, otherMonth, retailFrame, retailNetPrice, spendRatio, weeksIn } from "./other-channels";
+import { adCreatedReturning, adCreatedUnitsPerStoreWeek, channelForecast, haloWarnings, otherMonth, retailFrame, retailNetPrice, spendRatio, weeksIn } from "./other-channels";
 import { blankInputs, type PlanMonthInputs } from "./types";
 
 const amazon: OtherChannel = { key: "amazon", label: "Amazon", kind: "marketplace", costPct: 65, aov: 30 };
@@ -34,6 +34,11 @@ describe("retailFrame: doors x units per store per week x shelf price", () => {
     expect(f.doors).toBe(1300);
     expect(f.sellThrough).toBeCloseTo(((1000 * 2 + 300 * 1) * 31 * 30) / 7, 1);
   });
+  it("ignores a row whose launch month is empty or not a month", () => {
+    expect(retailFrame([{ ...target, launchMonth: "" }], 50, "2027-04-01").netRevenue).toBe(0);
+    expect(retailFrame([{ ...target, launchMonth: "soon" }], 50, "2027-04-01").netRevenue).toBe(0);
+    expect(retailNetPrice([{ ...target, launchMonth: "" }], 50, "2027-04-01")).toBeNull();
+  });
   it("ignores rows with no doors, no price or broken numbers", () => {
     const bad = [{ ...target, doors: 0 }, { ...target, shelfPrice: Number.NaN }, { ...target, unitsPerStoreWeek: -2 }];
     expect(retailFrame(bad, 50, "2027-04-01").netRevenue).toBe(0);
@@ -57,28 +62,33 @@ describe("spendRatio: revenue at the assumed spend over revenue at the planned s
   });
 });
 
-describe("otherForecast: the typed line moves with the spend it did not assume", () => {
-  it("is the typed line when the forecast assumed the planned spend", () => {
-    expect(otherForecast(100000, 20000, 1)).toBe(100000);
+describe("channelForecast: the typed line moved by the spend it did not assume", () => {
+  it("is the typed line when the forecast assumed the planned spend: the halo only moves credit", () => {
+    expect(channelForecast(100000, 20000, 1)).toEqual({ forecast: 100000, created: 20000, capped: false });
   });
   it("is the typed line plus the whole halo when the forecast assumed no ads", () => {
-    expect(otherForecast(100000, 20000, 0)).toBe(120000);
+    expect(channelForecast(100000, 20000, 0)).toEqual({ forecast: 120000, created: 20000, capped: false });
   });
   it("adds only the halo on the extra spend", () => {
-    expect(otherForecast(100000, 20000, 0.8)).toBeCloseTo(104000, 6);
+    expect(channelForecast(100000, 20000, 0.8).forecast).toBeCloseTo(104000, 6);
   });
   it("goes down when the plan spends less than the forecast assumed", () => {
-    expect(otherForecast(100000, 20000, 1.25)).toBeCloseTo(95000, 6);
+    expect(channelForecast(100000, 20000, 1.25).forecast).toBeCloseTo(95000, 6);
   });
-});
-
-describe("capHalo", () => {
-  it("caps the halo at the channel's forecast and says so", () => {
-    expect(capHalo(30000, 20000)).toEqual({ value: 20000, capped: true });
+  it("caps what the ads created at the forecast: the typed number wins over the factor", () => {
+    expect(channelForecast(20000, 30000, 1)).toEqual({ forecast: 20000, created: 20000, capped: true });
   });
-  it("leaves it alone under the forecast or with no forecast", () => {
-    expect(capHalo(15000, 20000)).toEqual({ value: 15000, capped: false });
-    expect(capHalo(30000, null)).toEqual({ value: 30000, capped: false });
+  it("never goes negative when the factor says the ads created more than the whole forecast", () => {
+    const r = channelForecast(50000, 34000, 4);
+    expect(r.forecast).toBeCloseTo(12500, 6);
+    expect(r.created).toBeCloseTo(12500, 6);
+    expect(r.capped).toBe(true);
+  });
+  it("credits nothing to the ads on a channel typed as zero", () => {
+    expect(channelForecast(0, 30000, 1)).toEqual({ forecast: 0, created: 0, capped: true });
+  });
+  it("has no forecast and no cap with nothing typed", () => {
+    expect(channelForecast(null, 30000, 1)).toEqual({ forecast: null, created: 30000, capped: false });
   });
 });
 
@@ -102,6 +112,14 @@ describe("adCreatedReturning: what retention ads add to returning revenue", () =
   });
   it("adds nothing for a channel with no recent spend", () => {
     expect(adCreatedReturning(inputs(), s, []).revenue).toBe(0);
+  });
+  it("reports what the same ads create on other sales channels, apart from .com", () => {
+    const withCell = withHalo({ channels: [amazon], cells: { meta_returning: { amazon: { value: 0.1, source: "assumption" } } } });
+    const r = adCreatedReturning(inputs(), withCell, [fact(1000, 3000)]);
+    expect(r.revenue).toBeCloseTo(18000, 6);
+    expect(r.halo.amazon).toBeCloseTo(3000, 6);
+    expect(r.haloRevenue).toBeCloseTo(3000, 6);
+    expect(adCreatedReturning(inputs(), s, [fact(1000, 3000)]).halo).toEqual({});
   });
   it("adds nothing when the plan has no retention spend", () => {
     expect(adCreatedReturning(inputs({ altPct: {} }), s, [fact(1000, 3000)]).revenue).toBe(0);
@@ -133,19 +151,6 @@ describe("haloWarnings", () => {
     expect(haloWarnings(cell({ source: "benchmark" }), {}, "2026-11-23")).toEqual([]);
     const orphan = withHalo({ channels: [], cells: { meta_acquisition: { amazon: { value: 0.2, source: "benchmark" } } } });
     expect(kinds(orphan, 100000)).toEqual([]);
-  });
-});
-
-describe("otherChannelsOf: the lines a plan month shows", () => {
-  it("lists the client's channels with what is typed, and leaves out lines whose channel was deleted", () => {
-    const s = withHalo({ channels: [amazon], cells: {} });
-    const lines = otherChannelsOf(inputs({ other: { amazon: { revenue: 50000, assumedSpend: null }, gone: { revenue: 9 } } }), s);
-    expect(lines.map((l) => l.channel.key)).toEqual(["amazon"]);
-    expect(lines[0].line).toEqual({ revenue: 50000, assumedSpend: null });
-  });
-  it("gives an empty line for a channel with nothing typed", () => {
-    const s = withHalo({ channels: [amazon], cells: {} });
-    expect(otherChannelsOf(inputs(), s)[0].line).toEqual({});
   });
 });
 
@@ -203,6 +208,23 @@ describe("otherMonth: a plan month's other sales channels", () => {
     expect(l.unitsPerStoreWeek).toBeCloseTo(0.13611, 4);
     const typed = otherMonth("2027-04-01", month({ retail: { revenue: 90000 } }), s(cells, [retailCh]), null).lines[0];
     expect(typed.base).toBe(90000);
+  });
+  it("stays at or above zero when the forecast assumed more spend than the plan and the factor overshoots it", () => {
+    const cells = { meta_acquisition: { amazon: own } };
+    const ok = otherMonth("2027-04-01", month({ amazon: { revenue: 50000, assumedSpend: 200000 } }), s(cells), null).lines[0];
+    expect(ok.forecast).toBeCloseTo(25000, 6);
+    expect(ok.capped).toBe(false);
+    const over = otherMonth("2027-04-01", month({ amazon: { revenue: 30000, assumedSpend: 200000 } }), s(cells), null).lines[0];
+    expect(over.forecast).toBeCloseTo(15000, 6);
+    expect(over.created).toBeCloseTo(15000, 6);
+    expect(over.capped).toBe(true);
+  });
+  it("checks units per store against the full halo, so a capped line still shows the overshoot", () => {
+    const cells = { meta_acquisition: { retail: { value: 0.07, source: "assumption" as const } } };
+    const l = otherMonth("2027-04-01", month({ retail: { revenue: 5000 } }), s(cells, [retailCh]), null).lines[0];
+    expect(l.capped).toBe(true);
+    expect(l.created).toBe(5000);
+    expect(l.unitsPerStoreWeek).toBeCloseTo(0.13611, 4);
   });
   it("is plain when the client has channels but no halo", () => {
     const m = otherMonth("2027-04-01", month({ amazon: { revenue: 100000 } }), s({}), null);

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { cellValue } from "@/lib/planning/halo";
-import { CHANNEL_KEYS, CHANNEL_LABELS, type ChannelKey, type HaloCell, type HaloSettings as Halo, type HaloSource, type OtherChannel, type RetailerRow } from "@/lib/types";
+import { cellValue, haloGridChannels } from "@/lib/planning/halo";
+import { CHANNEL_LABELS, type ChannelKey, type HaloCell, type HaloSettings as Halo, type HaloSource, type OtherChannel, type RetailerRow } from "@/lib/types";
 import { Check, Field, inputCls, NumberInput } from "./ui";
 
 const SOURCES: { id: HaloSource; label: string }[] = [
@@ -28,7 +28,8 @@ const smallBtn = "rounded-lg border border-border px-3 py-1.5 text-xs text-text-
  */
 export function HaloSettings({ value, multipliers, onChange }: { value: Halo; multipliers: Partial<Record<ChannelKey, number>>; onChange: (next: Halo) => void }) {
   const [open, setOpen] = useState<string | null>(null);
-  const adChannels = CHANNEL_KEYS.filter((k) => multipliers[k] !== undefined);
+  // Channels with a factor, plus any channel that still carries a halo: a cell keeps working after its factor is deleted, so it stays visible.
+  const adChannels = haloGridChannels(multipliers, value);
 
   const setChannel = (key: string, patch: Partial<OtherChannel>) => onChange({ ...value, channels: value.channels.map((c) => (c.key === key ? { ...c, ...patch } : c)) });
   const addChannel = (preset: Omit<OtherChannel, "key">) => {
@@ -140,7 +141,10 @@ export function HaloSettings({ value, multipliers, onChange }: { value: Halo; mu
                   return (
                     <tr key={k} className="border-b border-border/40 align-top">
                       <td className="px-3 py-2">{CHANNEL_LABELS[k]}</td>
-                      <td className="px-2 py-2 text-right tabular text-text-muted">{round2(base)}</td>
+                      <td className="px-2 py-2 text-right tabular text-text-muted" title={multipliers[k] === undefined ? "No factor is saved for this channel, so it counts as 1. Add one under Incrementality, or clear the halo." : undefined}>
+                        {round2(base)}
+                        {multipliers[k] === undefined ? "*" : ""}
+                      </td>
                       {value.channels.map((c) => {
                         const id = `${k}|${c.key}`;
                         const cell = cellOf(k, c.key);

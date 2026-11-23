@@ -40,10 +40,13 @@ export interface RoasBasis {
 }
 
 export function roasBasis(inputs: PlanMonthInputs | null, settings: ClientSettings): RoasBasis {
-  const factorOf = (k: ChannelKey) => totalFactor(k, settings);
-  if (!inputs) return { amer: 0, factorOf, modelled: false, benchmark: false };
+  const plain = (k: ChannelKey) => settings.multipliers[k] ?? 1;
+  if (!inputs) return { amer: 0, factorOf: plain, modelled: false, benchmark: false };
   const mix = haloMix(acquisitionShares(inputs, settings), settings);
-  return { amer: blendedAmer(inputs.amer, mix), factorOf, modelled: mix.modelled, benchmark: mix.benchmark };
+  // A month the halo does not change (no platform split yet, or no halo on what it spends on) keeps the plain aMER and factors:
+  // the total factor without the blended aMER would lower every target for no reason.
+  if (!mix.modelled) return { amer: inputs.amer, factorOf: plain, modelled: false, benchmark: false };
+  return { amer: blendedAmer(inputs.amer, mix), factorOf: (k) => totalFactor(k, settings), modelled: true, benchmark: mix.benchmark };
 }
 
 /** A month's target for one channel: the typed value when it is above zero, else the suggested one (`amer` defaults to the month's aMER; pass the basis's blended aMER and total factor to include the halo). */

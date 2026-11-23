@@ -183,6 +183,14 @@ describe("halo: ROAS targets from the blended aMER and the total factor", () => 
     expect(b.modelled).toBe(true);
     expect(b.benchmark).toBe(true);
   });
+  it("keeps the plain factor for a month the halo does not change (no platform split yet)", () => {
+    const m = example({ platformPct: {} });
+    const b = roasBasis(m.inputs, withHalo(mults));
+    expect(b.modelled).toBe(false);
+    expect(b.amer).toBe(1.5);
+    expect(b.factorOf("meta_acquisition")).toBe(1.2);
+    expect(planRoasTargets([m], withHalo(mults))["2027-03"].meta_acquisition).toBeCloseTo(1.25, 10);
+  });
   it("roasBasis is the plain aMER and factor with no halo, and safe with no inputs", () => {
     const b = roasBasis(example().inputs, settings(mults));
     expect(b.amer).toBe(1.5);

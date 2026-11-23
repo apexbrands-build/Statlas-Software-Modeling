@@ -348,7 +348,7 @@ function RoasPanel({ ctx, inputs, totals, money }: { ctx: PlanCtx; inputs: PlanM
               <tr key={r.k} className="border-b border-border/40">
                 <td className="px-2 py-1">{CHANNEL_LABELS[r.k]}</td>
                 <td className="px-2 py-1 text-right tabular">{money(r.spend)}</td>
-                <td className="px-2 py-1 text-right tabular text-text-muted">{Math.round(r.factor * 100) / 100}</td>
+                <td className="px-2 py-1 text-right tabular text-text-muted">{basis.modelled ? Math.round(r.factor * 1000) / 1000 : r.factor}</td>
                 <td className="px-2 py-1 text-right tabular">{r.incremental === null ? "–" : money(r.incremental, "ratio2")}</td>
                 <td className={`px-2 py-1 text-right tabular font-medium ${r.manual ? "text-accent" : ""}`}>{r.platform === null ? "–" : money(r.platform, "ratio2")}</td>
                 <td className="px-2 py-1 text-right tabular">{r.expected === null ? "–" : money(r.expected)}</td>
