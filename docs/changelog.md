@@ -2,6 +2,13 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-11-23: Sample store in production for the other-sales-channel screens
+- **Why:** those screens (Home's View selector, the Other Channels Model, the "Other sales channels" line, the blended basis) only appear for a store that has other sales channels. No store in production had one, so after the release nothing new could be seen.
+- **What:** a store named "Kettle & Co Coffee (demo data)" with made-up numbers: two years of own-site days, four ad channels and cohorts, sales for Amazon, TikTok Shop and Retail (Target), one halo factor (Meta on Amazon 0.2, a public benchmark) and a 2026 plan built in the app. `supabase/demo/sample_store.sql` fills it, can be run again, and says at its end how to remove the store.
+- **First run against the live database:** Home's views (Whole business and each channel) against the plan, the New Customer and Returning models, the Other Channels Model (R² 0.86 Amazon, 0.89 TikTok Shop) and "Fill the plan from this model", the Details line, saving the plan, saving settings that hold channels and halo, and the file import (three days). All worked, with no console errors.
+- **Limits:** orders, customers, campaigns and ads are not filled, so the reports built on them stay empty for this store. Only admins see it until someone is given access to it.
+- **Open:** the section that adds a channel sits far down Store Settings > Edit. Nothing on Home or on the Store Settings page points to it.
+
 ## 2026-11-23: Shopify install opens the store's own page (fix for the 2.1.4 pauses)
 - **Why:** the third review pause (2026-11-19, 2.1.4 "shows zero in everything"). The reviewer's screencast showed the cause: after install our page said "your Apex Brands contact will link this store"; the reviewer then signed in with the review account, which only sees the "Apex Analytics Test" client, and that client had no Shopify connection, so every number was $0. The store was never connected, and syncs also stopped at yesterday, so orders placed during the test could never show.
 - **Install** (`app/api/shopify/callback/route.ts`, `provisionStoreClient` in `lib/shopify-installs.ts`): an install from Shopify (no Apex user linking a client) reuses the client already linked to that store or creates one named after it, connects it, queues a 12-month history load and opens `/shopify/store`. Installs started from Store Settings for a client work as before.
