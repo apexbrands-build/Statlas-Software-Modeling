@@ -23,6 +23,7 @@ import { defaultExtra } from "../defaults";
 import type { ChannelSale } from "../omni/types";
 import type { ChannelSaleInput } from "../omni/import-kinds";
 import { mergeRows, toInput } from "./channel-merge";
+import { platformOf, type Platform } from "../omni/metrics";
 import { haloSettingsOf } from "../planning/halo";
 import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
@@ -696,5 +697,68 @@ function demoChannelSale(clientId: string, c: OtherChannel, date: string): Chann
   const adSpend = p.dailyOrders * p.aov * share * spendRate * noise(`${k}|s`, 0.45);
   const revenue = retail ? site * share * noise(`${k}|b`, 0.12) : site * share * 0.55 * noise(`${k}|b`, 0.12) + adSpend * (0.45 / spendRate) * noise(`${k}|r`, 0.06);
   const orders = revenue / (c.aov > 0 ? c.aov : 30);
-  return { date, channel: c.key, retailer: "", revenue: round2(revenue), orders: Math.round(orders), units: Math.round(orders * 1.4), adSpend: round2(adSpend), source: "demo" };
+  const row: ChannelSale = { date, channel: c.key, retailer: "", revenue: round2(revenue), orders: Math.round(orders), units: Math.round(orders * 1.4), adSpend: round2(adSpend), source: "demo" };
+  const metrics = demoChannelMetrics(platformOf(c), row, c.aov > 0 ? c.aov : 30, k);
+  return metrics ? { ...row, metrics } : row;
+}
+
+/** The platform's own numbers for a generated day, built from the day's four core numbers so they always agree with them. */
+function demoChannelMetrics(platform: Platform, r: ChannelSale, aov: number, k: string): Record<string, number> | null {
+  const nz = (name: string, spread: number) => noise(`${k}|m|${name}`, spread);
+  if (platform === "amazon") {
+    const spend = { sp: round2(r.adSpend * 0.72), sb: round2(r.adSpend * 0.18), sd: 0 };
+    spend.sd = round2(r.adSpend - spend.sp - spend.sb);
+    const roas = { sp: 3.6, sb: 4.2, sd: 2.2 };
+    const cpc = { sp: 1.05, sb: 1.4, sd: 0.7 };
+    const ctr = { sp: 0.0045, sb: 0.006, sd: 0.002 };
+    const m: Record<string, number> = {};
+    for (const t of ["sp", "sb", "sd"] as const) {
+      const sales = round2(spend[t] * roas[t] * nz(`${t}-sales`, 0.1));
+      const clicks = Math.round(spend[t] / cpc[t]);
+      m[`${t}_spend`] = spend[t];
+      m[`${t}_sales`] = sales;
+      m[`${t}_orders`] = Math.round(sales / aov);
+      m[`${t}_clicks`] = clicks;
+      m[`${t}_impressions`] = Math.round(clicks / ctr[t]);
+    }
+    m.sb_ntb_sales = round2(m.sb_sales * 0.58);
+    m.sb_ntb_orders = Math.round(m.sb_orders * 0.6);
+    m.sd_ntb_sales = round2(m.sd_sales * 0.45);
+    m.sd_ntb_orders = Math.round(m.sd_orders * 0.45);
+    m.sessions = Math.round(r.units / (0.19 * nz("conv", 0.1)));
+    m.page_views = Math.round(m.sessions * 1.32);
+    m.buy_box_views = Math.round(m.page_views * Math.min(1, 0.975 * nz("bb", 0.015)));
+    m.units_refunded = Math.round(r.units * 0.012);
+    m.sns_sales = round2(r.revenue * 0.24 * nz("sns", 0.08));
+    m.sns_units = Math.round(r.units * 0.22);
+    m.active_subscriptions = 4200 + Math.round(diffDays(ORIGIN, r.date) * 1.5);
+    return m;
+  }
+  if (platform === "tiktok_shop") {
+    const affiliate = round2(r.revenue * Math.min(0.9, 0.58 * nz("aff", 0.1)));
+    const live = round2(r.revenue * 0.12 * nz("live", 0.3));
+    const card = round2(r.revenue * 0.27 * nz("card", 0.1));
+    const adsGmv = round2(r.adSpend * 4.6 * nz("roi", 0.1));
+    const visitors = Math.round(r.orders * 29 * nz("vis", 0.1));
+    return {
+      affiliate_gmv: affiliate,
+      seller_gmv: round2(r.revenue - affiliate),
+      live_gmv: live,
+      card_gmv: card,
+      video_gmv: round2(r.revenue - live - card),
+      ads_gmv: adsGmv,
+      ads_orders: Math.round(adsGmv / aov),
+      buyers: Math.round(r.orders * 0.96),
+      visitors,
+      page_views: Math.round(visitors * 1.4),
+      add_to_carts: Math.round(visitors * 0.11),
+      refunds: round2(r.revenue * 0.032 * nz("ref", 0.3)),
+      creators_with_sales: Math.max(1, Math.round(55 * nz("creators", 0.25))),
+      videos_posted: Math.round(38 * nz("videos", 0.3)),
+      lives_held: Math.round(2 * nz("lives", 0.5)),
+      samples_shipped: Math.round(18 * nz("samples", 0.4)),
+      affiliate_commission: round2(affiliate * 0.15),
+    };
+  }
+  return null;
 }

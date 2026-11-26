@@ -12,6 +12,7 @@
 --
 -- The numbers follow the demo client in lib/repository/seed.ts (same shapes, different noise).
 -- Not filled: orders, customers, campaigns and ads, so the reports built on those stay empty for this store.
+-- Needs migrations up to 0022 (channel metrics).
 -- It only inserts and updates rows of this one store. To remove the store, see the end of this file.
 
 begin;
@@ -175,6 +176,61 @@ from (
 on conflict (client_id, date, sales_channel, retailer) do update set
   revenue = excluded.revenue, orders = excluded.orders, units = excluded.units, ad_spend = excluded.ad_spend, updated_at = now()
   where channel_sales.source = 'demo';
+
+-- The platforms' own numbers on the Amazon and TikTok Shop rows (needs migration 0022). They are built from each row's four core
+-- numbers with the same shares as the app's demo data (lib/repository/seed.ts), so they always agree with them. A row loaded through
+-- the app keeps the values it already has.
+update public.channel_sales cs
+set metrics = case when cs.source = 'demo' then cs.metrics || x.m else x.m || cs.metrics end
+from (
+  select b.client_id, b.date, b.sales_channel, b.retailer,
+    case b.sales_channel
+      when 'amazon' then jsonb_build_object(
+        'sp_spend', b.sp, 'sb_spend', b.sb, 'sd_spend', b.sd,
+        'sp_sales', a.sp_sales, 'sb_sales', a.sb_sales, 'sd_sales', a.sd_sales,
+        'sp_orders', round(a.sp_sales / 38), 'sb_orders', round(a.sb_sales / 38), 'sd_orders', round(a.sd_sales / 38),
+        'sp_clicks', round(b.sp / 1.05), 'sb_clicks', round(b.sb / 1.4), 'sd_clicks', round(b.sd / 0.7),
+        'sp_impressions', round(round(b.sp / 1.05) / 0.0045), 'sb_impressions', round(round(b.sb / 1.4) / 0.006), 'sd_impressions', round(round(b.sd / 0.7) / 0.002),
+        'sb_ntb_sales', round(a.sb_sales * 0.58, 2), 'sb_ntb_orders', round(round(a.sb_sales / 38) * 0.6),
+        'sd_ntb_sales', round(a.sd_sales * 0.45, 2), 'sd_ntb_orders', round(round(a.sd_sales / 38) * 0.45),
+        'sessions', a.sessions, 'page_views', round(a.sessions * 1.32),
+        'buy_box_views', round(round(a.sessions * 1.32) * least(1, 0.975 * pg_temp.nz(b.k || 'bb', 0.015))::numeric),
+        'units_refunded', round(b.units * 0.012),
+        'sns_sales', round((b.revenue * 0.24 * pg_temp.nz(b.k || 'sns', 0.08))::numeric, 2), 'sns_units', round(b.units * 0.22),
+        'active_subscriptions', 4200 + round((b.date - date '2024-01-01') * 1.5))
+      else jsonb_build_object(
+        'affiliate_gmv', t.affiliate, 'seller_gmv', round(b.revenue - t.affiliate, 2),
+        'live_gmv', t.live, 'card_gmv', t.card, 'video_gmv', round(b.revenue - t.live - t.card, 2),
+        'ads_gmv', t.ads_gmv, 'ads_orders', round(t.ads_gmv / 29),
+        'buyers', round(b.orders * 0.96), 'visitors', t.visitors, 'page_views', round(t.visitors * 1.4), 'add_to_carts', round(t.visitors * 0.11),
+        'refunds', round((b.revenue * 0.032 * pg_temp.nz(b.k || 'ref', 0.3))::numeric, 2),
+        'creators_with_sales', greatest(1, round((55 * pg_temp.nz(b.k || 'creators', 0.25))::numeric)),
+        'videos_posted', round((38 * pg_temp.nz(b.k || 'videos', 0.3))::numeric),
+        'lives_held', round((2 * pg_temp.nz(b.k || 'lives', 0.5))::numeric),
+        'samples_shipped', round((18 * pg_temp.nz(b.k || 'samples', 0.4))::numeric),
+        'affiliate_commission', round(t.affiliate * 0.15, 2))
+    end as m
+  from (
+    select c.client_id, c.date, c.sales_channel, c.retailer, c.revenue, c.orders, c.units, c.ad_spend,
+      c.client_id::text || '|' || c.sales_channel || '|' || c.date::text || '|m|' as k,
+      round(c.ad_spend * 0.72, 2) as sp, round(c.ad_spend * 0.18, 2) as sb,
+      round(c.ad_spend - round(c.ad_spend * 0.72, 2) - round(c.ad_spend * 0.18, 2), 2) as sd
+    from public.channel_sales c
+    where c.client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)') and c.sales_channel in ('amazon', 'tiktok_shop')
+  ) b
+  cross join lateral (select
+    round((b.sp * 3.6 * pg_temp.nz(b.k || 'sp-sales', 0.1))::numeric, 2) as sp_sales,
+    round((b.sb * 4.2 * pg_temp.nz(b.k || 'sb-sales', 0.1))::numeric, 2) as sb_sales,
+    round((b.sd * 2.2 * pg_temp.nz(b.k || 'sd-sales', 0.1))::numeric, 2) as sd_sales,
+    round((b.units / (0.19 * pg_temp.nz(b.k || 'conv', 0.1)))::numeric) as sessions) a
+  cross join lateral (select
+    round((b.revenue * least(0.9, 0.58 * pg_temp.nz(b.k || 'aff', 0.1)))::numeric, 2) as affiliate,
+    round((b.revenue * 0.12 * pg_temp.nz(b.k || 'live', 0.3))::numeric, 2) as live,
+    round((b.revenue * 0.27 * pg_temp.nz(b.k || 'card', 0.1))::numeric, 2) as card,
+    round((b.ad_spend * 4.6 * pg_temp.nz(b.k || 'roi', 0.1))::numeric, 2) as ads_gmv,
+    round((b.orders * 29 * pg_temp.nz(b.k || 'vis', 0.1))::numeric) as visitors) t
+) x
+where cs.client_id = x.client_id and cs.date = x.date and cs.sales_channel = x.sales_channel and cs.retailer = x.retailer;
 
 -- Settings: cost of delivery, the three other sales channels and one halo factor (a public benchmark).
 -- Written once: later edits made in the app are kept.
