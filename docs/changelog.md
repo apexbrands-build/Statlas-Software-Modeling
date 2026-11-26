@@ -6,7 +6,8 @@ Newest first. CLAUDE.md keeps only one line per item and points here.
 
 - Facebook Acq, Google Acq and Google Brand now show a **goal for platform revenue and for ROAS** (the plan's spend for the type at its ROAS target, and the target itself), as the 2026-10-22 spec asked ("each with goals when targets exist"). The Google total gets a revenue goal when all its planned spend has a target. No blended ROAS goal on a block that mixes types (it would follow the planned mix, not the mix spent), and none on returning blocks, which the plan sets no target for.
 - A **Trackers** menu in the report's controls opens the Meta and Google trackers (`lib/reports/tracker-links.ts`).
-- Still open on this report: email and SMS markers and revenue (wait for the Klaviyo and Postscript syncs), the Goals selector (plan versions), other sales channels' columns, an iROAS switch, export. The lint error on `CalendarReport.tsx` (state set inside an effect when restoring the saved view) predates this change.
+- **Goals** select (Baseline / Stretch), shown when the year has a stretch plan: the report's goals now follow the plan chosen on Home, as the trackers do, and can be switched on the report. Before, the report always read the baseline, so its platform goals could disagree with a tracker set to the stretch plan. Same pattern as Home (`components/Dashboard.tsx`).
+- Still open on this report: email and SMS markers and revenue (wait for the Klaviyo and Postscript syncs), picking a plan version other than the default baseline or the stretch, other sales channels' columns, an iROAS switch, export. The lint error on `CalendarReport.tsx` (state set inside an effect when restoring the saved view) predates this change.
 
 ## 2026-11-26: Spend trackers for Meta and Google (slice 2 of the operating-system build)
 

@@ -6,7 +6,8 @@ import { CalendarChart } from "./CalendarChart";
 import { CalendarTable } from "./CalendarTable";
 import { Empty, Loading, ReportFrame, selectClass, useReportRange } from "./ReportFrame";
 import { useApp } from "@/lib/app-context";
-import { useDashboardData } from "@/lib/dashboard-data";
+import { useDashboardData, type DashData } from "@/lib/dashboard-data";
+import { readScenarioChoice, writeScenarioChoice } from "@/lib/planning/scenarios";
 import { buildCalendarRows } from "@/lib/reports/calendar";
 import { eventActions, metaLaunchActions, type MarketingAction } from "@/lib/reports/calendar-actions";
 import { chartSeries } from "@/lib/reports/calendar-chart";
@@ -14,6 +15,7 @@ import { CALENDAR_PRESETS, CALENDAR_SPECS } from "@/lib/reports/calendar-specs";
 import { applyPreset, DEFAULT_VIEW, readViewState, type CalendarViewState } from "@/lib/reports/calendar-view";
 import { trackerLinks } from "@/lib/reports/tracker-links";
 import { getRepository } from "@/lib/repository";
+import type { PlanScenario } from "@/lib/types";
 
 const btn = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted hover:text-text";
 const toggleClass = (on: boolean) => `rounded-lg border px-3 py-1.5 text-sm ${on ? "border-accent bg-accent/10 text-text" : "border-border bg-surface text-text-muted hover:text-text"}`;
@@ -22,7 +24,22 @@ const toggleClass = (on: boolean) => `rounded-lg border px-3 py-1.5 text-sm ${on
 export function CalendarReport() {
   const { client, settings } = useApp();
   const { range, setRange } = useReportRange();
-  const data = useDashboardData(client, settings, range, null);
+  // Which plan the goals come from once the year has a stretch plan: the choice made on Home (the trackers follow it too),
+  // remembered per client in this browser.
+  const [picked, setPicked] = useState<Record<string, PlanScenario>>({});
+  const scenario: PlanScenario = client ? (picked[client.id] ?? readScenarioChoice(client.id)) : "baseline";
+  const chooseScenario = (s: PlanScenario) => {
+    if (!client) return;
+    setPicked((p) => ({ ...p, [client.id]: s }));
+    writeScenarioChoice(client.id, s);
+  };
+  const fresh = useDashboardData(client, settings, range, null, scenario);
+  // While only the plan is being switched, keep the last numbers on screen instead of the loading state and a vanishing selector.
+  const [last, setLast] = useState<DashData | null>(null);
+  if (fresh && fresh !== last) setLast(fresh);
+  const sameView = Boolean(last && client && range && last.client.id === client.id && last.range.from === range.from && last.range.to === range.to);
+  const data = fresh ?? (sameView ? last : null);
+  const refreshing = !fresh && data !== null;
   const [state, setState] = useState<CalendarViewState>(DEFAULT_VIEW);
   const [restored, setRestored] = useState<string | null>(null);
   const [actions, setActions] = useState<MarketingAction[]>([]);
@@ -92,6 +109,15 @@ export function CalendarReport() {
       setRange={setRange}
       controls={
         <>
+          {data?.hasStretch && (
+            <label className="flex items-center gap-2 text-sm text-text-muted" title="The plan the goals come from. The same choice as on Home and in the trackers.">
+              Goals
+              <select aria-label="Plan the goals come from" className={selectClass} value={scenario} onChange={(e) => chooseScenario(e.target.value as PlanScenario)}>
+                <option value="baseline">Baseline</option>
+                <option value="target">Stretch</option>
+              </select>
+            </label>
+          )}
           <button className={btn} onClick={() => setPresets(true)}>
             Presets
           </button>
@@ -149,7 +175,7 @@ export function CalendarReport() {
       ) : !hasActuals && built.rows.every((r) => !r.projected) ? (
         <Empty>No actual data in this range{data ? ` (data runs through ${data.lastData})` : ""}. Pick an earlier period.</Empty>
       ) : (
-        <>
+        <div className={`space-y-4 ${refreshing ? "opacity-60 transition-opacity" : ""}`} aria-busy={refreshing}>
           <p className="text-xs text-text-muted">{data?.hasPlan ? `Goals from plan “${data.planName}”, counted for the days with data only. Future days show the plan as the projection.` : "No plan for this client: showing actuals only."}</p>
           {state.chart && (
             <section className="rounded-xl border border-border bg-surface p-4" aria-label="Chart">
@@ -157,7 +183,7 @@ export function CalendarReport() {
             </section>
           )}
           <CalendarTable rows={built.rows} total={built.total} specs={shown} state={view} currency={client.currency} />
-        </>
+        </div>
       )}
 
       {presets && (
