@@ -10,10 +10,10 @@ import { compare } from "@/lib/metrics";
 import type { MarketingEvent } from "@/lib/planning/events";
 import { planRoasTargets, roasOf, type MonthRoasTargets } from "@/lib/planning/roas";
 import { pickPlan, readScenarioChoice } from "@/lib/planning/scenarios";
-import { getReport } from "@/lib/reports/registry";
+import { trackerLinks } from "@/lib/reports/tracker-links";
 import { getRepository } from "@/lib/repository";
 import { soFar, standing, type Standing } from "@/lib/trackers/grid";
-import { buildTracker, SHARE_WINDOWS, TRACKER_PLATFORMS, trackerLoadFrom, trackerOfSlug, type ShareWindow, type TrackerCell } from "@/lib/trackers/spend-tracker";
+import { buildTracker, SHARE_WINDOWS, trackerLoadFrom, trackerOfSlug, type ShareWindow, type TrackerCell } from "@/lib/trackers/spend-tracker";
 import type { CampaignDay, PlanTargetDay } from "@/lib/types";
 
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -190,8 +190,8 @@ function TrackerPage({ slug }: { slug: string }) {
   const controls = (
     <>
       <div className="flex items-center gap-1" role="tablist" aria-label="Ad platform">
-        {TRACKER_PLATFORMS.filter((p) => getReport(p.slug)?.status === "ready").map((p) => (
-          <Link key={p.id} href={`/reporting/${p.slug}`} role="tab" aria-selected={p.id === platform.id} className={`rounded-lg border px-3 py-1.5 text-sm ${focusRing} ${p.id === platform.id ? "border-accent text-text" : "border-border text-text-muted hover:text-text"}`}>
+        {trackerLinks().map((p) => (
+          <Link key={p.id} href={p.href} role="tab" aria-selected={p.id === platform.id} className={`rounded-lg border px-3 py-1.5 text-sm ${focusRing} ${p.id === platform.id ? "border-accent text-text" : "border-border text-text-muted hover:text-text"}`}>
             {p.label}
           </Link>
         ))}

@@ -20,12 +20,31 @@ const planSpend = (p: PlanTotals, keys: ChannelKey[]) => {
   return planned.length ? planned.reduce((s, k) => s + (p.spendByChannel[k] ?? 0), 0) : null;
 };
 
-/** Spend, revenue and ROAS rows for one group of channels. Spend has a plan goal; revenue and ROAS do not. */
-function platformRows(prefix: string, label: string, keys: ChannelKey[]): MetricSpec[] {
+/**
+ * The platform revenue the plan expects from a group of channels: each one's planned spend at its ROAS target. Null when a channel
+ * with planned spend has no target (the sum would leave part of the spend out) or when the plan holds no target for the group.
+ */
+const planRevenue = (p: PlanTotals, keys: ChannelKey[]) => {
+  const planned = keys.filter((k) => (p.spendByChannel[k] ?? 0) > 0);
+  if (!planned.length || planned.some((k) => !p.platformRoasPlan[k])) return null;
+  return planned.reduce((s, k) => s + (p.platformRoasPlan[k]?.expectedRevenue ?? 0), 0);
+};
+const planRoas = (p: PlanTotals, key: ChannelKey) => {
+  const x = p.platformRoasPlan[key];
+  return x ? div(x.expectedRevenue, x.spend) : null;
+};
+
+/**
+ * Spend, revenue and ROAS rows for one group of channels. Spend has a plan goal. `goals` says what else the plan can give:
+ * "both" for a single type that gets a ROAS target (its revenue at target and the target itself), "revenue" for a group that mixes
+ * types (the expected revenue adds up; a blended ROAS goal would follow the planned mix, not the mix spent, so there is none),
+ * "none" for a type the plan sets no ROAS target for.
+ */
+function platformRows(prefix: string, label: string, keys: ChannelKey[], goals: "both" | "revenue" | "none"): MetricSpec[] {
   return [
     { key: `${prefix}Spend`, label: `${label} Spend`, format: "currency0", direction: "up", value: (t) => sum(t, keys, "spend"), goal: (p) => planSpend(p, keys) },
-    { key: `${prefix}Rev`, label: `${label} Revenue`, format: "currency0", direction: "up", value: (t) => sum(t, keys, "platformRevenue") },
-    { key: `${prefix}Roas`, label: `${label} ROAS`, format: "ratio2", direction: "up", value: (t) => div(sum(t, keys, "platformRevenue"), sum(t, keys, "spend")) },
+    { key: `${prefix}Rev`, label: `${label} Revenue`, format: "currency0", direction: "up", value: (t) => sum(t, keys, "platformRevenue"), ...(goals === "none" ? {} : { goal: (p: PlanTotals) => planRevenue(p, keys) }) },
+    { key: `${prefix}Roas`, label: `${label} ROAS`, format: "ratio2", direction: "up", value: (t) => div(sum(t, keys, "platformRevenue"), sum(t, keys, "spend")), ...(goals === "both" ? { goal: (p: PlanTotals) => planRoas(p, keys[0]) } : {}) },
   ];
 }
 
@@ -48,12 +67,12 @@ export const CALENDAR_SPECS: MetricSpec[] = [
   fromMetric("email", "emailRevenue", "Email Rev"),
   fromMetric("sms", "smsRevenue", "SMS Rev"),
   fromMetric("organic", "organicRevenue", "Organic Rev"),
-  ...platformRows("fbAcq", "Facebook Acq", FB_ACQ),
-  ...platformRows("fbNonAcq", "Facebook Non-Acq", FB_NON),
-  ...platformRows("fb", "Facebook", [...FB_ACQ, ...FB_NON]),
-  ...platformRows("gAcq", "Google Acq", G_ACQ),
-  ...platformRows("gBrand", "Google Brand", G_BRAND),
-  ...platformRows("g", "Google", ["google_nonbrand", "google_brand", "google_nonbrand_returning", "google_brand_returning"]),
+  ...platformRows("fbAcq", "Facebook Acq", FB_ACQ, "both"),
+  ...platformRows("fbNonAcq", "Facebook Non-Acq", FB_NON, "none"),
+  ...platformRows("fb", "Facebook", [...FB_ACQ, ...FB_NON], "none"),
+  ...platformRows("gAcq", "Google Acq", G_ACQ, "both"),
+  ...platformRows("gBrand", "Google Brand", G_BRAND, "both"),
+  ...platformRows("g", "Google", ["google_nonbrand", "google_brand", "google_nonbrand_returning", "google_brand_returning"], "revenue"),
 ];
 
 export type PresetId = "all" | "basic" | "social" | "search" | "mess" | "onlyGoals" | "hideGoals";

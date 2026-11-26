@@ -2,6 +2,12 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-11-27: Calendar Report: plan goals on the platform columns, links to the trackers
+
+- Facebook Acq, Google Acq and Google Brand now show a **goal for platform revenue and for ROAS** (the plan's spend for the type at its ROAS target, and the target itself), as the 2026-10-22 spec asked ("each with goals when targets exist"). The Google total gets a revenue goal when all its planned spend has a target. No blended ROAS goal on a block that mixes types (it would follow the planned mix, not the mix spent), and none on returning blocks, which the plan sets no target for.
+- A **Trackers** menu in the report's controls opens the Meta and Google trackers (`lib/reports/tracker-links.ts`).
+- Still open on this report: email and SMS markers and revenue (wait for the Klaviyo and Postscript syncs), the Goals selector (plan versions), other sales channels' columns, an iROAS switch, export. The lint error on `CalendarReport.tsx` (state set inside an effect when restoring the saved view) predates this change.
+
 ## 2026-11-27: Spend trackers for Meta and Google (slice 2 of the operating-system build; on `development`, not released)
 
 - **What it is:** one page per ad platform, for the media buyer: Sidebar > **Trackers** (or Reporting > Meta Tracker / Google Tracker), a switch at the top moves between Meta and Google. It is one wide grid: the days of the month down the side; the platform's total first (target, projected, actual, delta, ROAS), then its types (Meta: new and returning customers; Google: non-brand and brand), then every campaign as its own block. The campaigns add up to the total on every day. One sentence above the grid says where the month stands.

@@ -52,3 +52,37 @@ describe("CALENDAR_SPECS", () => {
     expect(CALENDAR_SPECS.filter((s) => s.direction === "down").map((s) => s.key)).toEqual(["cac"]);
   });
 });
+
+describe("platform blocks: goals from the plan's ROAS targets", () => {
+  const plan = () => {
+    const p = aggregatePlan([]);
+    p.spendByChannel = { meta_acquisition: 800, meta_returning: 200, google_nonbrand: 700, google_brand: 300 };
+    p.platformRoasPlan = { meta_acquisition: { spend: 800, expectedRevenue: 1600 }, google_nonbrand: { spend: 700, expectedRevenue: 2450 }, google_brand: { spend: 300, expectedRevenue: 4500 } };
+    return p;
+  };
+  it("a block of one type gets the platform revenue its planned spend should bring, and its ROAS target", () => {
+    expect(spec("fbAcqRev").goal!(plan(), settings)).toBe(1600);
+    expect(spec("fbAcqRoas").goal!(plan(), settings)).toBeCloseTo(2);
+    expect(spec("gAcqRoas").goal!(plan(), settings)).toBeCloseTo(3.5);
+    expect(spec("gBrandRev").goal!(plan(), settings)).toBe(4500);
+    expect(spec("gBrandRoas").goal!(plan(), settings)).toBeCloseTo(15);
+  });
+  it("gives no goal column to a block whose type the plan sets no ROAS target for", () => {
+    expect(spec("fbNonAcqRev").goal).toBeUndefined();
+    expect(spec("fbNonAcqRoas").goal).toBeUndefined();
+    expect(spec("fbRev").goal).toBeUndefined();
+    expect(spec("fbRoas").goal).toBeUndefined();
+  });
+  it("a block that mixes types gets a revenue goal when all its planned spend has a target, and never a blended ROAS goal", () => {
+    expect(spec("gRev").goal!(plan(), settings)).toBe(6950);
+    // The mix that is spent differs from the mix that was planned: ROAS is read type by type.
+    expect(spec("gRoas").goal).toBeUndefined();
+    const part = plan();
+    part.spendByChannel.google_nonbrand_returning = 50;
+    expect(spec("gRev").goal!(part, settings)).toBeNull();
+  });
+  it("has no goal when the plan holds no ROAS target for the block", () => {
+    expect(spec("fbAcqRev").goal!(aggregatePlan([]), settings)).toBeNull();
+    expect(spec("fbAcqRoas").goal!(aggregatePlan([]), settings)).toBeNull();
+  });
+});

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarChart } from "./CalendarChart";
 import { CalendarTable } from "./CalendarTable";
@@ -11,6 +12,7 @@ import { eventActions, metaLaunchActions, type MarketingAction } from "@/lib/rep
 import { chartSeries } from "@/lib/reports/calendar-chart";
 import { CALENDAR_PRESETS, CALENDAR_SPECS } from "@/lib/reports/calendar-specs";
 import { applyPreset, DEFAULT_VIEW, readViewState, type CalendarViewState } from "@/lib/reports/calendar-view";
+import { trackerLinks } from "@/lib/reports/tracker-links";
 import { getRepository } from "@/lib/repository";
 
 const btn = "rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted hover:text-text";
@@ -93,6 +95,18 @@ export function CalendarReport() {
           <button className={btn} onClick={() => setPresets(true)}>
             Presets
           </button>
+          {trackerLinks().length > 0 && (
+            <details className="relative">
+              <summary className={`${selectClass} cursor-pointer list-none`}>Trackers</summary>
+              <div className="absolute left-0 z-30 mt-1 w-56 rounded-xl border border-border bg-surface p-2 shadow-xl">
+                {trackerLinks().map((t) => (
+                  <Link key={t.id} href={t.href} className="block rounded-lg px-2 py-1.5 text-sm text-text-muted hover:bg-surface-raised hover:text-text">
+                    {t.title}
+                  </Link>
+                ))}
+              </div>
+            </details>
+          )}
           <details className="relative">
             <summary className={`${selectClass} cursor-pointer list-none`}>Columns: {state.cols.length === CALENDAR_SPECS.length ? "All" : `${state.cols.length}/${CALENDAR_SPECS.length}`}</summary>
             <div className="absolute right-0 z-30 mt-1 max-h-80 w-64 overflow-auto rounded-lg border border-border bg-surface-raised p-2 text-sm">
