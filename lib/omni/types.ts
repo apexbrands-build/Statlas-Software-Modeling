@@ -14,6 +14,10 @@ export interface ChannelSale {
   units: number;
   /** Ad spend on the channel itself (Amazon Ads, GMV Max, retail media). */
   adSpend: number;
+  /** The platform's own numbers for the day, keyed as in the metric catalog (`lib/omni/metrics.ts`). Absent on rows saved before they existed. */
+  metrics?: Record<string, number>;
+  /** How many days the row covers, ending on `date`: 1 for a day, 7 for a week. Absent = 1. */
+  periodDays?: number;
   source: "import" | "shopify" | "connector" | "demo";
 }
 
