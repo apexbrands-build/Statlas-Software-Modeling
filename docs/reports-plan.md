@@ -23,7 +23,8 @@ Build all Recommended reports from Statlas **except** DTC Index, Trend Explorer 
 | LTV Dashboard, Revenue Over Time, Net Active Customer Detail | `ltv-dashboard`, `revenue-over-time`, `net-active-customers` | Coming soon (status `planned`; cohort data exists since migration 0007) |
 
 Registry status meanings (`lib/reports/registry.ts`): `ready` = the page is built, `waiting` = page and layout built but the data source is not connected, `planned` = no page yet. A test checks that every `ready` report has a case in `ReportRouter`.
-| Hourly, Email Metrics, Email/SMS Trackers, Pinterest/TikTok/Snapchat/Bing/YouTube/AppLovin Trackers | see registry | Not built: layout only, "waiting for data source" |
+| Hourly Report | `hourly` | **Step 1 built 2026-11-26** (`/reporting/hourly`; migration 0023 applied 2026-11-26; on `development`, not released): one day by the hour of the store's clock, the Calendar Report by hour. Business block from orders (revenue, orders, AOV, new and returning) against the plan's day target × the day's shape, or against last week, the last four same weekdays or last year; sends, events and Meta launches on their hour; where the day is heading; the Plan B signal. Ad spend, MER, aMER, CAC, the paid blocks, email and SMS show their expectation only until step 2 (ad spend by hour) and step 3 (Klaviyo). Spec: `docs/superpowers/specs/2026-11-27-hourly-report-design.md`; code `lib/reports/hourly*.ts`, `components/reports/Hourly*.tsx`. |
+| Email Metrics, Email/SMS Trackers, Pinterest/TikTok/Snapchat/Bing/YouTube/AppLovin Trackers | see registry | Not built: layout only, "waiting for data source" |
 
 ## Order of work
 1. Forecasting / planning layer (phases A and B built, see `docs/planning-layer.md`; C/D are the statistical models).

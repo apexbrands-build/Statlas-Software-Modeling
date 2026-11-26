@@ -1,6 +1,6 @@
 # Hourly report
 
-Date: 2026-11-26 (the file name is a day ahead). Status: **approved by João on 2026-11-26 ("push all of this in development fast"); step 1 in build.** One of the three reports he named on 2026-11-26 (Calendar, Hourly, Total Net Customer).
+Date: 2026-11-26 (the file name is a day ahead). Status: **approved by João on 2026-11-26 ("push all of this in development fast"); step 1 is built on `development` (2026-11-26, not released; migration 0023 applied, 0024 waiting for João); steps 2 and 3 are not built.** What was built and what was not checked: `docs/changelog.md`. One of the three reports he named on 2026-11-26 (Calendar, Hourly, Total Net Customer).
 
 **Revised twice on 2026-11-26.** First after João asked for the whole-business metrics against targets by hour, every paid channel down to its types, and email and SMS against their targets (the reference tool's hourly report was read again in his browser for this; notes in `docs/statlas-findings.md`, "Hourly Report"). Then with his corrections: the types are acquisition and retention only; the hourly shape of a Black Friday / Cyber Monday day is last year's; email and SMS do get an expectation per hour; the report is the Calendar report by hour, with the sends and launches on it, so a day that is behind can get a Plan B.
 
