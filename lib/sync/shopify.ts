@@ -111,14 +111,30 @@ const SOURCE_TO_CHANNEL: Record<string, string> = {
   android: "Online Store",
 };
 
-/** Orders matching a Shopify search query. Without the read_all_orders scope Shopify only exposes the last 60 days. */
-export async function fetchOrders(shop: string, token: string, searchQuery: string, deadline?: number, includeTest = false): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean }> {
+/**
+ * Orders matching a Shopify search query, oldest first. Without the read_all_orders scope Shopify only exposes the last 60 days.
+ * Past the deadline the fetch fails, unless `partialAtDeadline` is set: then it stops and returns the orders read so far with
+ * `truncated: true` (the hourly pull of today's orders saves them and carries on from the last one on its next run).
+ */
+export async function fetchOrders(
+  shop: string,
+  token: string,
+  searchQuery: string,
+  deadline?: number,
+  includeTest = false,
+  partialAtDeadline = false,
+): Promise<{ orders: RawOrder[]; approximateNewReturning: boolean; truncated: boolean }> {
   const out: RawOrder[] = [];
   let withCount = true;
   let approximate = false;
+  let truncated = false;
   let cursor: string | null = null;
   for (;;) {
-    if (deadline && Date.now() > deadline) throw new Error("TIMEOUT: too many orders for one task");
+    if (deadline && Date.now() > deadline) {
+      if (!partialAtDeadline) throw new Error("TIMEOUT: too many orders for one task");
+      truncated = true;
+      break;
+    }
     const queryFor = (c: boolean) => `query($cursor: String, $q: String!) { orders(first: 50, after: $cursor, query: $q, sortKey: CREATED_AT) {
       pageInfo { hasNextPage endCursor } nodes { ${orderFields(c)} } } }`;
     let data: OrdersPage;
@@ -167,7 +183,7 @@ export async function fetchOrders(shop: string, token: string, searchQuery: stri
     if (!data.orders.pageInfo.hasNextPage) break;
     cursor = data.orders.pageInfo.endCursor;
   }
-  return { orders: out, approximateNewReturning: approximate };
+  return { orders: out, approximateNewReturning: approximate, truncated };
 }
 
 
