@@ -9,6 +9,10 @@ import type { ChannelDay, ChannelSale } from "./types";
 /** One channel's sales by day, its retailers added together. */
 export function dailyTotals(sales: ChannelSale[], channel: string): Map<string, ChannelDay> {
   const out = new Map<string, ChannelDay>();
+  // A day that holds ad numbers or platform metrics but no sales is a day whose sales file is not loaded yet (an ads file that runs
+  // ahead). It is not a day of zero sales, so it is left out: it must not move "sales through", the forecast comparison or the model.
+  const waiting = new Set<string>();
+  const sold = new Set<string>();
   for (const s of sales) {
     if (s.channel !== channel) continue;
     const d = out.get(s.date) ?? { revenue: 0, orders: 0, units: 0, adSpend: 0 };
@@ -17,7 +21,10 @@ export function dailyTotals(sales: ChannelSale[], channel: string): Map<string, 
     d.units += s.units;
     d.adSpend += s.adSpend;
     out.set(s.date, d);
+    if (s.revenue > 0 || s.orders > 0 || s.units > 0) sold.add(s.date);
+    else if (s.adSpend > 0 || Object.keys(s.metrics ?? {}).length > 0) waiting.add(s.date);
   }
+  for (const date of waiting) if (!sold.has(date)) out.delete(date);
   return out;
 }
 

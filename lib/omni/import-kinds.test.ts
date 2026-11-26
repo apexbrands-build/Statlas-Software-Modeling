@@ -23,7 +23,8 @@ describe("detectKind", () => {
     expect(detectKind(head(BUSINESS), "amazon")).toBe("amazon_sales_traffic");
     expect(detectKind(head(ADS_SP), "amazon")).toBe("amazon_ads_sp");
     expect(detectKind(["Date", "Spend", "14 Day Total Sales", "14 Day New-to-brand Sales"], "amazon")).toBe("amazon_ads_sb");
-    expect(detectKind(["Date", "Spend", "14 Day Total Sales", "Viewable Impressions"], "amazon")).toBe("amazon_ads_sd");
+    // Sponsored Brands and Sponsored Display files share their columns: the app reads them as Brands and the person confirms.
+    expect(detectKind(["Date", "Spend", "14 Day Total Sales", "Viewable Impressions"], "amazon")).toBe("amazon_ads_sb");
   });
   it("recognises TikTok Shop files, and falls back to the generic kind", () => {
     expect(detectKind(["Date", "GMV", "SKU orders", "Items sold", "Customers"], "tiktok_shop")).toBe("tiktok_overview");
@@ -131,6 +132,24 @@ describe("parseChannelFile", () => {
 
   it("drops a Buy Box % that comes without page views, since it cannot be weighted", () => {
     const r = parseChannelFile(csv("Date,Ordered Product Sales,Featured Offer (Buy Box) Percentage", "2026-11-20,100,98%"), "amazon", { platform: "amazon" });
+    expect(r.rows[0].metrics).toEqual({});
+  });
+});
+
+describe("parseChannelFile, findings of the review", () => {
+  it("reads a Buy Box below 1% as a percentage when the cell says %", () => {
+    const r = parseChannelFile(csv("Date,Ordered Product Sales,Page Views - Total,Featured Offer (Buy Box) Percentage", "2026-11-20,100,1000,0.50%", "2026-11-21,100,1000,1.00%", "2026-11-22,100,1000,0.97"), "amazon", { platform: "amazon" });
+    expect(r.rows.map((x) => x.metrics.buy_box_views)).toEqual([5, 10, 970]);
+  });
+  it("does not save a day that holds nothing but a Buy Box % it cannot weight", () => {
+    const r = parseChannelFile(csv("Date,Featured Offer (Buy Box) Percentage,Ordered Product Sales", "2026-11-20,98%,"), "amazon", { platform: "amazon" });
+    expect(r.rows).toEqual([]);
+    expect(r.errors).toEqual([{ line: 2, message: "Nothing to read on this line." }]);
+  });
+  it("reads a dash as an empty cell and keeps the rest of the line", () => {
+    const r = parseChannelFile(csv("Date,GMV,Visitors,Refunds,Customers", "2026-11-20,2000,--,-,n/a"), "tiktok_shop", { platform: "tiktok_shop" });
+    expect(r.errors).toEqual([]);
+    expect(r.rows[0]).toMatchObject({ revenue: 2000 });
     expect(r.rows[0].metrics).toEqual({});
   });
 });

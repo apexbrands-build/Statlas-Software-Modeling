@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelSaleInput } from "../omni/import-kinds";
 import type { ChannelSale } from "../omni/types";
-import { mergeRows, toInput } from "./channel-merge";
+import { mergeRows, pulledInput, toInput } from "./channel-merge";
 
 const have = (date: string, over: Partial<ChannelSale> = {}): ChannelSale => ({ date, channel: "amazon", retailer: "", revenue: 100, orders: 4, units: 5, adSpend: 10, source: "import", ...over });
 const give = (date: string, over: Partial<ChannelSaleInput> = {}): ChannelSaleInput => ({ date, channel: "amazon", retailer: "", revenue: null, orders: null, units: null, adSpend: null, metrics: {}, source: "import", ...over });
@@ -40,5 +40,15 @@ describe("mergeRows", () => {
 describe("toInput", () => {
   it("turns a full row into a row that gives every core number", () => {
     expect(toInput(have("2026-11-20", { metrics: { sessions: 1 } }))).toEqual({ date: "2026-11-20", channel: "amazon", retailer: "", revenue: 100, orders: 4, units: 5, adSpend: 10, metrics: { sessions: 1 }, source: "import" });
+  });
+});
+
+describe("pulledInput", () => {
+  it("gives revenue and orders only, so ad spend and units loaded from files survive a pull from the store's orders", () => {
+    const pulled = pulledInput({ date: "2026-11-20", channel: "tiktok_shop", retailer: "", revenue: 300, orders: 9, units: 0, adSpend: 0, source: "shopify" });
+    expect(pulled).toMatchObject({ revenue: 300, orders: 9, units: null, adSpend: null, metrics: {} });
+    const out = mergeRows([have("2026-11-20", { channel: "tiktok_shop", adSpend: 55, units: 12, metrics: { ads_gmv: 200 } })], "tiktok_shop", [pulled]);
+    expect(out[0]).toMatchObject({ revenue: 300, orders: 9, units: 12, adSpend: 55 });
+    expect(out[0].metrics).toEqual({ ads_gmv: 200 });
   });
 });

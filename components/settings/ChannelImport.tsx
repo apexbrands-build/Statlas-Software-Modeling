@@ -154,6 +154,9 @@ export function ChannelImport({ clientId, channel, currency }: { clientId: strin
               </select>
             </label>
           )}
+          {(parsed.kind === "amazon_ads_sb" || parsed.kind === "amazon_ads_sd") && (
+            <p className="text-text">Sponsored Brands and Sponsored Display files have the same columns, so the app cannot tell them apart. Check that the kind above is the right one before saving.</p>
+          )}
           {parsed.columns.length > 0 && (
             <div className="overflow-x-auto rounded-lg border border-border/60">
               <table className="w-full border-collapse">

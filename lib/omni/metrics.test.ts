@@ -14,6 +14,7 @@ describe("platformOf", () => {
   });
   it("treats a retail channel as retail and anything else as other", () => {
     expect(platformOf({ key: "stores", label: "Stores", kind: "retail" })).toBe("retail");
+    expect(platformOf({ key: "retail_amazon_fresh", label: "Retail (Amazon Fresh)", kind: "retail" })).toBe("retail");
     expect(platformOf({ key: "faire", label: "Faire", kind: "marketplace" })).toBe("other");
   });
 });

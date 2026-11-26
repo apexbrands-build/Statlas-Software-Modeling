@@ -99,3 +99,32 @@ describe("dailyForecast", () => {
     expect(dailyForecast(lines, "gone", "2027-03-01", "2027-03-31", null).size).toBe(0);
   });
 });
+
+describe("dailyTotals and days that only hold ad numbers", () => {
+  const base = { channel: "amazon", retailer: "", revenue: 0, orders: 0, units: 0, adSpend: 0, source: "import" as const };
+  it("leaves out a day whose sales are not loaded yet (an ads file that runs ahead of the sales file)", () => {
+    const days = dailyTotals(
+      [
+        { ...base, date: "2026-11-20", revenue: 100, orders: 4, units: 5, adSpend: 10 },
+        { ...base, date: "2026-11-21", adSpend: 15, metrics: { sp_spend: 15 } },
+        { ...base, date: "2026-11-22", metrics: { sessions: 40 } },
+      ],
+      "amazon",
+    );
+    expect([...days.keys()]).toEqual(["2026-11-20"]);
+  });
+  it("keeps a day that was loaded with zero sales and nothing else, as before", () => {
+    const days = dailyTotals([{ ...base, date: "2026-11-20" }], "amazon");
+    expect(days.get("2026-11-20")).toEqual({ revenue: 0, orders: 0, units: 0, adSpend: 0 });
+  });
+  it("keeps a day when one of its retailers has sales", () => {
+    const days = dailyTotals(
+      [
+        { ...base, date: "2026-11-20", retailer: "A", adSpend: 5 },
+        { ...base, date: "2026-11-20", retailer: "B", revenue: 50, units: 2 },
+      ],
+      "amazon",
+    );
+    expect(days.get("2026-11-20")).toEqual({ revenue: 50, orders: 0, units: 2, adSpend: 5 });
+  });
+});

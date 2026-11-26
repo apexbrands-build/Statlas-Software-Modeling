@@ -9,7 +9,7 @@ import { defaultSettings } from "../defaults";
 import { shopifyDaysToSales } from "../omni/import";
 import type { ChannelSale } from "../omni/types";
 import type { ChannelSaleInput } from "../omni/import-kinds";
-import { numbersOf, rpcRow, toInput } from "./channel-merge";
+import { numbersOf, pulledInput, rpcRow, toInput } from "./channel-merge";
 import type { OrderChannel } from "../order-channels";
 import { getBrowserClient } from "../supabase/client";
 import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
@@ -611,7 +611,7 @@ export class SupabaseRepository implements Repository {
       throw new Error(error.message);
     }
     const rows = shopifyDaysToSales(channel, (data ?? []) as { date: unknown; revenue: unknown; orders: unknown }[]);
-    if (rows.length) await this.saveChannelSales(clientId, channel, rows);
+    if (rows.length) await this.mergeRpc(clientId, channel, rows.map((r) => rpcRow(pulledInput(r), "shopify")));
     return rows.length;
   }
 
@@ -640,7 +640,7 @@ export class SupabaseRepository implements Repository {
   }
 }
 
-/** What the database answers when `channel_sales` does not exist yet. */
 /** The merge function of migration 0022 is not in the database yet (or a column it writes is missing). */
 const CHANNEL_MERGE_MISSING = /PGRST202|Could not find the function|column \"?(metrics|period_days)\"? .*does not exist/i;
+/** What the database answers when `channel_sales` does not exist yet. */
 const CHANNEL_SALES_MISSING = /PGRST205|42P01|Could not find the table|relation "?(public\.)?channel_sales"? does not exist/i;

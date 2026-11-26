@@ -52,6 +52,8 @@ export const normHeader = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-
 
 /** Amazon gives the Buy Box as a percentage; it is turned into page views that showed the offer, so a period can weight it. */
 const BUY_BOX_PCT = "buy_box_pct";
+/** A cell that says "no value": a dash of any kind, or n/a. */
+const NO_VALUE = /^(-+|–|—|n\/a)$/i;
 const CORE = ["revenue", "orders", "units", "adSpend"] as const;
 type Core = (typeof CORE)[number];
 const isCore = (t: string): t is Core => (CORE as readonly string[]).includes(t);
@@ -101,7 +103,9 @@ const KINDS: FileKind[] = [
   },
   adsKind("sp", "Amazon Ads: Sponsored Products, by day", 7, ["7 day total sales"]),
   adsKind("sb", "Amazon Ads: Sponsored Brands, by day", 14, ["14 day total sales"]),
-  adsKind("sd", "Amazon Ads: Sponsored Display, by day", 14, ["14 day total sales", "viewable impressions"]),
+  // Sponsored Brands and Sponsored Display files share their columns (both can carry "Viewable Impressions"), so the columns cannot
+  // tell them apart: a 14-day file is read as Brands, the first of the two, and the import screen asks the person to check.
+  adsKind("sd", "Amazon Ads: Sponsored Display, by day", 14, ["14 day total sales"]),
   {
     id: "tiktok_overview",
     label: "TikTok Shop: shop analytics by day",
@@ -261,10 +265,14 @@ export function parseChannelFile(
     }
     const values: Record<string, number> = {};
     let problem: string | null = null;
+    let buyBoxInPercent = false;
     for (const { t, i } of numeric) {
       const cell = (cells[i] ?? "").trim();
+      // The platforms write a dash, or "n/a", where a day has no value.
+      if (NO_VALUE.test(cell)) continue;
       const r = readNumber(cell.replace(/%$/, ""), numberFormat);
       if (r === "empty") continue;
+      if (t === BUY_BOX_PCT) buyBoxInPercent = cell.endsWith("%");
       if (r === "format") problem = `Could not read the ${labelOf(t)} "${cell}" in this number format. Check how numbers are written, above.`;
       else if (r === "bad") problem = `Could not read the ${labelOf(t)} on this line.`;
       else if (r.value < 0) problem = `The ${labelOf(t)} is negative.`;
@@ -276,15 +284,16 @@ export function parseChannelFile(
       out.errors.push({ line, message: problem });
       return;
     }
-    if (!Object.keys(values).length) {
-      out.errors.push({ line, message: "Nothing to read on this line." });
-      return;
-    }
     // The Buy Box % becomes page views that showed the offer; without page views on the row it cannot be weighted and is dropped.
+    // A cell written with "%" is a percentage whatever its size (0.50% is half a percent); a bare number up to 1 is a share.
     if (BUY_BOX_PCT in values) {
       const pct = values[BUY_BOX_PCT];
       delete values[BUY_BOX_PCT];
-      if (typeof values.page_views === "number") values.buy_box_views = values.page_views * (pct > 1 ? pct / 100 : pct);
+      if (typeof values.page_views === "number") values.buy_box_views = values.page_views * (buyBoxInPercent || pct > 1 ? pct / 100 : pct);
+    }
+    if (!Object.keys(values).length) {
+      out.errors.push({ line, message: "Nothing to read on this line." });
+      return;
     }
     const retailer = retailerAt >= 0 ? (cells[retailerAt] ?? "").trim() : "";
     const id = `${date}|${retailer}`;

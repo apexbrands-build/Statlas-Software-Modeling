@@ -55,13 +55,14 @@ export interface PlatformCatalog {
   rollups: { target: string; parts: string[] }[];
 }
 
-/** A channel saved before platforms existed is recognised by its name. */
+/** A channel saved before platforms existed: a retail channel is retail whatever its name; a marketplace is recognised by its name. */
 export function platformOf(c: { key: string; label: string; kind: "marketplace" | "retail"; platform?: Platform }): Platform {
   if (c.platform) return c.platform;
+  if (c.kind === "retail") return "retail";
   const name = `${c.key} ${c.label}`.toLowerCase();
   if (/amazon/.test(name)) return "amazon";
   if (/tik\s*tok|(^|[^a-z])tts([^a-z]|$)/.test(name)) return "tiktok_shop";
-  return c.kind === "retail" ? "retail" : "other";
+  return "other";
 }
 
 const get = (t: Totals, key: string): number | null => (typeof t.m[key] === "number" && Number.isFinite(t.m[key]) ? t.m[key] : null);

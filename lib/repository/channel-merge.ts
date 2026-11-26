@@ -34,6 +34,14 @@ export function toInput(r: ChannelSale): ChannelSaleInput {
   return { date: r.date, channel: r.channel, retailer: r.retailer ?? "", revenue: r.revenue, orders: r.orders, units: r.units, adSpend: r.adSpend, metrics: { ...(r.metrics ?? {}) }, source: "import" };
 }
 
+/**
+ * A day pulled from the store's own orders. The orders give revenue and order count only, so units, ad spend and metrics are
+ * "not given": a pull never wipes what a file loaded for the same day.
+ */
+export function pulledInput(r: ChannelSale): ChannelSaleInput {
+  return { ...toInput(r), units: null, adSpend: null, metrics: {} };
+}
+
 /** One row of the `p_rows` argument of `channel_sales_merge`. A core number that is not given is sent as null. */
 export function rpcRow(r: ChannelSaleInput, source: string): Record<string, unknown> {
   return { date: r.date, retailer: r.retailer ?? "", revenue: r.revenue, orders: r.orders, units: r.units, ad_spend: r.adSpend, metrics: r.metrics, source };
