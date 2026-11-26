@@ -204,6 +204,8 @@ export interface OtherChannel {
   key: string;
   label: string;
   kind: "marketplace" | "retail";
+  /** Which platform's numbers the channel holds (its metrics, its files, its page). Absent on channels saved before this existed: read it with `platformOf`. */
+  platform?: "amazon" | "tiktok_shop" | "retail" | "other";
   /** Variable costs as % of the channel's net revenue (COGS, fees, fulfilment, trade spend). */
   costPct: number;
   aov: number;
