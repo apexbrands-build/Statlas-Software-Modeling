@@ -1,6 +1,6 @@
 # Slice 2: trackers for the paid channels
 
-Date: 2026-11-26 (the file name is a day ahead; revised the same day after João's corrections and an independent review). Status: built on `development`; João approved the layout and the numbers on 2026-11-27 and asked for a better visual organisation of the grid, done the same day. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
+Date: 2026-11-26 (the file name is a day ahead; revised the same day after João's corrections and an independent review). Status: **released to production** (commit 29ebde9); João approved the layout and the numbers on 2026-11-26 and asked for a better visual organisation of the grid, done the same day. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
 
 ## Goal (João, 2026-11-26)
 "Take the total number of the forecast for spend and your efficiency targets for the platform. Then allocate in platform across your campaigns and see where you can maybe push more against targets. That's the whole idea for every tracker for every platform." And: non-brand and brand on Google, new and returning on Meta each have their own ROAS target, through their own incrementality factor.
