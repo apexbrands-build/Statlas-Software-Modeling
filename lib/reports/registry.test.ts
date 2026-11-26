@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { trackerOfSlug } from "../trackers/spend-tracker";
 import { getReport, REPORTS } from "./registry";
 
 const router = readFileSync(path.resolve(__dirname, "../../components/reports/ReportRouter.tsx"), "utf8");
@@ -31,7 +32,14 @@ describe("report registry", () => {
   });
 
   it("marks reports without a page as planned", () => {
-    for (const slug of ["facebook-tracker", "google-tracker", "total-net-customer", "variable-costs", "ltv-dashboard", "revenue-over-time", "net-active-customers"]) expect(status(slug)).toBe("planned");
+    for (const slug of ["total-net-customer", "variable-costs", "ltv-dashboard", "revenue-over-time", "net-active-customers"]) expect(status(slug)).toBe("planned");
+  });
+
+  it("has the Meta and Google spend trackers ready, each with a tracker platform behind its slug", () => {
+    expect(getReport("facebook-tracker")).toMatchObject({ status: "ready", title: "Meta Tracker" });
+    expect(getReport("google-tracker")).toMatchObject({ status: "ready", title: "Google Tracker" });
+    expect(trackerOfSlug("facebook-tracker")?.id).toBe("meta");
+    expect(trackerOfSlug("google-tracker")?.id).toBe("google");
   });
 
   it("keeps reports that wait for a data source as waiting", () => {

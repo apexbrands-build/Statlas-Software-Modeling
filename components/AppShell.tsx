@@ -8,6 +8,7 @@ import { AppProvider, useApp } from "@/lib/app-context";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { authEnabled, dataMode } from "@/lib/supabase/env";
 import { isBarePage } from "@/lib/public-paths";
+import { isNavActive } from "@/lib/nav";
 
 type IconName = "home" | "folder" | "target" | "calendar" | "trend" | "gear";
 
@@ -35,6 +36,7 @@ const NAV_GROUPS: { title: string; items: { href: string; label: string; icon: I
     items: [
       { href: "/", label: "Home", icon: "home", enabled: true },
       { href: "/reporting", label: "Reporting", icon: "folder", enabled: true },
+      { href: "/reporting/facebook-tracker", label: "Trackers", icon: "target", enabled: true },
     ],
   },
   {
@@ -75,7 +77,7 @@ function Shell({ children }: { children: ReactNode }) {
                     key={n.label}
                     href={n.href}
                     className={`flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium ${
-                      (n.href === "/" ? path === "/" : path.startsWith(n.href)) ? "bg-surface-raised text-text" : "text-text-muted hover:text-text"
+                      isNavActive(n.href, path) ? "bg-surface-raised text-text" : "text-text-muted hover:text-text"
                     }`}
                   >
                     <Icon name={n.icon} />

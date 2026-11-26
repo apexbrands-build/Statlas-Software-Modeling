@@ -10,6 +10,7 @@ import { RevenueOverviewReport } from "./RevenueOverviewReport";
 import { PaidMediaReport } from "./PaidMediaReport";
 import { FirstProductReport } from "./FirstProductReport";
 import { PnlReport } from "./PnlReport";
+import { SpendTrackerReport } from "./SpendTrackerReport";
 import { WaitingForData } from "./WaitingForData";
 import { Empty } from "./ReportFrame";
 import { MER_SPECS } from "@/lib/reports/metric-spec";
@@ -42,6 +43,9 @@ export function ReportRouter({ slug }: { slug: string }) {
       return <NewVsReturningReport />;
     case "aov-histogram":
       return <AovHistogramReport />;
+    case "facebook-tracker":
+    case "google-tracker":
+      return <SpendTrackerReport key={slug} slug={slug} />;
     default:
       if (def.status === "waiting") return <WaitingForData slug={slug} outline={OUTLINES[slug] ?? []} />;
       return <Empty>{def.status === "planned" ? `${def.title} is coming soon.` : `${def.title} is not built yet.`}</Empty>;

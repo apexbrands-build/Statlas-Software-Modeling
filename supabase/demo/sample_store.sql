@@ -11,7 +11,8 @@
 --   3. Build the store's plan in the app (Planning), like for any store.
 --
 -- The numbers follow the demo client in lib/repository/seed.ts (same shapes, different noise).
--- Not filled: orders, customers, campaigns and ads, so the reports built on those stay empty for this store.
+-- Campaigns are made up from the ad channels' days. Not filled: orders, customers and ads, so the reports built on
+-- those stay empty for this store.
 -- Needs migrations up to 0022 (channel metrics).
 -- It only inserts and updates rows of this one store. To remove the store, see the end of this file.
 
@@ -120,6 +121,35 @@ cross join lateral (select t.total_spend * c.mix * pg_temp.nz(t.k || 'sp-' || c.
 cross join lateral (select a.sp * c.roas * pg_temp.nz(t.k || 'pr-' || c.ch, 0.14) as pr) b
 on conflict (client_id, date, channel) do update set
   spend = excluded.spend, platform_revenue = excluded.platform_revenue, platform_purchases = excluded.platform_purchases, updated_at = now();
+
+-- Campaigns: each ad channel's day shared out to a few named campaigns, so the trackers and the Paid Media report
+-- have rows. The campaigns of a channel add up to the channel's day exactly.
+insert into public.ad_spend_daily (client_id, date, platform, campaign_id, campaign_name, category, audience_type, spend, platform_revenue, platform_purchases)
+select x.client_id, x.date, x.platform, x.id, x.name, x.category, x.audience,
+  round((x.spend * x.ws / sum(x.ws) over w)::numeric, 2),
+  round((x.platform_revenue * x.rs / sum(x.rs) over w)::numeric, 2),
+  round((x.platform_purchases * x.rs / sum(x.rs) over w)::numeric, 2)
+from (
+  select f.client_id, f.date, f.channel, f.spend, f.platform_revenue, f.platform_purchases, c.platform, c.id, c.name, c.category, c.audience,
+    c.w * pg_temp.nz(f.date::text || '|cw|' || c.id, 0.30) as ws,
+    c.w * pg_temp.nz(f.date::text || '|cw|' || c.id, 0.30) * c.eff * pg_temp.nz(f.date::text || '|ce|' || c.id, 0.15) as rs
+  from public.daily_channel_facts f
+  join (values
+    ('meta_acquisition', 'meta', 'demo-m1', 'ACQ | Evergreen | Broad', 'acquisition', 'new', 0.55, 1.05),
+    ('meta_acquisition', 'meta', 'demo-m2', 'ACQ | Creative testing', 'acquisition', 'new', 0.20, 0.80),
+    ('meta_acquisition', 'meta', 'demo-m3', 'ACQ | Catalog', 'acquisition', 'new', 0.25, 1.05),
+    ('meta_returning', 'meta', 'demo-m4', 'RTN | Evergreen', 'retention', 'returning', 0.70, 1.00),
+    ('meta_returning', 'meta', 'demo-m5', 'RTN | Promo', 'retention', 'returning', 0.30, 1.00),
+    ('google_nonbrand', 'google_ads', 'demo-g1', 'PMax | All products', 'acquisition', 'unknown', 0.60, 1.10),
+    ('google_nonbrand', 'google_ads', 'demo-g2', 'Search | NB | Coffee beans', 'acquisition', 'unknown', 0.40, 0.85),
+    ('google_brand', 'google_ads', 'demo-g3', 'Search | Brand', 'brand', 'unknown', 1.00, 1.00)
+  ) as c(channel, platform, id, name, category, audience, w, eff) on c.channel = f.channel
+  where f.client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)')
+) x
+window w as (partition by x.client_id, x.date, x.channel)
+on conflict (client_id, date, platform, campaign_id) do update set
+  campaign_name = excluded.campaign_name, category = excluded.category, audience_type = excluded.audience_type,
+  spend = excluded.spend, platform_revenue = excluded.platform_revenue, platform_purchases = excluded.platform_purchases;
 
 -- Cohorts: first-order revenue per month, repeat revenue fading with age, for the months that have passed.
 -- A period is a 30-day window that sits half in one calendar month and half in the next, so its revenue follows
@@ -256,6 +286,7 @@ commit;
 --   delete from public.channel_sales       where client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)');
 --   delete from public.cohort_periods      where client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)');
 --   delete from public.cohort_stats        where client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)');
+--   delete from public.ad_spend_daily      where client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)');
 --   delete from public.daily_channel_facts where client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)');
 --   delete from public.daily_facts         where client_id = (select id from public.clients where name = 'Kettle & Co Coffee (demo data)');
 --   delete from public.clients             where name = 'Kettle & Co Coffee (demo data)';

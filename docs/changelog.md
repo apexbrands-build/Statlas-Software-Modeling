@@ -2,6 +2,19 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
+## 2026-11-27: Spend trackers for Meta and Google (slice 2 of the operating-system build)
+
+- **What it is:** one page per ad platform, for the media buyer. For a month it shows the plan's daily spend target, what was spent, where the month is heading, how much of it each campaign carries, and the return against target. Sidebar > **Trackers** (or Reporting > Meta Tracker / Google Tracker); a switch at the top moves between Meta and Google.
+- **Numbers** (`lib/trackers/spend-tracker.ts`, design `docs/superpowers/specs/2026-11-27-slice2-trackers-design.md`):
+  - Target = the plan's daily spend for the platform's channels (the plan Home uses). Google's tracker includes its returning-customer channels.
+  - Projected = a past day is its actual; a day still to come is its target times the pace so far (spent so far ÷ target so far). With no plan, the days to come run at the average of the last seven days and there is no target.
+  - Campaign share = the campaign's part of the platform's spend over the last 7, 14 or 28 days with data; its target and projection are the platform's times that share. Clicking a campaign shows its own days.
+  - Return = platform ROAS (7-day click) or iROAS (each campaign weighted by its channel's factor), against the plan's ROAS target; "ROAS needed on the days left" = (platform revenue the plan expects for the month − platform revenue so far) ÷ the planned spend of the days left.
+  - Moments = the calendar's events on each day; for Meta, the days campaigns got new ads.
+- Test campaigns follow the store setting (a checkbox on the page overrides it). Both tables download as CSV.
+- The sample store now has made-up campaigns (`supabase/demo/sample_store.sql`, run on the live database 2026-11-26), so the trackers and the Paid Media report show numbers there. Its campaigns add up to its ad channels' days.
+- Not built: budget and bid changes (the app does not hold them), trackers for Amazon and TikTok Shop ads (they need the plan's daily targets per channel, slice 3), the email tracker (needs the Klaviyo sync).
+
 ## 2026-11-26: Channel depth: Amazon and TikTok Shop hold their own numbers (slice 1 of the operating-system build)
 - **Why:** the other channels held four numbers a day (revenue, orders, units, ad spend), which is not what an Amazon or a TikTok Shop team works from. Master plan: `docs/superpowers/specs/2026-11-26-operating-system-blueprint.md`; how it follows CTC's method: `2026-11-26-ctc-operating-model-notes.md`; this slice: `2026-11-26-slice1-channel-depth-design.md`.
 - **Type of channel:** a channel is Amazon, TikTok Shop, Retail or Other marketplace (Store Settings > Edit > "Other sales channels and halo"). A channel saved earlier is recognised from its name (`platformOf`).
