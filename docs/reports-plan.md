@@ -13,7 +13,7 @@ Build all Recommended reports from Statlas **except** DTC Index, Trend Explorer 
 | P&L | `pnl` | Built (#s As: Whole / Thousands / % of revenue; Revenue By: Simplified / New vs Returning / Paid vs Organic; Compare A/P/F: P and F live now, see docs/planning-layer.md) |
 | Paid Media Overview | `ads` | Built (columns are our design; Statlas's table never loaded) |
 | Best Creatives | `best-creatives` | Built 2026-10-14 (our design): the client's Meta ads for a range, ranked against the account's own average. Metric chips (Spend, Est. CM, Revenue, ROAS by default; Purchases, CPA, CTR, CPM, share of spend), rank by, filters (format, catalog, live, campaign contains), a trend column (spend against the previous 7 days: +%, New, Stopped), Load more in pages of 50, format cards. Est. CM = ad revenue x the store's margin before ads - spend. Data: ad-level Meta tables (migration 0012) through the functions of migration 0014 (applied 2026-10-14). The Meta ROAS tile on Home links here. |
-| Meta / Google Trackers | `facebook-tracker`, `google-tracker` | Built 2026-11-27 on `development` (`lib/trackers/spend-tracker.ts`): a grid of days by total, type and campaign, each with target, projected, actual and ROAS vs its type's target |
+| Meta / Google Trackers | `facebook-tracker`, `google-tracker` | Built 2026-11-27 (`lib/trackers/spend-tracker.ts`): a grid of days by total, type and campaign, each with target, projected, actual and ROAS vs its type's target |
 | Contribution Margin | `contribution-margin` | Built 2026-10-12 (daily rollups; CM equals the Home tile) |
 | Revenue Overview | `revenue-overview` | Built 2026-10-12 (added to the approved scope) |
 | New Vs Returning Overview | `new-vs-returning` | Built 2026-10-12 |

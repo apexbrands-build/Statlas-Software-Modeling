@@ -8,19 +8,19 @@ Newest first. CLAUDE.md keeps only one line per item and points here.
 - A **Trackers** menu in the report's controls opens the Meta and Google trackers (`lib/reports/tracker-links.ts`).
 - Still open on this report: email and SMS markers and revenue (wait for the Klaviyo and Postscript syncs), the Goals selector (plan versions), other sales channels' columns, an iROAS switch, export. The lint error on `CalendarReport.tsx` (state set inside an effect when restoring the saved view) predates this change.
 
-## 2026-11-27: Spend trackers for Meta and Google (slice 2 of the operating-system build; on `development`, not released)
+## 2026-11-27: Spend trackers for Meta and Google (slice 2 of the operating-system build)
 
 - **What it is:** one page per ad platform, for the media buyer: Sidebar > **Trackers** (or Reporting > Meta Tracker / Google Tracker), a switch at the top moves between Meta and Google. It is one wide grid: the days of the month down the side; the platform's total first (target, projected, actual, delta, ROAS), then its types (Meta: new and returning customers; Google: non-brand and brand), then every campaign as its own block. The campaigns add up to the total on every day. One sentence above the grid says where the month stands.
 - **Numbers** (`lib/trackers/spend-tracker.ts`, design `docs/superpowers/specs/2026-11-27-slice2-trackers-design.md`):
   - Target = the plan's daily spend per type. A type's target is shared out to its campaigns by their share of that type's spend over the last 7, 14 or 28 days with data.
   - Projected = a past day is its actual; a day to come is each type's target times that type's pace so far. With no plan: the average of the last seven days.
   - ROAS target per type = aMER ÷ the type's incrementality factor. For the trackers the returning types get one too (`planRoasTargets(..., { returning: true })`); the plan's own screens are unchanged.
-  - The total's ROAS target follows the mix really spent. "ROAS needed on the days left" = (platform revenue the plan expects − platform revenue so far) ÷ planned spend left.
+  - The total's ROAS target follows the mix really spent. "ROAS needed on the days left" = (platform revenue the plan expects − platform revenue made so far by the types the plan holds spend for) ÷ planned spend left.
   - Planned spend of a type that no campaign carries is shown as its own block.
 - **Reading the grid** (after João's note that moving across the columns felt bland): campaigns sit under the type they mostly spend on, each group opening with its subtotal and foldable; every block's header has a pace bar (spend so far against target so far); the header and the month row stay in view; a "Jump to" list scrolls to any campaign; a rule separates the days to come; columns can be cut to actual and ROAS. `lib/trackers/grid.ts` holds the two reads behind the colours.
 - Test campaigns are counted unless left out with the checkbox (the page then says how much was left out). The grid downloads as CSV.
 - The sample store has made-up campaigns (`supabase/demo/sample_store.sql`, run on the live database 2026-11-26), so the trackers and the Paid Media report show numbers there.
-- History of the day: the first version (tiles, a chart, two tables) went to an independent review, which found the ROAS tiles compared all of Meta with an acquisition-only target, among others; João then asked for the grid and for the split by type. Both are in this version. The rewritten split has not had its own independent read yet.
+- History of the day: the first version (tiles, a chart, two tables) went to an independent review, which found the ROAS tiles compared all of Meta with an acquisition-only target, among others; João then asked for the grid and for the split by type. Both are in this version. The rewritten split then got its own independent read: the adding-up held; one critical and two important problems were fixed with tests before the release (ROAS needed counted revenue of types the plan holds no spend for; a subtotal labelled as its type's plan when its campaigns carry another type too; a finished month read as a late sync in the first days of the next). The minor ones left as they are are listed in the spec's Review section.
 - Not built: budget and bid changes, trackers for Amazon and TikTok Shop ads (slice 3), the email tracker (needs the Klaviyo sync).
 
 ## 2026-11-26: Channel depth: Amazon and TikTok Shop hold their own numbers (slice 1 of the operating-system build)

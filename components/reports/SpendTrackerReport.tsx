@@ -13,7 +13,7 @@ import { pickPlan, readScenarioChoice } from "@/lib/planning/scenarios";
 import { trackerLinks } from "@/lib/reports/tracker-links";
 import { getRepository } from "@/lib/repository";
 import { soFar, standing, type Standing } from "@/lib/trackers/grid";
-import { buildTracker, SHARE_WINDOWS, trackerLoadFrom, trackerOfSlug, type ShareWindow, type TrackerCell } from "@/lib/trackers/spend-tracker";
+import { buildTracker, SHARE_WINDOWS, trackerLoadFrom, trackerLoadTo, trackerOfSlug, typeName, type ShareWindow, type TrackerCell } from "@/lib/trackers/spend-tracker";
 import type { CampaignDay, PlanTargetDay } from "@/lib/types";
 
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -30,6 +30,8 @@ type Col = "target" | "projected" | "actual" | "delta" | "roas";
 type Columns = "all" | "short";
 const TOTAL_COLS: Record<Columns, Col[]> = { all: ["target", "projected", "actual", "delta", "roas"], short: ["target", "actual", "roas"] };
 const BLOCK_COLS: Record<Columns, Col[]> = { all: ["target", "projected", "actual", "roas"], short: ["actual", "roas"] };
+/** Said on a group whose numbers are not its type's own: its campaigns carry another type too, or another group carries part of this one. */
+const NOT_OWN_TYPE = "The sum of this group's campaigns. Each campaign sits under the type it mostly spends on, with all of its spend, so this is not the type's own plan and spend: those are in the line above the grid.";
 const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent";
 
 type Return = Pick<TrackerCell, "roas" | "iRoas" | "roasTarget" | "iRoasTarget">;
@@ -45,6 +47,8 @@ interface Block {
   actual: number;
   ret: Return;
   cells: TrackerCell[];
+  /** A subtotal only: its group holds all of its type's spend and nothing else, so it is the type's own plan and spend. */
+  ownType?: boolean;
 }
 
 interface Loaded {
@@ -141,7 +145,8 @@ function TrackerPage({ slug }: { slug: string }) {
         const to = endOfMonth(from);
         const plan = pickPlan(await repo.listPlans(client.id), Number(month.slice(0, 4)), readScenarioChoice(client.id));
         const [campaigns, planRows, targets, events, launches] = await Promise.all([
-          repo.getCampaignDays(client.id, trackerLoadFrom(month, lastData, 28), to),
+          // A few days past a month that is over, so its quiet last days are not read as a late sync.
+          repo.getCampaignDays(client.id, trackerLoadFrom(month, lastData, 28), trackerLoadTo(month, lastData)),
           plan ? repo.getPlanTargets(client.id, plan.id, from, to) : Promise.resolve([]),
           plan
             ? repo
@@ -257,17 +262,20 @@ function TrackerPage({ slug }: { slug: string }) {
     const partial = s.targetedShare !== null && s.targetedShare < 0.999;
     line.push(`${word} so far ${ratio(roasIn(s))} against a target of ${ratio(goalIn(s))}${partial ? `, read on the spend that has a target (everything: ${ratio(incremental ? s.iRoasAll : s.roasAll)})` : ""}.`);
   }
-  if (s.planMet) line.push("The platform revenue so far already covers the month's plan.");
-  else if (s.roasNeeded !== null) line.push(`The days left need a ROAS of ${ratio(s.roasNeeded)}${s.roasPlanLeft !== null ? ` (the plan expects ${ratio(s.roasPlanLeft)})` : ""}.`);
+  // What the plan expects is read on the types it holds spend for. When another type spent too, the sentence names the ones it is about.
+  const offPlan = tracker.channels.some((c) => c.actual > 0 && !s.planTypes.includes(c.key));
+  const about = offPlan && s.planTypes.length > 0 ? `${s.planTypes.map(typeName).join(" and ")}: the` : "The";
+  if (s.planMet) line.push(`${about} platform revenue so far already covers the month's plan.`);
+  else if (s.roasNeeded !== null) line.push(`${about} days left need a ROAS of ${ratio(s.roasNeeded)}${s.roasPlanLeft !== null ? ` (the plan expects ${ratio(s.roasPlanLeft)})` : ""}.`);
   // How each type of spend is doing, whatever campaign carried it.
   const byType =
     tracker.channels.length > 1
       ? tracker.channels
           .filter((c) => c.actual > 0 || (c.target ?? 0) > 0)
-          .map((c) => `${c.label}: ${withSymbol(c.actual)}${c.target !== null ? ` of a ${withSymbol(soFar(c.days).target)} target so far` : " spent"}${roasIn(c) !== null ? `, ${word} ${ratio(roasIn(c))}${goalIn(c) !== null ? ` against ${ratio(goalIn(c))}` : ""}` : ""}.`)
+          .map((c) => `${c.label}: ${withSymbol(c.actual)}${c.target !== null && c.target > 0 ? ` of a ${withSymbol(soFar(c.days).target)} target so far` : s.hasPlan ? " spent, none planned" : " spent"}${roasIn(c) !== null ? `, ${word} ${ratio(roasIn(c))}${goalIn(c) !== null ? ` against ${ratio(goalIn(c))}` : ""}` : ""}.`)
       : [];
   const notes = [
-    loaded && tracker.through < loaded.lastData ? `${platform.label}'s data runs through ${tracker.through}; the store's through ${loaded.lastData}. The days after it are read as still to come.` : null,
+    loaded && s.lateSync ? `${platform.label}'s data runs through ${tracker.through}; the store's through ${loaded.lastData}. The days after it are read as still to come.` : null,
     s.testsLeftOut > 0 ? `Test campaigns are left out of what was spent (${withSymbol(s.testsLeftOut)} this month). The plan's target still holds their budget, so spend and pace read low by that much.` : null,
     s.hasPlan && loaded?.planName ? `Targets come from the plan "${loaded.planName}".` : null,
   ].filter((x): x is string => x !== null);
@@ -275,11 +283,11 @@ function TrackerPage({ slug }: { slug: string }) {
   // The blocks of the grid: the total, then each type with the campaigns that carry it.
   const total: Block = { id: "total", kind: "total", name: `${platform.label} total`, share: null, target: s.targetMonth, projected: s.projectedMonth, actual: s.spentToDate, ret: s, cells: tracker.days };
   const groups = tracker.groups.map((g) => {
-    const subtotal: Block[] = g.subtotal ? [{ id: `sub:${g.key}`, kind: "subtotal", name: "Subtotal", share: null, target: g.subtotal.target, projected: g.subtotal.projected, actual: g.subtotal.actual, ret: g.subtotal, cells: g.subtotal.days }] : [];
+    const subtotal: Block[] = g.subtotal ? [{ id: `sub:${g.key}`, kind: "subtotal", name: "Subtotal", share: null, target: g.subtotal.target, projected: g.subtotal.projected, actual: g.subtotal.actual, ret: g.subtotal, cells: g.subtotal.days, ownType: g.matchesType }] : [];
     const blocks: Block[] = [...subtotal, ...g.campaigns.map((c): Block => ({ id: c.id, kind: c.placeholder ? "none" : "campaign", name: c.name, share: c.share, target: c.target, projected: c.projected, actual: c.actual, ret: c, cells: c.days }))];
     // A group can be folded down to its subtotal.
     const open = !(g.subtotal && closed.has(g.key));
-    return { key: g.key as string, label: g.label, canFold: g.subtotal !== null, open, count: g.campaigns.filter((c) => !c.placeholder).length, blocks, shown: open ? blocks : subtotal };
+    return { key: g.key as string, label: g.label, canFold: g.subtotal !== null, open, count: g.campaigns.filter((c) => !c.placeholder).length, ownType: g.matchesType, blocks, shown: open ? blocks : subtotal };
   });
   // With one group only, its name would say nothing the page does not: the campaigns sit straight after the total.
   const hasBands = groups.length > 1;
@@ -297,11 +305,18 @@ function TrackerPage({ slug }: { slug: string }) {
     if (c === "actual") return { text: money(x.actual), tone: toneOf(standing(x.actual, x.target)), dot: b.kind === "campaign" && x.launches > 0, title: b.kind === "campaign" && x.launches > 0 ? "New ads went live in this campaign that day" : undefined };
     return { text: ratio(roasIn(x)), tone: toneOf(standing(roasIn(x), goalIn(x))), title: goalIn(x) !== null ? `Target ${ratio(goalIn(x))}` : undefined };
   };
+  /** What a block's target for the month is made of. */
+  const targetNote = (b: Block): string => {
+    if (b.kind === "campaign") return "Each type's target for the month times the campaign's share of that type's recent spend, added up. Not a budget set for the campaign.";
+    if (b.kind === "none") return "The plan's spend for this type. No campaign carried it in the days the split is read over.";
+    if (b.kind === "total") return `The plan's ${platform.label} spend for the month`;
+    return b.ownType ? "The plan's spend for this type over the month" : NOT_OWN_TYPE;
+  };
   /** The month's cell of a block. */
   const monthCell = (c: Col, b: Block): { text: string; tone: string; title?: string } => {
     const sf = soFar(b.cells);
-    if (c === "target") return { text: money(b.target), tone: "", title: b.kind === "campaign" ? "Its type's target for the month times the campaign's share of that type's recent spend. Not a budget set for the campaign." : "The plan's spend for the month" };
-    if (c === "projected") return { text: money(b.projected), tone: "", title: "Spent so far plus the days left, each at its target times its type's pace so far. A projection, not a commitment." };
+    if (c === "target") return { text: money(b.target), tone: "", title: targetNote(b) };
+    if (c === "projected") return { text: money(b.projected), tone: "", title: s.hasPlan ? "Spent so far plus the days left, each at its target times its type's pace so far. A projection, not a commitment." : "Spent so far plus the days left at the average of the last 7 days. A projection, not a commitment." };
     if (c === "delta") return { text: signed(sf.target === null ? null : sf.actual - sf.target), tone: "", title: "Spent so far minus the target so far" };
     if (c === "actual") return { text: money(b.actual), tone: toneOf(standing(sf.actual, sf.target)), title: sf.target !== null ? `Target so far ${money(sf.target)}` : undefined };
     return { text: ratio(roasIn(b.ret)), tone: toneOf(standing(roasIn(b.ret), goalIn(b.ret))), title: goalIn(b.ret) !== null ? `Target ${ratio(goalIn(b.ret))}` : "No ROAS target for this type in the plan" };
@@ -371,7 +386,7 @@ function TrackerPage({ slug }: { slug: string }) {
         </div>
         <div className="mt-1 text-[11px] font-normal text-text-muted">{b.kind === "none" ? <span className="text-text-faint">Planned spend no campaign is carrying</span> : <Pace pace={sf.pace} tone={standing(sf.actual, sf.target)} />}</div>
         {goal !== null && (
-          <div className="mt-0.5 truncate text-[11px] font-normal text-text-faint">
+          <div className="mt-0.5 truncate text-[11px] font-normal text-text-faint" title="What its spend so far should have returned: each part at its own type's target.">
             {word} target {ratio(goal)}
           </div>
         )}
@@ -448,7 +463,7 @@ function TrackerPage({ slug }: { slug: string }) {
           </div>
 
           <div ref={scroller} className="max-h-[74vh] overflow-auto rounded-lg border border-border">
-            <table className="table-fixed border-separate border-spacing-0 text-xs" style={{ width: DAY_W + leaves * COL_W }}>
+            <table className="table-fixed border-separate border-spacing-0 text-xs" style={{ width: DAY_W + leaves * COL_W, "--band": `${DAY_W + 8}px`, "--band-xl": `${DAY_W + totalCols.length * COL_W + 8}px` } as CSSProperties}>
               <colgroup>
                 <col style={{ width: DAY_W }} />
                 {Array.from({ length: leaves }, (_, i) => (
@@ -466,19 +481,20 @@ function TrackerPage({ slug }: { slug: string }) {
                     </th>
                     {groups.map((g, gi) => (
                       <th key={g.key} colSpan={g.shown.length * blockCols.length} className={`border-b border-b-border bg-surface-raised px-0 py-0 text-left font-normal ${gi === 0 ? "" : "border-l-2 border-l-border"}`}>
-                        <div className="sticky inline-flex max-w-full items-center gap-2 px-2 py-1" style={{ left: DAY_W + 8 }}>
+                        <div className="sticky left-[var(--band)] inline-flex max-w-full items-center gap-2 px-2 py-1 xl:left-[var(--band-xl)]" title={g.ownType ? undefined : NOT_OWN_TYPE}>
                           {g.canFold ? (
-                            <button type="button" aria-expanded={g.open} onClick={() => fold(g.key)} className={`flex items-center gap-1.5 rounded font-medium text-text hover:text-accent ${focusRing}`}>
+                            <button type="button" aria-expanded={g.open} onClick={() => fold(g.key)} className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded font-medium text-text hover:text-accent ${focusRing}`}>
                               <span aria-hidden className={`inline-block text-[9px] transition-transform ${g.open ? "rotate-90" : ""}`}>
                                 ▶
                               </span>
                               {g.label}
                             </button>
                           ) : (
-                            <span className="font-medium text-text">{g.label}</span>
+                            <span className="shrink-0 whitespace-nowrap font-medium text-text">{g.label}</span>
                           )}
-                          <span className="truncate text-text-faint">
+                          <span className="min-w-0 truncate text-text-faint">
                             {g.count === 1 ? "1 campaign" : `${g.count} campaigns`}
+                            {g.ownType ? "" : `, by where most of ${g.count === 1 ? "its" : "their"} spend goes`}
                             {g.open ? "" : ", folded"}
                           </span>
                         </div>

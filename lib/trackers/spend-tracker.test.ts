@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defaultSettings } from "../defaults";
 import type { MarketingEvent } from "../planning/events";
 import type { CampaignDay, ChannelKey, PlanTargetDay } from "../types";
-import { buildTracker, trackerChannels, TRACKER_PLATFORMS, typeName, type Tracker, type TrackerInput } from "./spend-tracker";
+import { buildTracker, trackerChannels, trackerLoadTo, TRACKER_PLATFORMS, typeName, type Tracker, type TrackerInput } from "./spend-tracker";
 
 const settings = { ...defaultSettings("t"), multipliers: { ...defaultSettings("t").multipliers, meta_acquisition: 1.2, meta_returning: 0.5, google_nonbrand: 0.65, google_brand: 0.15 } };
 const row = (date: string, o: Partial<CampaignDay> = {}): CampaignDay => ({ date, platform: "meta", campaignId: "a", campaignName: "ACQ | Evergreen", category: "acquisition", audience: "new", spend: 100, platformRevenue: 200, platformPurchases: 4, ...o });
@@ -102,6 +102,43 @@ describe("buildTracker: the platform's target, actual and projection", () => {
     const stopped = buildTracker({ ...late, lastData: "2026-11-20" });
     expect(stopped.through).toBe("2026-11-20");
     expect(stopped.days[14]).toMatchObject({ past: true, actual: 0 });
+  });
+});
+
+describe("a month that is over, seen in the first days of the next one", () => {
+  const october = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `2026-10-${String(from + i).padStart(2, "0")}`);
+  const existing = (date: string, spend: number) => row(date, { campaignId: "a:existing", category: "retention", audience: "returning", spend, platformRevenue: 0 });
+
+  it("loads the platform's rows up to three days past the month, never past the store's last day", () => {
+    expect(trackerLoadTo("2026-11", "2026-11-10")).toBe("2026-11-30");
+    expect(trackerLoadTo("2026-10", "2026-11-02")).toBe("2026-11-02");
+    expect(trackerLoadTo("2026-10", "2026-12-15")).toBe("2026-11-03");
+    expect(trackerLoadTo("2026-12", "2026-11-10")).toBe("2026-12-31");
+  });
+  it("reads a quiet month end as days of no spend when the platform has data after it", () => {
+    const t = buildTracker({ ...base, month: "2026-10", lastData: "2026-11-01", plan: october(1, 31).map((d) => plan(d, { meta_acquisition: 100 })), campaigns: [...october(1, 29).map((d) => row(d)), row("2026-11-01")] });
+    expect(t.through).toBe("2026-11-01");
+    expect(t.days[29]).toMatchObject({ date: "2026-10-30", past: true, actual: 0, projected: 0 });
+    expect(t.summary).toMatchObject({ daysLeft: 0, spentToDate: 2900, projectedMonth: 2900, lateSync: false });
+  });
+  it("rows after the month only move the cut-off: they change no campaign's type, share or spend", () => {
+    // In October the campaign mostly spends on new customers. On 1 November it spends a lot on existing customers.
+    const campaigns = [...october(1, 31).map((d) => row(d, { spend: 60 })), ...october(1, 31).map((d) => existing(d, 10)), existing("2026-11-01", 5000)];
+    const t = buildTracker({ ...base, month: "2026-10", lastData: "2026-11-01", campaigns });
+    expect(camp(t, "a")).toMatchObject({ channel: "meta_acquisition", actual: 31 * 70 });
+    expect(t.shareTo).toBe("2026-10-31");
+    expect(t.summary.spentToDate).toBe(31 * 70);
+  });
+  it("says the platform's sync is late only when a day of the month is waiting on it", () => {
+    const late = buildTracker({ ...base, lastData: "2026-11-11", plan: month({ meta_acquisition: 100 }), campaigns: days(1, 10).map((d) => row(d)) });
+    expect(late.summary.lateSync).toBe(true);
+    // October seen on 2 November, the platform's data ending on 31 October: no day of October is waiting.
+    const done = buildTracker({ ...base, month: "2026-10", lastData: "2026-11-02", campaigns: [row("2026-10-31")] });
+    expect(done.through).toBe("2026-10-31");
+    expect(done.summary.lateSync).toBe(false);
+    expect(buildTracker({ ...base, campaigns: days(1, 10).map((d) => row(d)) }).summary.lateSync).toBe(false);
+    // A month that has not started waits on nothing.
+    expect(buildTracker({ ...base, month: "2026-12", lastData: "2026-11-11", campaigns: days(1, 10).map((d) => row(d)) }).summary.lateSync).toBe(false);
   });
 });
 
@@ -248,6 +285,12 @@ describe("buildTracker: campaigns grouped by the type they mostly spend on", () 
     expect(one.groups[0].subtotal).toBeNull();
     expect(buildTracker(base).groups).toEqual([]);
   });
+  it("says when a group is not its type's own spend: a campaign in it carries another type, or another group carries part of this one", () => {
+    // a and c also reach existing customers, so neither group's numbers are its type's own plan and spend.
+    expect(t.groups.map((g) => g.matchesType)).toEqual([false, false]);
+    const pure = buildTracker({ ...base, plan: month({ meta_acquisition: 80, meta_returning: 20 }), campaigns: [...days(1, 10).map((d) => row(d)), ...days(1, 10).map((d) => rtn(d))] });
+    expect(pure.groups.map((g) => g.matchesType)).toEqual([true, true]);
+  });
   it("planned spend that no campaign carries sits in its own type's group", () => {
     const g = buildTracker({ ...base, platform: "google", plan: month({ google_nonbrand: 70, google_brand: 30 }), campaigns: days(1, 10).map((d) => row(d, { platform: "google_ads", campaignId: "nb", campaignName: "PMax", audience: "unknown", spend: 70 })) });
     expect(g.groups.map((x) => [x.label, x.campaigns.map((c) => c.id)])).toEqual([
@@ -305,6 +348,39 @@ describe("buildTracker: return", () => {
     const met = buildTracker({ ...input, campaigns: days(1, 10).map((d) => row(d, { spend: 80, platformRevenue: 800 })) });
     expect(met.summary.planMet).toBe(true);
     expect(met.summary.roasNeeded).toBe(0);
+  });
+  it("the ROAS needed leaves out the revenue of a type the plan holds no spend for (Meta's reach to existing customers)", () => {
+    // Plan: 100 a day to new customers only. The campaign spends 80 a day on new customers at 1.8 and 20 a day on existing customers at 6.
+    const m = buildTracker({
+      ...base,
+      lastData: "2026-11-20",
+      roasOf: (_d, k) => (k === "meta_acquisition" ? 2 : k === "meta_returning" ? 3.83 : null),
+      plan: month({ meta_acquisition: 100 }),
+      campaigns: [...days(1, 20).map((d) => row(d, { spend: 80, platformRevenue: 144 })), ...days(1, 20).map((d) => row(d, { campaignId: "a:existing", category: "retention", audience: "returning", spend: 20, platformRevenue: 120 }))],
+    });
+    // The plan expects 30 x 100 x 2 = 6,000. New-customer spend made 2,880, and 1,000 of planned spend is left.
+    expect(m.summary.roasNeeded).toBeCloseTo(3.12);
+    expect(m.summary.planMet).toBe(false);
+    expect(m.summary.planTypes).toEqual(["meta_acquisition"]);
+    // The return so far is still read on everything that has a target.
+    expect(m.summary.roas).toBeCloseTo((2880 + 2400) / 2000);
+  });
+  it("the plan is not met by the revenue of campaigns it holds no spend for (Google, returning customers)", () => {
+    const g = buildTracker({
+      ...base,
+      platform: "google",
+      lastData: "2026-11-20",
+      roasOf: (_d, k) => (k === "google_nonbrand" ? 3.5 : k === "google_nonbrand_returning" ? 5 : null),
+      plan: month({ google_nonbrand: 100 }),
+      campaigns: [
+        ...days(1, 20).map((d) => row(d, { platform: "google_ads", campaignId: "pm", campaignName: "PMax", audience: "unknown", spend: 100, platformRevenue: 300 })),
+        ...days(1, 20).map((d) => row(d, { platform: "google_ads", campaignId: "rt", campaignName: "RTN | Search", audience: "returning", spend: 50, platformRevenue: 400 })),
+      ],
+    });
+    // Non-brand made 6,000 of the 10,500 the plan expects; the 8,000 of the returning campaign is not the plan's.
+    expect(g.summary.planMet).toBe(false);
+    expect(g.summary.roasNeeded).toBeCloseTo(4.5);
+    expect(g.summary.planTypes).toEqual(["google_nonbrand"]);
   });
   it("reads the target at the mix that was really spent, so campaigns that are each on target show on target", () => {
     const g = buildTracker({

@@ -153,6 +153,12 @@ export interface TrackerGroup {
   campaigns: TrackerCampaign[];
   /** Null when it would repeat something on the page: a group with one block, or the only group (it equals the total). */
   subtotal: TrackerSubtotal | null;
+  /**
+   * The group holds all of its type's spend and nothing else, so its numbers are the type's own plan and spend. False when one of its
+   * campaigns also carries another type (on Meta, a prospecting campaign's reach to existing customers) or when a campaign of
+   * another group carries part of this type.
+   */
+  matchesType: boolean;
 }
 
 export interface TrackerSummary {
@@ -177,12 +183,16 @@ export interface TrackerSummary {
   iRoasAll: number | null;
   /** The part of the spend so far that has a ROAS target (1 = all of it). Null with no spend. */
   targetedShare: number | null;
-  /** The ROAS the days left need, on the spend that has a target, for the month to make its planned platform revenue. */
+  /** The types the plan holds spend for, with a ROAS target: what the plan expects the platform to bring is read on these. */
+  planTypes: ChannelKey[];
+  /** The ROAS the days left need on those types' planned spend, for them to make the platform revenue the plan expects for the month. */
   roasNeeded: number | null;
   /** The ROAS the plan itself expects on the days left (planned mix). */
   roasPlanLeft: number | null;
-  /** The platform revenue so far already covers what the plan expects for the month. */
+  /** The platform revenue those types made so far already covers what the plan expects for the month. */
   planMet: boolean;
+  /** A day of this month has store data but is read as still to come, because the ad platform's data ends before it. */
+  lateSync: boolean;
   launches: number;
   /** Spend of test campaigns in the month that was left out of the actuals (the plan's target still holds their budget). */
   testsLeftOut: number;
@@ -284,14 +294,18 @@ export function buildTracker(input: TrackerInput): Tracker {
   const total = noReturn();
   const totalByDay = new Map<string, Return>();
   const types = new Map<ChannelKey, { ret: Return; byDay: Map<string, Return> }>(channels.map((k) => [k, { ret: noReturn(), byDay: new Map<string, Return>() }] as const));
-  const byCampaign = new Map<string, { name: string; ret: Return; byDay: Map<string, Return>; byType: Map<ChannelKey, number> }>();
+  const byCampaign = new Map<string, { name: string; ret: Return; byDay: Map<string, Return>; byType: Map<ChannelKey, number>; seen: Set<ChannelKey> }>();
   for (const r of rows) {
+    // Rows after the month are loaded only to tell a month that is over from a late sync (the cut-off above).
+    if (r.date > monthEnd) continue;
     const id = campaignOf(r.campaignId);
     const counts = inMonth(r.date);
     if (!counts && !winByCampaign.has(id)) continue;
-    const c = byCampaign.get(id) ?? { name: r.campaignName, ret: noReturn(), byDay: new Map<string, Return>(), byType: new Map<ChannelKey, number>() };
+    const c = byCampaign.get(id) ?? { name: r.campaignName, ret: noReturn(), byDay: new Map<string, Return>(), byType: new Map<ChannelKey, number>(), seen: new Set<ChannelKey>() };
     const k = channelOf(r);
     c.byType.set(k, (c.byType.get(k) ?? 0) + r.spend);
+    // The types the page shows this campaign spending on: in the month so far, or in the days its share is read over.
+    if (r.spend > 0 && (counts || (r.date >= shareFrom && r.date <= shareTo))) c.seen.add(k);
     if (counts) {
       const f = factor(settings, k);
       const target = roasOf?.(r.date, k) ?? null;
@@ -457,7 +471,14 @@ export function buildTracker(input: TrackerInput): Tracker {
     return { target: hasPlan ? (sumOf(own, "target") ?? 0) : null, projected: sumOf(own, "projected"), actual: sum.spend, revenue: sum.revenue, ...returnOf(sum, k), days: own };
   };
   const grouped = channels.map((k) => ({ k, list: campaigns.filter((c) => c.channel === k) })).filter((g) => g.list.length > 0);
-  const groups: TrackerGroup[] = grouped.map((g) => ({ key: g.k, label: typeName(g.k), campaigns: g.list, subtotal: grouped.length > 1 && g.list.length > 1 ? subtotalOf(g.list, g.k) : null }));
+  const typesOf = (c: TrackerCampaign): ChannelKey[] => (c.placeholder ? [c.channel] : [...(byCampaign.get(c.id)?.seen ?? [])]);
+  const groups: TrackerGroup[] = grouped.map((g) => ({
+    key: g.k,
+    label: typeName(g.k),
+    campaigns: g.list,
+    subtotal: grouped.length > 1 && g.list.length > 1 ? subtotalOf(g.list, g.k) : null,
+    matchesType: campaigns.every((c) => (c.channel === g.k ? typesOf(c).every((x) => x === g.k) : !typesOf(c).includes(g.k))),
+  }));
 
   // What the plan expects the platform to bring: each type's spend at its ROAS target.
   let targetMonth = 0;
@@ -465,7 +486,7 @@ export function buildTracker(input: TrackerInput): Tracker {
   let plannedRevenue = 0;
   let plannedRevenueLeft = 0;
   let plannedWithTargetLeft = 0;
-  let anyRoasTarget = false;
+  const inPlan = new Set<ChannelKey>();
   for (const d of dates) {
     for (const k of channels) {
       const p = planOf(d, k);
@@ -474,7 +495,7 @@ export function buildTracker(input: TrackerInput): Tracker {
       if (isPast(d)) targetToDate += p;
       const target = roasOf?.(d, k) ?? null;
       if (target === null || p <= 0) continue;
-      anyRoasTarget = true;
+      inPlan.add(k);
       plannedRevenue += p * target;
       if (!isPast(d)) {
         plannedRevenueLeft += p * target;
@@ -482,6 +503,11 @@ export function buildTracker(input: TrackerInput): Tracker {
       }
     }
   }
+
+  // Like for like: what the plan expects is each planned type's spend at its target, so what was made is read on those types only.
+  // A type the plan holds no spend for (campaigns for returning customers, Meta's reach to existing customers) is not counted.
+  const planTypes = channels.filter((k) => inPlan.has(k));
+  const madeOnPlan = planTypes.reduce((a, k) => a + (types.get(k)?.ret.tRevenue ?? 0), 0);
 
   const summary: TrackerSummary = {
     hasPlan,
@@ -497,15 +523,26 @@ export function buildTracker(input: TrackerInput): Tracker {
     roasAll: ratio(total.revenue, total.spend),
     iRoasAll: ratio(total.iRevenue, total.spend),
     targetedShare: ratio(total.tSpend, total.spend),
-    roasNeeded: anyRoasTarget && plannedWithTargetLeft > 0 ? Math.max(0, (plannedRevenue - total.tRevenue) / plannedWithTargetLeft) : null,
+    planTypes,
+    roasNeeded: planTypes.length > 0 && plannedWithTargetLeft > 0 ? Math.max(0, (plannedRevenue - madeOnPlan) / plannedWithTargetLeft) : null,
     roasPlanLeft: ratio(plannedRevenueLeft, plannedWithTargetLeft),
-    planMet: anyRoasTarget && plannedRevenue > 0 && total.tRevenue >= plannedRevenue,
+    planMet: planTypes.length > 0 && plannedRevenue > 0 && madeOnPlan >= plannedRevenue,
+    lateSync: through < lastData && through < monthEnd && addDays(through, 1) >= monthStart,
     launches: [...launchesByDay.values()].reduce((a, n) => a + n, 0),
     testsLeftOut,
   };
 
   const hasRows = rows.length > 0;
   return { days, channels: trackerChannelsOut, campaigns, groups, summary, through, shareFrom: hasRows ? shareFrom : null, shareTo: hasRows ? shareTo : null };
+}
+
+/**
+ * The last day the tracker needs campaign rows up to: the month's end. Once the month is over, up to three days past it (never past
+ * the store's last day): without them a quiet month end cannot be told from a late sync.
+ */
+export function trackerLoadTo(month: string, lastData: string): string {
+  const monthEnd = endOfMonth(`${month.slice(0, 7)}-01`);
+  return lastData > monthEnd ? min(lastData, addDays(monthEnd, SYNC_LAG_DAYS)) : monthEnd;
 }
 
 /** The first day the tracker needs campaign rows from: the start of the month, or earlier when the share window reaches back. */
