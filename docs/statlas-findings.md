@@ -305,3 +305,25 @@ Common report chrome: global date range picker (top), store switcher, back arrow
 - Library + Marketing Efficiency Report: built 2026-10-01 (`/reporting`, `/reporting/mer`).
 - P&L: built (`/reporting/pnl`) with Gross Sales, Discounts, Shipping, Refunds -> Operating Revenue. View options (from the user, not opened in Statlas because the dropdowns would not open in the browser tools): **#s As** = Whole / Thousands / % of operating revenue; **Revenue By** = Simplified / New vs Returning / Paid vs Organic (all reconcile to the same Operating Revenue); **Compare To** A/P/F (Plan and Forecast disabled until the planning layer). Exact Statlas rows for the New vs Returning and Paid vs Organic views are our interpretation.
 - Paid Media Overview: built (`/reporting/ads`). Statlas's table never finished loading in the browser tools, so columns are our design: per campaign (or platform / channel type / day / week / month) Spend, % of spend, platform revenue, purchases, ROAS, iROAS, iRevenue, CPA, iCPA, AOV; filters for platform, campaign name, removed names, exclude tests; optional comparison (previous period / last year). Clicks and impressions are not stored yet.
+
+## Seen 2026-11-26 (read-only, store "D.Louise Jewelry USA", which had no data loaded): Email Tracker, Hourly Report, Facebook Tracker
+
+### Email Tracker (`/tracker/email`)
+- Top: **Settings** (one option, "Campaign Revenue By: Send Date") and a two-way switch **Actual+FC | Forecast**.
+- Left table, one row per day of the month, with a month picker (This Month, Last Month, Next Month) and a totals row: **Moments, Target Rev, Actual+FC, Actual Rev, Delta**. With the switch on Forecast the third column is **Forecast** (the forecast for every day); on Actual+FC it holds the actual for the days that have passed and the forecast for the rest.
+- Right table, the same day rows: **Campaign, Audience, Actual+FC (or Forecast), Actual Rev**, with a Total row. It lists each day's campaigns with their audience size.
+- Purpose: the email target per day against what was sent and what is scheduled, so the month's gap is visible while campaigns can still be added.
+
+### Hourly Report (`/reporting/hourly`)
+- Controls: **Compare To** (shown: "Target / Hourly"), **Business Unit** (Omnichannel, DTC, TTS, Amazon), **Goals** (which plan), **Columns**, **Chart** (which metric the chart draws), checkboxes **Acq/Brand breakdown** and **Projection**; tools: iROAS, Cumulative, Reload, Save, Export, HeatMap, Deltas, Chart, Copy. Date range picker (three days were loaded).
+- One row per hour, a totals row at the bottom. Each metric is a pair: the value (with "/Proj." when Projection is on) and its target with the difference and the % difference in colour.
+- Metrics: Order Revenue before Taxes, Orders, AOV, New Order Revenue before Taxes, New Orders, New AOV, Total Spend, MER, New Rev/Spend (aMER), CAC (hourly publisher spend / new orders), then per platform Ad Spend, Revenue and iROAS with their targets (Facebook, Google).
+- The hourly target seen was the day's target divided evenly over 24 hours (the same value on every hour of a day).
+- The vendor's update note (relayed by João): the Business Unit picker is for brands with several sales channels; for TikTok Shop, where there is usually no target, compare with the same day last year.
+
+### Facebook Tracker (`/tracker/facebook`), additions to the section above
+- Settings holds one option: **Show iROAS: On**.
+- The page showed only its frame for this store (no day rows, no campaign cards).
+- João's description (2026-11-26): the table has target spend, projected spend and actual spend; projected spend is re-based on the month's pacing so far; it is then broken down to the running campaigns in proportion to what each has spent historically, so the buyer sees how much of the planned spend each campaign can carry.
+
+The folder `Statlas Original UX/` holds no images any more (only empty subfolders), and they were never in git, so these notes are the reference.
