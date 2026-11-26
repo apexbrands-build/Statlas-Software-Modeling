@@ -8,6 +8,8 @@ import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types
 import { defaultSettings } from "../defaults";
 import { shopifyDaysToSales } from "../omni/import";
 import type { ChannelSale } from "../omni/types";
+import type { ChannelSaleInput } from "../omni/import-kinds";
+import { numbersOf, rpcRow, toInput } from "./channel-merge";
 import type { OrderChannel } from "../order-channels";
 import { getBrowserClient } from "../supabase/client";
 import { mapAovRows, type AovData, type AovMode } from "../reports/aov";
@@ -593,7 +595,12 @@ export class SupabaseRepository implements Repository {
       throw e;
     }
     const source = (v: unknown): ChannelSale["source"] => (v === "shopify" || v === "connector" ? v : "import");
-    return rows.map((r) => ({ date: r.date as string, channel: r.sales_channel as string, retailer: (r.retailer as string) ?? "", revenue: n(r.revenue), orders: n(r.orders), units: n(r.units), adSpend: n(r.ad_spend), source: source(r.source) }));
+    return rows.map((r) => {
+      const days = Math.round(n(r.period_days));
+      const sale: ChannelSale = { date: r.date as string, channel: r.sales_channel as string, retailer: (r.retailer as string) ?? "", revenue: n(r.revenue), orders: n(r.orders), units: n(r.units), adSpend: n(r.ad_spend), metrics: numbersOf(r.metrics), source: source(r.source) };
+      if (days > 1) sale.periodDays = days;
+      return sale;
+    });
   }
 
   async pullChannelSalesFromOrders(clientId: string, channel: string, shopifyChannels: string[], from: string, to: string): Promise<number | null> {
@@ -608,32 +615,32 @@ export class SupabaseRepository implements Repository {
     return rows.length;
   }
 
+  /** Full rows: each day's core numbers are replaced and its metrics merged, in one statement per 500 rows. */
   async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {
+    await this.mergeRpc(clientId, channel, rows.map((r) => rpcRow(toInput(r), r.source === "demo" ? "import" : r.source)));
+  }
+
+  async mergeChannelSales(clientId: string, channel: string, rows: ChannelSaleInput[]): Promise<void> {
+    await this.mergeRpc(clientId, channel, rows.map((r) => rpcRow(r, "import")));
+  }
+
+  private async mergeRpc(clientId: string, channel: string, rows: Record<string, unknown>[]): Promise<void> {
     const fail = (message: string) =>
       new Error(
-        CHANNEL_SALES_MISSING.test(message)
-          ? "Could not save the sales: the database is not ready for other channels yet (migration 0021)."
-          : /policy|permission|row-level/i.test(message)
-            ? "Could not save the sales: this login cannot change this client's data."
+        /policy|permission|row-level/i.test(message)
+          ? "Could not save the sales: this login cannot change this client's data."
+          : CHANNEL_MERGE_MISSING.test(message) || CHANNEL_SALES_MISSING.test(message)
+            ? "Could not save the sales: the database is not ready for this yet (migration 0022)."
             : `Could not save the sales: ${message}`,
       );
-    // A day is replaced for the retailers in the file only, so one file per retailer can be loaded one after another.
-    const byRetailer = new Map<string, Set<string>>();
-    for (const r of rows) byRetailer.set(r.retailer ?? "", (byRetailer.get(r.retailer ?? "") ?? new Set<string>()).add(r.date));
-    for (const [retailer, set] of byRetailer) {
-      const dates = [...set];
-      for (let i = 0; i < dates.length; i += 200) {
-        const { error } = await this.db.from("channel_sales").delete().eq("client_id", clientId).eq("sales_channel", channel).eq("retailer", retailer).in("date", dates.slice(i, i + 200));
-        if (error) throw fail(error.message);
-      }
-    }
-    const rec = (r: ChannelSale) => ({ client_id: clientId, date: r.date, sales_channel: channel, retailer: r.retailer ?? "", revenue: r.revenue, orders: r.orders, units: r.units, ad_spend: r.adSpend, source: r.source === "demo" ? "import" : r.source });
     for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await this.db.from("channel_sales").insert(rows.slice(i, i + 500).map(rec));
+      const { error } = await this.db.rpc("channel_sales_merge", { p_client: clientId, p_channel: channel, p_rows: rows.slice(i, i + 500) });
       if (error) throw fail(error.message);
     }
   }
 }
 
 /** What the database answers when `channel_sales` does not exist yet. */
+/** The merge function of migration 0022 is not in the database yet (or a column it writes is missing). */
+const CHANNEL_MERGE_MISSING = /PGRST202|Could not find the function|column \"?(metrics|period_days)\"? .*does not exist/i;
 const CHANNEL_SALES_MISSING = /PGRST205|42P01|Could not find the table|relation "?(public\.)?channel_sales"? does not exist/i;

@@ -21,6 +21,8 @@ import type {
 import { CHANNEL_KEYS, type HaloSettings, type OtherChannel } from "../types";
 import { defaultExtra } from "../defaults";
 import type { ChannelSale } from "../omni/types";
+import type { ChannelSaleInput } from "../omni/import-kinds";
+import { mergeRows, toInput } from "./channel-merge";
 import { haloSettingsOf } from "../planning/halo";
 import type { MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
@@ -655,10 +657,23 @@ export class SeedRepository implements Repository {
   }
 
   async saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void> {
+    await this.mergeChannelSales(clientId, channel, rows.map(toInput));
+  }
+
+  /** As the database does it: a row changes only what it gives. A day that was only generated so far is written down first, so the rest of it is kept. */
+  async mergeChannelSales(clientId: string, channel: string, rows: ChannelSaleInput[]): Promise<void> {
     const key = `${clientId}|${channel}`;
-    // A day is replaced for the retailers in the file only, so one file per retailer can be loaded one after another.
-    const pairs = new Set(rows.map((r) => `${r.date}|${r.retailer ?? ""}`));
-    this.channelStore.set(key, [...(this.channelStore.get(key) ?? []).filter((r) => !pairs.has(`${r.date}|${r.retailer ?? ""}`)), ...rows.map((r) => ({ ...r, channel }))]);
+    const base = [...(this.channelStore.get(key) ?? [])];
+    const have = new Set(base.map((r) => r.date));
+    const c = haloSettingsOf(await this.getSettings(clientId)).channels.find((x) => x.key === channel);
+    const last = await this.getLastDataDate(clientId);
+    if (c)
+      for (const r of rows)
+        if (!r.retailer && r.date <= last && !have.has(r.date)) {
+          base.push(demoChannelSale(clientId, c, r.date));
+          have.add(r.date);
+        }
+    this.channelStore.set(key, mergeRows(base, channel, rows));
   }
 }
 

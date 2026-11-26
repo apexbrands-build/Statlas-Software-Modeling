@@ -3,6 +3,7 @@ import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import type { Range } from "../dates";
 import type { ChannelSale } from "../omni/types";
+import type { ChannelSaleInput } from "../omni/import-kinds";
 import type { OrderChannel } from "../order-channels";
 import type { MetaLaunch } from "./meta-launches";
 import type { AovData, AovMode } from "../reports/aov";
@@ -81,6 +82,11 @@ export interface Repository {
   getChannelSales(clientId: string, from: string, to: string): Promise<ChannelSale[] | null>;
   /** Saves one channel's sales, replacing that channel's rows for the same day and retailer as a row in `rows` (other retailers of those days stay). */
   saveChannelSales(clientId: string, channel: string, rows: ChannelSale[]): Promise<void>;
+  /**
+   * Saves rows that hold only part of a day (a file of ads numbers, a file of sales numbers): a number that is not given keeps the
+   * value the day already has, and the day's metrics are merged key by key.
+   */
+  mergeChannelSales(clientId: string, channel: string, rows: ChannelSaleInput[]): Promise<void>;
   /**
    * For a channel fed by Shopify sales channels (for example TikTok Shop orders synced into Shopify): rolls those orders up by day
    * and saves them as the channel's sales. Returns the days saved; null when the database function is not there yet (migration 0021).
