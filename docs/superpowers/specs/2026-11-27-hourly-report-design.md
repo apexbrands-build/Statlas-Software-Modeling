@@ -1,6 +1,6 @@
 # Hourly report
 
-Date: 2026-11-27. Status: **design for João to approve; nothing built.** One of the three reports he named on 2026-11-27 (Calendar, Hourly, Total Net Customer).
+Date: 2026-11-26 (the file name is a day ahead). Status: **design for João to approve; nothing built.** One of the three reports he named on 2026-11-26 (Calendar, Hourly, Total Net Customer).
 
 ## Goal
 On a day that matters (a launch, a sale, Black Friday), see by the hour whether the day is on track, while there is still time to act. Afterwards, read how a day unfolded.

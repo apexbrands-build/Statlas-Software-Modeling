@@ -1,8 +1,8 @@
 # Slice 2: trackers for the paid channels
 
-Date: 2026-11-27 (revised the same day after João's corrections and an independent review). Status: built on `development`; João approved the layout and the numbers on 2026-11-27 and asked for a better visual organisation of the grid, done the same day. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
+Date: 2026-11-26 (the file name is a day ahead; revised the same day after João's corrections and an independent review). Status: built on `development`; João approved the layout and the numbers on 2026-11-27 and asked for a better visual organisation of the grid, done the same day. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
 
-## Goal (João, 2026-11-27)
+## Goal (João, 2026-11-26)
 "Take the total number of the forecast for spend and your efficiency targets for the platform. Then allocate in platform across your campaigns and see where you can maybe push more against targets. That's the whole idea for every tracker for every platform." And: non-brand and brand on Google, new and returning on Meta each have their own ROAS target, through their own incrementality factor.
 
 ## The page
@@ -55,7 +55,7 @@ Fri 27  Black Friday | 26,926  25,450  -  -  -        | ...
 The email tracker (needs the Klaviyo sync), Amazon and TikTok Shop ad trackers (they need the plan's daily targets per channel, slice 3), the business scoreboard (next), changing budgets from the app, typing a target per campaign.
 
 ## Review
-An independent review of the first version (tiles, chart, two tables) found two critical problems and five important ones; all are fixed with tests: the ROAS comparison mixed spend with and without a target; a stale picked campaign zeroed the page (the pick is gone with the new layout); the cut-off used the store's last day when the ad sync was late; leaving tests out said nothing; a campaign's projection did not match its own days; Google's target was blended at the planned mix; Meta campaigns appeared twice. The split by type and the grid were written after that review and got their own independent read on 2026-11-27, before the release.
+An independent review of the first version (tiles, chart, two tables) found two critical problems and five important ones; all are fixed with tests: the ROAS comparison mixed spend with and without a target; a stale picked campaign zeroed the page (the pick is gone with the new layout); the cut-off used the store's last day when the ad sync was late; leaving tests out said nothing; a campaign's projection did not match its own days; Google's target was blended at the planned mix; Meta campaigns appeared twice. The split by type and the grid were written after that review and got their own independent read on 2026-11-26, before the release (production, commit 29ebde9).
 
 **Second review (split by type, groups, grid).** The adding-up held in every case tried (campaigns to subtotals to the total, on target, projection and actual). Fixed, each with a test that failed first:
 - Critical: "ROAS needed" and "plan met" counted revenue of types the plan holds no spend for (since returning types got a ROAS target). On a plan of 100 a day to new customers, a campaign at ROAS 1.8 with a fifth of its spend reaching existing customers at 6.0 read "needs 0.72" instead of 3.12.
