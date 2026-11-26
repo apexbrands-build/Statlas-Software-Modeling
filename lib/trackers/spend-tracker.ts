@@ -143,10 +143,11 @@ export function buildTracker(input: TrackerInput): Tracker {
   const shareOf = (id: string): number | null => (windowTotal > 0 ? (windowSpend.get(id) ?? 0) / windowTotal : null);
 
   // The plan, per day: spend of the platform's channels, and the platform revenue that spend is planned to bring at its ROAS target.
+  // A plan that holds no spend for this platform in the month is read as "no plan" here: a target of zero would be noise.
   const planByDay = new Map(input.plan.filter((p) => p.date >= monthStart && p.date <= monthEnd).map((p) => [p.date, p] as const));
-  const hasPlan = planByDay.size > 0;
+  const hasPlan = [...planByDay.values()].some((p) => channels.some((k) => (p.spendByChannel[k] ?? 0) > 0));
   const planOf = (d: string) => {
-    const p = planByDay.get(d);
+    const p = hasPlan ? planByDay.get(d) : undefined;
     if (!p) return null;
     let spend = 0;
     let withTarget = 0;

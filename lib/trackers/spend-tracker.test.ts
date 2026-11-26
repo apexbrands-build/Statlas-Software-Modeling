@@ -61,6 +61,14 @@ describe("buildTracker: target, actual and projection", () => {
     expect(noPlan.days[20].projected).toBeCloseTo(70);
     expect(noPlan.summary.projectedMonth).toBeCloseTo(30 + 490 + 20 * 70);
   });
+  it("a plan that holds no spend for this platform is read as no plan, so the projection follows what is being spent", () => {
+    const other = buildTracker({ ...input, plan: days(1, 30).map((d) => plan(d, { google_nonbrand: 500 })) });
+    expect(other.summary.hasPlan).toBe(false);
+    expect(other.summary.targetMonth).toBeNull();
+    expect(other.days[0].target).toBeNull();
+    expect(other.days[20].projected).toBeCloseTo(90);
+    expect(other.summary.projectedMonth).toBeCloseTo(900 + 20 * 90);
+  });
   it("a month that has not started is projected at its plan, and a finished month at what was spent", () => {
     const next = buildTracker({ ...input, month: "2026-12", plan: [plan("2026-12-01", { meta_acquisition: 50 })] });
     expect(next.summary.pace).toBeNull();
