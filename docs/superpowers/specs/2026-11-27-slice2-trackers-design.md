@@ -1,6 +1,6 @@
 # Slice 2: trackers for the paid channels
 
-Date: 2026-11-27 (revised the same day after João's two corrections and an independent review). Status: built on `development`, **not released**: waiting for João's word on the layout. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
+Date: 2026-11-27 (revised the same day after João's corrections and an independent review). Status: built on `development`; João approved the layout and the numbers on 2026-11-27 and asked for a better visual organisation of the grid, done the same day. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
 
 ## Goal (João, 2026-11-27)
 "Take the total number of the forecast for spend and your efficiency targets for the platform. Then allocate in platform across your campaigns and see where you can maybe push more against targets. That's the whole idea for every tracker for every platform." And: non-brand and brand on Google, new and returning on Meta each have their own ROAS target, through their own incrementality factor.
@@ -9,23 +9,31 @@ Date: 2026-11-27 (revised the same day after João's two corrections and an inde
 One page per ad platform (Meta and Google today), Sidebar > Trackers. It is **one wide grid, not a dashboard**: the days of the month down the side, blocks of columns across.
 
 ```
-Day        | Meta total                              | New customers             | Returning customers       | ACQ | Evergreen          | RTN | Evergreen ...
-           | Target Projected Actual Delta ROAS      | Target Projected Actual ROAS | ...                    | Target Projected Actual ROAS
-Month      | 275,995 260,869 172,992 -10,031 1.81    | 236,049 224,091 148,603 1.60 | ...
-Sun 1      | 7,936   7,697   7,697   -238    1.93    | ...
+Jump to  New customers  [ACQ | Evergreen] [ACQ | Catalog] ...  Returning customers  [RTN | Winback]        [All columns | Actual and ROAS] [Download CSV]
+
+Day        | Meta total                              | > New customers, 4 campaigns                                   | Returning customers, 1 campaign
+           | [=====|--] 95%                          | Subtotal [====|--] 95%    | ACQ | Evergreen  37% [====|-] 95%  | RTN | Winback ...
+           | Target Projected Actual Delta ROAS      | Target Projected Actual ROAS | Target Projected Actual ROAS  |
+November   | 275,995 260,869 172,992 -10,031 1.81    | 236,049 224,091 148,603 1.60 | 101,332 95,979 63,573 1.60    |   (stays in view)
+Sun  1     | 7,936   7,697   7,697   -238    1.93    | ...
+Mon  2     | (a heavier rule opens each week)
 ...
-Fri 27     | (days to come: target and projection, dimmed)
-Black Friday
+Days to come   Projected: each type's target at its pace so far
+Fri 27  Black Friday | 26,926  25,450  -  -  -        | ...
 ```
 
-- The **total** block stays in place while the rest scrolls sideways. After it come the platform's **types** (Meta: new customers, returning customers; Google: non-brand, brand, and their returning versions when used), then every **campaign**. On every day the campaigns add up to the total.
-- One sentence above the grid says where the month stands (spent vs target so far, heading to, ROAS vs target, ROAS needed on the days left). No tiles, no chart.
-- Green and red compare actual with target (beyond 10% either way), on spend and on ROAS, so a campaign that is above its ROAS target and under its spend is visible at a glance.
+- The day and the **total** stay in place while the rest scrolls sideways; the header and the **month row** stay in place while the days scroll.
+- After the total, the campaigns sit **under the type they mostly spend on** (Meta: new customers, returning customers; Google: non-brand, brand). A group with several campaigns opens with its **subtotal** (the sum of its campaigns) and can be folded down to it. On every day the campaigns add up to their subtotal and the subtotals to the total.
+- Every block's header carries a **pace bar**: spend so far against target so far, with a tick at 100%. That row of bars is the page's quick read.
+- **Jump to**: the list above the grid names every campaign (green or red when its ROAS is above or below target) and scrolls the grid to it.
+- **Columns**: all four per campaign, or actual and ROAS only (twice as many campaigns in view).
+- Two sentences above the grid say where the month stands and how each type of spend is doing, whatever campaign carried it. No tiles, no chart.
+- Green and red compare actual with target (beyond 10% either way), on spend and on ROAS. Days to come sit under their own rule, dimmed. A dot marks a day a campaign got new ads.
 - Controls: platform, month, the days the split is read over (7, 14, 28), ROAS or iROAS, leave out test campaigns. CSV of the whole grid.
 
 ## The numbers (`lib/trackers/spend-tracker.ts`)
 - **Target** = the plan's daily spend, per type (the plan already holds spend per channel: Meta new, Meta returning, Google non-brand, Google brand...).
-- **Split to campaigns**: a type's target is shared out to that type's campaigns by their share of its spend over the last 7, 14 or 28 days with data. A brand campaign only carries brand budget. Meta reports one campaign's new-customer and existing-customer spend apart: the tracker shows them as one campaign that carries a part of both types.
+- **Split to campaigns**: a type's target is shared out to that type's campaigns by their share of its spend over the last 7, 14 or 28 days with data. A brand campaign only carries brand budget. Meta reports one campaign's new-customer and existing-customer spend apart: the tracker shows them as one campaign that carries a part of both types, and lists it under the type it mostly spends on. A group's subtotal is the sum of its campaigns (so on Meta it holds the returning spend its prospecting campaigns carry); the pure split by type is in the sentence above the grid.
 - **Projected**: a past day is its actual. A day to come is each type's target times that type's pace so far (its spend so far ÷ its target so far). With no plan: the average of the last seven days. A campaign's projection is what it spent plus its part of the days left.
 - **ROAS target per type** = the month's aMER ÷ the type's incrementality factor (the plan's formula, typed targets win). New for the trackers: **returning types get a target too, by the same formula** (the plan's own screens still leave them out).
 - **ROAS shown** = platform ROAS (7-day click); with "Show iROAS", revenue x the type's factor, against target x factor. The total's target is what the spend so far should have returned, each part at its own type's target (so it follows the mix really spent, not the planned mix).

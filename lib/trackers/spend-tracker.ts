@@ -133,6 +133,28 @@ export interface TrackerCampaign {
   placeholder: boolean;
 }
 
+/** The sum of a group's campaigns. */
+export interface TrackerSubtotal {
+  target: number | null;
+  projected: number | null;
+  actual: number;
+  revenue: number;
+  roas: number | null;
+  iRoas: number | null;
+  roasTarget: number | null;
+  iRoasTarget: number | null;
+  days: TrackerCell[];
+}
+
+/** The campaigns that mostly spend on one type, in the tracker's order. Each campaign is in one group, with all of its spend. */
+export interface TrackerGroup {
+  key: ChannelKey;
+  label: string;
+  campaigns: TrackerCampaign[];
+  /** Null when it would repeat something on the page: a group with one block, or the only group (it equals the total). */
+  subtotal: TrackerSubtotal | null;
+}
+
 export interface TrackerSummary {
   hasPlan: boolean;
   daysElapsed: number;
@@ -171,6 +193,8 @@ export interface Tracker {
   /** The platform's types that have a plan or spend, in the platform's order. */
   channels: TrackerChannel[];
   campaigns: TrackerCampaign[];
+  /** The same campaigns under the type they mostly spend on, each group with its subtotal. */
+  groups: TrackerGroup[];
   summary: TrackerSummary;
   /** The last day read as an actual: the store's last day, or the ad platform's when its sync is up to three days behind. */
   through: string;
@@ -369,6 +393,7 @@ export function buildTracker(input: TrackerInput): Tracker {
       return { key: k, label: typeName(k), target: hasPlan ? planned(k) : null, projected: sumOf(own, "projected"), actual: ret.spend, revenue: ret.revenue, pace: typeInfo.get(k)?.pace ?? null, ...returnOf(ret, k), days: own };
     });
 
+  const raw = new Map<string, { ret: Return; byDay: Map<string, Return> }>([...byCampaign.entries()].map(([id, c]) => [id, { ret: c.ret, byDay: c.byDay }] as const));
   const real: TrackerCampaign[] = [...byCampaign.entries()]
     .map(([id, c]) => {
       const channel = [...c.byType.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? channels[0];
@@ -398,6 +423,41 @@ export function buildTracker(input: TrackerInput): Tracker {
       const own = cells((x) => (x === k ? 1 : 0), null, "");
       return { id: `none:${k}`, name: `No campaign (${typeName(k)})`, channel: k, type: typeName(k), share: null, target: sumOf(own, "target"), projected: sumOf(own, "projected"), actual: 0, revenue: 0, ...returnOf(noReturn(), k), days: own, placeholder: true };
     });
+
+  // The campaigns under the type they mostly spend on. A subtotal adds its campaigns up, whatever types they spend on, so the
+  // subtotals add up to the total and the campaigns to their subtotal.
+  const campaigns = [...real, ...unassigned];
+  const addInto = (into: Return, r: Return) => {
+    for (const f of Object.keys(into) as (keyof Return)[]) into[f] += r[f];
+  };
+  const subtotalOf = (list: TrackerCampaign[], k: ChannelKey): TrackerSubtotal => {
+    const sum = noReturn();
+    for (const c of list) {
+      const r = raw.get(c.id);
+      if (r && !c.placeholder) addInto(sum, r.ret);
+    }
+    const own: TrackerCell[] = dates.map((d, i) => {
+      const past = isPast(d);
+      const day = noReturn();
+      let target: number | null = null;
+      let projected: number | null = null;
+      let actual: number | null = past ? 0 : null;
+      let launches = 0;
+      for (const c of list) {
+        const x = c.days[i];
+        if (x.target !== null) target = (target ?? 0) + x.target;
+        if (x.projected !== null) projected = (projected ?? 0) + x.projected;
+        if (x.actual !== null) actual = (actual ?? 0) + x.actual;
+        launches += x.launches;
+        const r = c.placeholder ? undefined : raw.get(c.id)?.byDay.get(d);
+        if (r) addInto(day, r);
+      }
+      return { target, projected, actual, delta: actual !== null && target !== null ? actual - target : null, ...(past && day.spend > 0 ? readReturn(day) : NO_RETURN), launches };
+    });
+    return { target: hasPlan ? (sumOf(own, "target") ?? 0) : null, projected: sumOf(own, "projected"), actual: sum.spend, revenue: sum.revenue, ...returnOf(sum, k), days: own };
+  };
+  const grouped = channels.map((k) => ({ k, list: campaigns.filter((c) => c.channel === k) })).filter((g) => g.list.length > 0);
+  const groups: TrackerGroup[] = grouped.map((g) => ({ key: g.k, label: typeName(g.k), campaigns: g.list, subtotal: grouped.length > 1 && g.list.length > 1 ? subtotalOf(g.list, g.k) : null }));
 
   // What the plan expects the platform to bring: each type's spend at its ROAS target.
   let targetMonth = 0;
@@ -445,7 +505,7 @@ export function buildTracker(input: TrackerInput): Tracker {
   };
 
   const hasRows = rows.length > 0;
-  return { days, channels: trackerChannelsOut, campaigns: [...real, ...unassigned], summary, through, shareFrom: hasRows ? shareFrom : null, shareTo: hasRows ? shareTo : null };
+  return { days, channels: trackerChannelsOut, campaigns, groups, summary, through, shareFrom: hasRows ? shareFrom : null, shareTo: hasRows ? shareTo : null };
 }
 
 /** The first day the tracker needs campaign rows from: the start of the month, or earlier when the share window reaches back. */

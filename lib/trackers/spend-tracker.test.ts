@@ -198,6 +198,65 @@ describe("buildTracker: the plan is split by type, then by campaign", () => {
   });
 });
 
+describe("buildTracker: campaigns grouped by the type they mostly spend on", () => {
+  const existing = (date: string, id: string, spend: number, platformRevenue = 0) => row(date, { campaignId: `${id}:existing`, campaignName: id === "a" ? "ACQ | Evergreen" : "ACQ | Catalog", category: "retention", audience: "returning", spend, platformRevenue });
+  // Two prospecting campaigns that also reach existing customers (Meta reports that part apart), and one retention campaign.
+  const campaigns = [
+    ...days(1, 10).map((d) => row(d, { spend: 60, platformRevenue: 120 })),
+    ...days(1, 10).map((d) => existing(d, "a", 10, 40)),
+    ...days(1, 10).map((d) => row(d, { campaignId: "c", campaignName: "ACQ | Catalog", spend: 20, platformRevenue: 20 })),
+    ...days(1, 10).map((d) => existing(d, "c", 10, 40)),
+    ...days(1, 10).map((d) => rtn(d, { campaignId: "r", campaignName: "RTN | Winback", spend: 5, platformRevenue: 30 })),
+  ];
+  const t = buildTracker({ ...base, roasOf: (_d, k) => (k === "meta_acquisition" ? 2 : 4), plan: month({ meta_acquisition: 80, meta_returning: 25 }), campaigns });
+
+  it("makes one group per type, in the platform's order, each campaign once", () => {
+    expect(t.groups.map((g) => [g.key, g.label, g.campaigns.map((c) => c.id)])).toEqual([
+      ["meta_acquisition", "New customers", ["a", "c"]],
+      ["meta_returning", "Returning customers", ["r"]],
+    ]);
+  });
+  it("a group's subtotal is the sum of its campaigns, the part they spend on other types included", () => {
+    const sub = t.groups[0].subtotal;
+    // a: 60 of 80 new + 10 of 25 returning; c: 20 of 80 + 10 of 25. Together 80 + 25 x 20/25 = 100 a day of the plan.
+    expect(sub?.days[0]).toMatchObject({ target: 100, actual: 100 });
+    expect(sub).toMatchObject({ actual: 1000, revenue: 2200 });
+    expect(sub?.target).toBeCloseTo(3000);
+    t.days.forEach((_d, i) => {
+      for (const k of ["target", "projected", "actual"] as const) expect(sub?.days[i][k] ?? 0).toBeCloseTo(t.groups[0].campaigns.reduce((a, c) => a + (c.days[i][k] ?? 0), 0));
+    });
+    // Return: 2,200 on 1,000, against what that spend should have returned (800 x 2 + 200 x 4).
+    expect(sub?.roas).toBeCloseTo(2.2);
+    expect(sub?.roasTarget).toBeCloseTo(2.4);
+    expect(sub?.days[0].roas).toBeCloseTo(2.2);
+    expect(sub?.days[15].roas).toBeNull();
+  });
+  it("a group with one block has no subtotal: it would repeat it", () => {
+    expect(t.groups[1].subtotal).toBeNull();
+  });
+  it("the groups add up to the platform on every day", () => {
+    t.days.forEach((d, i) => {
+      const of = (k: "target" | "projected" | "actual") => t.groups.reduce((a, g) => a + g.campaigns.reduce((x, c) => x + (c.days[i][k] ?? 0), 0), 0);
+      expect(of("target")).toBeCloseTo(d.target ?? 0);
+      expect(of("projected")).toBeCloseTo(d.projected ?? 0);
+      expect(of("actual")).toBeCloseTo(d.actual ?? 0);
+    });
+  });
+  it("with one type only there is one group and no subtotal: it would repeat the total", () => {
+    const one = buildTracker({ ...base, campaigns: [...days(1, 10).map((d) => row(d)), ...days(1, 10).map((d) => row(d, { campaignId: "c", campaignName: "ACQ | Catalog" }))] });
+    expect(one.groups).toHaveLength(1);
+    expect(one.groups[0].subtotal).toBeNull();
+    expect(buildTracker(base).groups).toEqual([]);
+  });
+  it("planned spend that no campaign carries sits in its own type's group", () => {
+    const g = buildTracker({ ...base, platform: "google", plan: month({ google_nonbrand: 70, google_brand: 30 }), campaigns: days(1, 10).map((d) => row(d, { platform: "google_ads", campaignId: "nb", campaignName: "PMax", audience: "unknown", spend: 70 })) });
+    expect(g.groups.map((x) => [x.label, x.campaigns.map((c) => c.id)])).toEqual([
+      ["Non-brand", ["nb"]],
+      ["Brand", ["none:google_brand"]],
+    ]);
+  });
+});
+
 describe("buildTracker: return", () => {
   const roasOf = (_d: string, k: ChannelKey) => (k === "meta_acquisition" ? 2 : k === "meta_returning" ? 4 : null);
   const input: TrackerInput = {
