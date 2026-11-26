@@ -1,6 +1,6 @@
 # The operating system: one forecast for the whole business, tracked by every team
 
-Date: 2026-11-26. Status: **under revision (2026-11-26).** João approved the order, then asked for the design to be re-planned from how CTC operates; see `2026-11-26-ctc-operating-model-notes.md`. The build of slice 1 is paused: only its metric catalog and period totals exist, on `development`, unreleased. It follows `2026-11-20-halo-layer-design.md` and `2026-11-23-omnichannel-views-design.md` (both built) and reuses `2026-10-12-email-sms-plan-and-trackers-design.md` and `2026-10-11-messaging-klaviyo-sms-design.md` (written, not built).
+Date: 2026-11-26. Status: **under revision (2026-11-26).** João approved the order, then asked for the design to be re-planned from how CTC operates; see `2026-11-26-ctc-operating-model-notes.md`. He then said to continue building and release (same day). **Slice 1 (channel depth) is built**; the later slices are redesigned from the CTC notes before each is built. It follows `2026-11-20-halo-layer-design.md` and `2026-11-23-omnichannel-views-design.md` (both built) and reuses `2026-10-12-email-sms-plan-and-trackers-design.md` and `2026-10-11-messaging-klaviyo-sms-design.md` (written, not built).
 
 This is the master plan. Each build slice at the end gets its own short design and build plan before code is written.
 
