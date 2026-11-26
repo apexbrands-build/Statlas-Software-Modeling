@@ -1,12 +1,15 @@
 "use client";
 
+import { ChannelPage } from "./ChannelPage";
 import { DailyChart, type ChartSeries } from "./DailyChart";
 import type { DashData } from "@/lib/dashboard-data";
 import { compactCurrency, formatDiff, formatValue } from "@/lib/format";
 import { compare, type Direction, type Tone } from "@/lib/metrics";
+import { platformOf } from "@/lib/omni/metrics";
 import type { OmniData } from "@/lib/omni/use-omni";
 import { BUSINESS_VIEW } from "@/lib/omni/view-choice";
 import type { ChannelView } from "@/lib/omni/views";
+import { haloSettingsOf } from "@/lib/planning/halo";
 import { theme } from "@/theme/theme";
 
 const TONE: Record<Tone, string> = { good: "text-good", bad: "text-bad", neutral: "text-text-muted" };
@@ -179,6 +182,9 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
   /* ---------------- one other channel ---------------- */
   const v: ChannelView | undefined = omni.views.find((x) => x.key === view);
   if (!v) return <p className="rounded-xl border border-border bg-surface p-8 text-center text-text-muted">This sales channel is no longer in Store Settings.</p>;
+  // Amazon and TikTok Shop have a page of their own, with the platform's numbers; other channels keep the short view below.
+  const channel = haloSettingsOf(data.settings).channels.find((c) => c.key === view);
+  const rich = channel ? ["amazon", "tiktok_shop"].includes(platformOf(channel)) : false;
   // Compared over the days that have a forecast: a month the plan has no line for stays in the totals and out of the comparison.
   const rev = vs(v.comparable?.revenue ?? null, v.comparable ? v.forecastToDate : null, money, "forecast");
   const spendVs = vs(v.comparable?.adSpend ?? null, v.comparable && v.planAdSpendToDate !== null && v.planAdSpendToDate > 0 ? v.planAdSpendToDate : null, money, "planned");
@@ -204,19 +210,25 @@ export function OmniHome({ data, omni, view }: { data: DashData; omni: OmniData;
       {v.forecastFull === null && (
         <p className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">The plan has no {v.label} forecast for this period. Type one in Planning, Details, &quot;Other sales channels&quot;, or fill it from the channel&apos;s model.</p>
       )}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Tile label={`${v.label} revenue`} value={money(v.revenue)} sub={rev.sub} tone={rev.tone} extra={pace} />
-        <Tile label="Ad spend on the channel" value={money(v.adSpend)} sub={spendVs.sub} tone={spendVs.tone} />
-        <Tile label="ROAS on the channel" value={v.roas === null ? "–" : v.roas.toFixed(2)} title="The channel's revenue ÷ its own ad spend" />
-        <Tile label="Contribution" value={money(v.contribution)} sub={cm.sub} tone={cm.tone} title="Revenue at the channel's margin (Store Settings) minus its own ad spend" />
-        <Tile label={v.orders > 0 || v.units === 0 ? "Orders" : "Units"} value={(v.orders > 0 || v.units === 0 ? v.orders : v.units).toLocaleString()} extra={v.orders > 0 && v.units > 0 ? `${v.units.toLocaleString()} units` : null} />
-        <Tile
-          label="Created by the own-site ads"
-          value={v.createdByAds === null ? "–" : money(v.createdByAds)}
-          extra={v.createdByAds === null ? "No halo factor is typed for this channel" : "Modelled from the halo factors; inside the revenue, not on top of it"}
-        />
-      </div>
-      {chart(v.dates, v.actual, v.plan, `${v.label} revenue`, "Forecast")}
+      {channel && rich ? (
+        <ChannelPage data={data} channel={channel} view={v} sales={omni.sales} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <Tile label={`${v.label} revenue`} value={money(v.revenue)} sub={rev.sub} tone={rev.tone} extra={pace} />
+            <Tile label="Ad spend on the channel" value={money(v.adSpend)} sub={spendVs.sub} tone={spendVs.tone} />
+            <Tile label="ROAS on the channel" value={v.roas === null ? "–" : v.roas.toFixed(2)} title="The channel's revenue ÷ its own ad spend" />
+            <Tile label="Contribution" value={money(v.contribution)} sub={cm.sub} tone={cm.tone} title="Revenue at the channel's margin (Store Settings) minus its own ad spend" />
+            <Tile label={v.orders > 0 || v.units === 0 ? "Orders" : "Units"} value={(v.orders > 0 || v.units === 0 ? v.orders : v.units).toLocaleString()} extra={v.orders > 0 && v.units > 0 ? `${v.units.toLocaleString()} units` : null} />
+            <Tile
+              label="Created by the own-site ads"
+              value={v.createdByAds === null ? "–" : money(v.createdByAds)}
+              extra={v.createdByAds === null ? "No halo factor is typed for this channel" : "Modelled from the halo factors; inside the revenue, not on top of it"}
+            />
+          </div>
+          {chart(v.dates, v.actual, v.plan, `${v.label} revenue`, "Forecast")}
+        </>
+      )}
     </div>
   );
 }

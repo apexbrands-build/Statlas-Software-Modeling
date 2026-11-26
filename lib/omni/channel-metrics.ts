@@ -1,5 +1,5 @@
 import { addDays, eachDay } from "../dates";
-import { CATALOG, type Platform, type Totals } from "./metrics";
+import { CATALOG, platformOf, type Platform, type Totals } from "./metrics";
 import type { ChannelSale } from "./types";
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -24,6 +24,15 @@ export function withRollups(platform: Platform, s: ChannelSale): ChannelSale {
     changed = true;
   }
   return changed ? { ...s, adSpend, metrics } : s;
+}
+
+/** Every row read the way its channel's platform means it (see `withRollups`). Call it once, right after loading the rows. */
+export function rolledUp(sales: ChannelSale[], channels: { key: string; label: string; kind: "marketplace" | "retail"; platform?: Platform }[]): ChannelSale[] {
+  const platforms = new Map(channels.map((c) => [c.key, platformOf(c)] as const));
+  return sales.map((s) => {
+    const p = platforms.get(s.channel);
+    return p ? withRollups(p, s) : s;
+  });
 }
 
 /** A period of a channel, with how many days carried a row and the last of them. */

@@ -7,6 +7,7 @@ import { aggregate, amerSpend } from "@/lib/metrics";
 import { dailyTotals } from "@/lib/omni/forecast";
 import { fitChannelModel, modelRevenue, planFill, recentAdSpendPace, type ChannelModel } from "@/lib/omni/model";
 import type { ChannelDay, ChannelSale } from "@/lib/omni/types";
+import { rolledUp } from "@/lib/omni/channel-metrics";
 import { haloSettingsOf } from "@/lib/planning/halo";
 import { curveAmer } from "@/lib/planning/new-customer";
 import { getRepository } from "@/lib/repository";
@@ -108,7 +109,7 @@ function ChannelPanel({
   planned: (month: string) => number;
   onFill: (c: OtherChannel, m: ChannelModel, days: Map<string, ChannelDay>) => void;
 }) {
-  const days = useMemo(() => dailyTotals(sales, channel.key), [sales, channel.key]);
+  const days = useMemo(() => dailyTotals(rolledUp(sales, [channel]), channel.key), [sales, channel]);
   const model = useMemo(() => fitChannelModel(days, lastData), [days, lastData]);
   const withSpend = [...days.values()].filter((d) => d.adSpend > 0 && d.revenue > 0).length;
 

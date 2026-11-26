@@ -11,6 +11,7 @@ import { fitPlanModel } from "../planning/plan-fit";
 import { pickPlan } from "../planning/scenarios";
 import type { PlanMonth } from "../planning/types";
 import { getRepository } from "../repository";
+import { rolledUp } from "./channel-metrics";
 import { dailyForecast, dailyTotals, monthLines, needsCurve, weekdayShares, type MonthLine } from "./forecast";
 import type { ChannelSale } from "./types";
 import { businessView, channelView, type BusinessView, type ChannelView, type SiteNumbers } from "./views";
@@ -35,9 +36,11 @@ export interface OmniData {
   views: ChannelView[];
   site: SiteNumbers | null;
   business: BusinessView | null;
+  /** The other channels' rows that were loaded (the range, a year of history, and the same days last year), for the channel pages. */
+  sales: ChannelSale[];
 }
 
-const EMPTY: OmniData = { ready: false, tableMissing: false, loadError: false, views: [], site: null, business: null };
+const EMPTY: OmniData = { ready: false, tableMissing: false, loadError: false, views: [], site: null, business: null, sales: [] };
 
 /**
  * The other sales channels and the whole business for the range Home shows, built on the own-site numbers Home already has.
@@ -54,7 +57,8 @@ export function useOmni(d: DashData | null, enabled: boolean): OmniData {
       const repo = getRepository();
       // A year of sales before the last day with data gives each channel its weekday pattern.
       const yearAgo = addDays(addYears(d.lastData, -1), 1);
-      const from = yearAgo < d.range.from ? yearAgo : d.range.from;
+      // ...and the same days last year, which a channel page compares with when the plan has no forecast.
+      const from = [yearAgo, d.range.from, addYears(d.range.from, -1)].sort()[0];
       let failed = false;
       const [sales, plans] = await Promise.all([
         repo.getChannelSales(d.client.id, from, d.range.to).catch(() => {
@@ -75,7 +79,9 @@ export function useOmni(d: DashData | null, enabled: boolean): OmniData {
           curve = null;
         }
       }
-      if (!cancel) setRaw({ key, sales, months, curve, failed });
+      // Ad spend and ad sales that were loaded by ad type are added up once, here, for every reader of these rows.
+      const rows = sales ? rolledUp(sales, haloSettingsOf(d.settings).channels) : sales;
+      if (!cancel) setRaw({ key, sales: rows, months, curve, failed });
     })();
     return () => {
       cancel = true;
@@ -105,6 +111,6 @@ export function useOmni(d: DashData | null, enabled: boolean): OmniData {
       amer,
       blendedAmer: amer !== null && mix.modelled ? blendedAmer(amer, mix) : null,
     };
-    return { ready: true, tableMissing: raw.sales === null, loadError: raw.failed, views, site, business: businessView(site, views) };
+    return { ready: true, tableMissing: raw.sales === null, loadError: raw.failed, views, site, business: businessView(site, views), sales: raw.sales ?? [] };
   }, [d, raw, key]);
 }

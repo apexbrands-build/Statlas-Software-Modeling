@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { seriesOf, totalsOf, withRollups } from "./channel-metrics";
+import { rolledUp, seriesOf, totalsOf, withRollups } from "./channel-metrics";
 import type { ChannelSale } from "./types";
 
 const row = (date: string, over: Partial<ChannelSale> = {}): ChannelSale => ({ date, channel: "amazon", retailer: "", revenue: 100, orders: 4, units: 5, adSpend: 10, source: "import", ...over });
@@ -93,5 +93,16 @@ describe("seriesOf", () => {
     const whole = totalsOf("amazon", sales, "amazon", "2026-11-01", "2026-12-31");
     expect(s.rows.reduce((a, r) => a + r.revenue, 0)).toBe(whole.revenue);
     expect(s.rows.reduce((a, r) => a + (r.m.sessions ?? 0), 0)).toBe(whole.m.sessions);
+  });
+});
+
+describe("rolledUp", () => {
+  it("reads each row the way its own channel's platform means it", () => {
+    const rows = [row("2026-11-01", { adSpend: 0, metrics: { sp_spend: 7 } }), row("2026-11-01", { channel: "tiktok_shop", adSpend: 3, metrics: { sp_spend: 7 } }), row("2026-11-01", { channel: "gone", adSpend: 1 })];
+    const out = rolledUp(rows, [
+      { key: "amazon", label: "Amazon", kind: "marketplace" },
+      { key: "tiktok_shop", label: "TikTok Shop", kind: "marketplace" },
+    ]);
+    expect(out.map((r) => r.adSpend)).toEqual([7, 3, 1]);
   });
 });
