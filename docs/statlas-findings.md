@@ -320,6 +320,7 @@ Common report chrome: global date range picker (top), store switcher, back arrow
 - Metrics: Order Revenue before Taxes, Orders, AOV, New Order Revenue before Taxes, New Orders, New AOV, Total Spend, MER, New Rev/Spend (aMER), CAC (hourly publisher spend / new orders), then per platform Ad Spend, Revenue and iROAS with their targets (Facebook, Google).
 - The hourly target seen was the day's target divided evenly over 24 hours (the same value on every hour of a day).
 - The vendor's update note (relayed by João): the Business Unit picker is for brands with several sales channels; for TikTok Shop, where there is usually no target, compare with the same day last year.
+- Second read the same day (João's browser, still the one store with no hourly data): every hour of a day carried the same target (698 on each hour of 11-24), so the day's target is divided by 24. The **Acq/Brand breakdown** checkbox reads "Show ACQ, NonACQ and Awareness columns": it splits the platform columns by campaign type. With it on and no data loaded, the Facebook and Google columns left the table, so the split columns themselves were not seen. The Columns picker listed the 20 business columns only. There are **no email or SMS columns** in this report (those live in the Email and SMS trackers, by day). The store switcher holds this one store.
 
 ### Facebook Tracker (`/tracker/facebook`), additions to the section above
 - Settings holds one option: **Show iROAS: On**.
