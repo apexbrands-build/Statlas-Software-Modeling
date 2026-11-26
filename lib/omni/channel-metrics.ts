@@ -2,25 +2,28 @@ import { addDays, eachDay } from "../dates";
 import { CATALOG, type Platform, type Totals } from "./metrics";
 import type { ChannelSale } from "./types";
 
-/** The stored metric that holds a platform's ad-attributed sales when its ads are split by type. */
-const AD_SALES = "ad_sales";
-
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /**
- * A row as the platform means it: when ads are loaded by type (Amazon: Sponsored Products, Brands, Display), the channel's ad spend
- * and its ad-attributed sales are the sum of the types, whatever total was loaded before. Rows without any type are returned as they are.
+ * A row as the platform means it: when ads are loaded by type (Amazon: Sponsored Products, Brands, Display), the channel's ad spend,
+ * ad-attributed sales, ad orders, clicks and impressions are the sum of the types, whatever total was loaded before.
+ * A total with no type loaded is left as it is.
  */
 export function withRollups(platform: Platform, s: ChannelSale): ChannelSale {
-  const parts = CATALOG[platform].adParts;
+  const rollups = CATALOG[platform].rollups;
   const m = s.metrics;
-  if (!parts || !m) return s;
-  const has = (keys: string[]) => keys.some((k) => isNum(m[k]));
-  const sum = (keys: string[]) => keys.reduce((a, k) => a + (isNum(m[k]) ? m[k] : 0), 0);
-  const spend = has(parts.spend);
-  const sales = has(parts.sales);
-  if (!spend && !sales) return s;
-  return { ...s, adSpend: spend ? sum(parts.spend) : s.adSpend, metrics: sales ? { ...m, [AD_SALES]: sum(parts.sales) } : m };
+  if (!rollups.length || !m) return s;
+  let adSpend = s.adSpend;
+  let metrics = m;
+  let changed = false;
+  for (const r of rollups) {
+    if (!r.parts.some((k) => isNum(m[k]))) continue;
+    const sum = r.parts.reduce((a, k) => a + (isNum(m[k]) ? m[k] : 0), 0);
+    if (r.target === "adSpend") adSpend = sum;
+    else metrics = { ...metrics, [r.target]: sum };
+    changed = true;
+  }
+  return changed ? { ...s, adSpend, metrics } : s;
 }
 
 /** A period of a channel, with how many days carried a row and the last of them. */

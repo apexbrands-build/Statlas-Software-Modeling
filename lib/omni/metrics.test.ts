@@ -82,11 +82,16 @@ describe("catalog", () => {
       expect(new Set(all).size).toBe(all.length);
     }
   });
-  it("lists only stored metrics as ad parts", () => {
-    const c = CATALOG.amazon;
-    const stored = new Set(c.stored.map((m) => m.key));
-    for (const k of [...(c.adParts?.spend ?? []), ...(c.adParts?.sales ?? [])]) expect(stored.has(k)).toBe(true);
+  it("rolls up only stored metrics, into ad spend or a stored metric", () => {
+    for (const p of platforms) {
+      const stored = new Set(CATALOG[p].stored.map((m) => m.key));
+      for (const r of CATALOG[p].rollups) {
+        expect(r.target === "adSpend" || stored.has(r.target)).toBe(true);
+        for (const k of r.parts) expect(stored.has(k)).toBe(true);
+      }
+    }
+    expect(CATALOG.amazon.rollups.find((r) => r.target === "adSpend")?.parts).toEqual(["sp_spend", "sb_spend", "sd_spend"]);
     expect(CATALOG.retail.stored).toEqual([]);
-    expect(CATALOG.other.adParts).toBeNull();
+    expect(CATALOG.other.rollups).toEqual([]);
   });
 });

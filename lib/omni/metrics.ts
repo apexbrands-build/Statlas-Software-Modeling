@@ -48,8 +48,11 @@ export interface PlatformCatalog {
   coreAliases: { revenue: string[]; orders: string[]; units: string[]; adSpend: string[] };
   stored: MetricDef[];
   derived: DerivedDef[];
-  /** Stored metrics whose sum is the channel's ad spend and its ad-attributed sales, when the platform splits its ads by type. */
-  adParts: { spend: string[]; sales: string[] } | null;
+  /**
+   * Totals that are the sum of parts when the platform reports its ads by type, so one type's file never overwrites another's.
+   * `target` is "adSpend" or a stored metric; `parts` are stored metrics.
+   */
+  rollups: { target: string; parts: string[] }[];
 }
 
 /** A channel saved before platforms existed is recognised by its name. */
@@ -70,10 +73,13 @@ const s = (key: string, label: string, unit: Unit, group: string, aliases: strin
 const d = (key: string, label: string, unit: Unit, group: string, better: Better, calc: (t: Totals) => number | null, hint?: string): DerivedDef => ({ key, label, unit, group, better, calc, hint });
 
 const GENERIC_CORE = { revenue: ["revenue", "sales", "net sales", "gmv"], orders: ["orders"], units: ["units"], adSpend: ["ad spend", "adspend", "spend"] };
-const NONE: PlatformCatalog = { coreLabels: { revenue: "Revenue", orders: "Orders", units: "Units", adSpend: "Ad spend" }, coreAliases: GENERIC_CORE, stored: [], derived: [], adParts: null };
+const NONE: PlatformCatalog = { coreLabels: { revenue: "Revenue", orders: "Orders", units: "Units", adSpend: "Ad spend" }, coreAliases: GENERIC_CORE, stored: [], derived: [], rollups: [] };
 
 const ROUGH_ORGANIC = "Rough by day: ad sales are counted in a window after the click (7 days for Sponsored Products, 14 for Brands and Display), all sales on the order day. Read it by week or month.";
 const GMV_MAX = "GMV Max counts organic orders of the promoted products as its own, so this reads high. It cannot be compared with the ROAS of an ad platform.";
+
+const AD_TYPE = { sp: "Sponsored Products", sb: "Sponsored Brands", sd: "Sponsored Display" } as const;
+const byType = (suffix: string, types: readonly ("sp" | "sb" | "sd")[] = ["sp", "sb", "sd"]) => types.map((p) => `${p}_${suffix}`);
 
 const AMAZON: PlatformCatalog = {
   coreLabels: { revenue: "Ordered product sales", orders: "Order items", units: "Units ordered", adSpend: "Ad spend" },
@@ -99,6 +105,15 @@ const AMAZON: PlatformCatalog = {
     s("sb_sales", "Sponsored Brands sales", "currency", "Ads", ["sb sales", "sponsored brands sales"]),
     s("sd_spend", "Sponsored Display spend", "currency", "Ads", ["sd spend", "sponsored display spend"]),
     s("sd_sales", "Sponsored Display sales", "currency", "Ads", ["sd sales", "sponsored display sales"]),
+    ...(["sp", "sb", "sd"] as const).flatMap((p) => [
+      s(`${p}_orders`, `${AD_TYPE[p]} orders`, "number", "Ads", [`${p} orders`]),
+      s(`${p}_clicks`, `${AD_TYPE[p]} clicks`, "number", "Ads", [`${p} clicks`]),
+      s(`${p}_impressions`, `${AD_TYPE[p]} impressions`, "number", "Ads", [`${p} impressions`]),
+    ]),
+    ...(["sb", "sd"] as const).flatMap((p) => [
+      s(`${p}_ntb_orders`, `${AD_TYPE[p]} new-to-brand orders`, "number", "Ads", [`${p} new to brand orders`, `${p} ntb orders`]),
+      s(`${p}_ntb_sales`, `${AD_TYPE[p]} new-to-brand sales`, "currency", "Ads", [`${p} new to brand sales`, `${p} ntb sales`]),
+    ]),
     s("ntb_orders", "New-to-brand orders", "number", "Ads", ["new to brand orders", "ntb orders"]),
     s("ntb_sales", "New-to-brand sales", "currency", "Ads", ["new to brand sales", "ntb sales"]),
     s("sns_sales", "Subscribe & Save sales", "currency", "Subscriptions", ["subscribe and save sales", "subscribe save sales", "sns sales", "total subscriptions revenue", "subscription revenue"]),
@@ -127,7 +142,15 @@ const AMAZON: PlatformCatalog = {
     d("sb_acos", "Sponsored Brands ACOS", "percent", "Ads", "down", (t) => div(get(t, "sb_spend"), get(t, "sb_sales"))),
     d("sd_acos", "Sponsored Display ACOS", "percent", "Ads", "down", (t) => div(get(t, "sd_spend"), get(t, "sd_sales"))),
   ],
-  adParts: { spend: ["sp_spend", "sb_spend", "sd_spend"], sales: ["sp_sales", "sb_sales", "sd_sales"] },
+  rollups: [
+    { target: "adSpend", parts: byType("spend") },
+    { target: "ad_sales", parts: byType("sales") },
+    { target: "ad_orders", parts: byType("orders") },
+    { target: "ad_clicks", parts: byType("clicks") },
+    { target: "ad_impressions", parts: byType("impressions") },
+    { target: "ntb_orders", parts: byType("ntb_orders", ["sb", "sd"]) },
+    { target: "ntb_sales", parts: byType("ntb_sales", ["sb", "sd"]) },
+  ],
 };
 
 const TIKTOK: PlatformCatalog = {
@@ -171,7 +194,7 @@ const TIKTOK: PlatformCatalog = {
     d("ads_cost_share", "Shop ads cost as % of GMV", "percent", "Shop ads", "down", (t) => div(t.adSpend, t.revenue), "The honest reading of shop ads: what they cost against everything the shop sold."),
     d("cost_per_order", "Shop ads cost per order", "price", "Shop ads", "down", (t) => div(t.adSpend, get(t, "ads_orders"))),
   ],
-  adParts: null,
+  rollups: [],
 };
 
 export const CATALOG: Record<Platform, PlatformCatalog> = { amazon: AMAZON, tiktok_shop: TIKTOK, retail: NONE, other: NONE };
