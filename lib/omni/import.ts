@@ -28,7 +28,7 @@ const COLUMNS: Record<"date" | "revenue" | "orders" | "units" | "adSpend" | "ret
 const norm = (s: string) => s.trim().toLowerCase().replace(/[_\s]+/g, " ");
 
 /** Splits one line on the delimiter, keeping delimiters inside double quotes ("" is a quote inside a quoted field). */
-function splitLine(line: string, delim: string): string[] {
+export function splitLine(line: string, delim: string): string[] {
   const out: string[] = [];
   let cur = "";
   let quoted = false;
@@ -52,7 +52,7 @@ function splitLine(line: string, delim: string): string[] {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-function readDate(raw: string, format: DateFormat): string | null {
+export function readDate(raw: string, format: DateFormat): string | null {
   let y: number;
   let m: number;
   let d: number;
@@ -74,14 +74,14 @@ function readDate(raw: string, format: DateFormat): string | null {
 /** How the file writes numbers: "us" = 1,234.56 (comma for thousands), "eu" = 1.234,56 (dot for thousands). */
 export type NumberFormat = "us" | "eu";
 
-type Read = { value: number } | "empty" | "format" | "bad";
+export type Read = { value: number } | "empty" | "format" | "bad";
 
 /**
  * A number as a spreadsheet writes it, in the chosen format; currency signs and spaces are allowed. A value that only makes sense in the
  * other format ("12.345" with a comma for thousands, "1,234.56" with a dot for thousands) is refused as "format" rather than read as a
  * thousandth or a thousand times what was meant.
  */
-function readNumber(raw: string, format: NumberFormat): Read {
+export function readNumber(raw: string, format: NumberFormat): Read {
   const s = raw.replace(/[$£€\s]/g, "");
   if (s === "") return "empty";
   const negative = s.startsWith("-");
