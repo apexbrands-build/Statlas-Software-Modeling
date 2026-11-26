@@ -5,6 +5,7 @@ import { cellValue, haloGridChannels } from "@/lib/planning/halo";
 import { getRepository } from "@/lib/repository";
 import { CHANNEL_LABELS, type ChannelKey, type HaloCell, type HaloSettings as Halo, type HaloSource, type OtherChannel, type RetailerRow } from "@/lib/types";
 import { ChannelImport } from "./ChannelImport";
+import { platformOf, type Platform } from "@/lib/omni/metrics";
 import { Check, Field, inputCls, NumberInput } from "./ui";
 
 const SOURCES: { id: HaloSource; label: string }[] = [
@@ -14,10 +15,10 @@ const SOURCES: { id: HaloSource; label: string }[] = [
 ];
 
 const PRESETS: { label: string; channel: Omit<OtherChannel, "key"> }[] = [
-  { label: "Amazon", channel: { label: "Amazon", kind: "marketplace", costPct: 0, aov: 0 } },
-  { label: "TikTok Shop", channel: { label: "TikTok Shop", kind: "marketplace", costPct: 0, aov: 0 } },
-  { label: "Retail", channel: { label: "Retail", kind: "retail", costPct: 0, aov: 0, netPct: 50, retailers: [] } },
-  { label: "Other", channel: { label: "New channel", kind: "marketplace", costPct: 0, aov: 0 } },
+  { label: "Amazon", channel: { label: "Amazon", kind: "marketplace", platform: "amazon", costPct: 0, aov: 0 } },
+  { label: "TikTok Shop", channel: { label: "TikTok Shop", kind: "marketplace", platform: "tiktok_shop", costPct: 0, aov: 0 } },
+  { label: "Retail", channel: { label: "Retail", kind: "retail", platform: "retail", costPct: 0, aov: 0, netPct: 50, retailers: [] } },
+  { label: "Other", channel: { label: "New channel", kind: "marketplace", platform: "other", costPct: 0, aov: 0 } },
 ];
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "channel";
@@ -82,10 +83,20 @@ export function HaloSettings({
               <Field label="Name">
                 <input className={inputCls} value={c.label} onChange={(e) => setChannel(c.key, { label: e.target.value })} />
               </Field>
-              <Field label="Kind">
-                <select aria-label={`${c.label} kind`} className={inputCls} value={c.kind} onChange={(e) => setChannel(c.key, { kind: e.target.value as OtherChannel["kind"] })}>
-                  <option value="marketplace">Marketplace</option>
+              <Field label="Type" hint="Decides which numbers the channel holds and which files it reads">
+                <select
+                  aria-label={`${c.label} type`}
+                  className={inputCls}
+                  value={platformOf(c)}
+                  onChange={(e) => {
+                    const platform = e.target.value as Platform;
+                    setChannel(c.key, { platform, kind: platform === "retail" ? "retail" : "marketplace" });
+                  }}
+                >
+                  <option value="amazon">Amazon</option>
+                  <option value="tiktok_shop">TikTok Shop</option>
                   <option value="retail">Retail (stores)</option>
+                  <option value="other">Other marketplace</option>
                 </select>
               </Field>
               <Field label="Variable costs" hint="% of the channel's net revenue: product, fees, fulfilment, trade spend">
