@@ -199,3 +199,19 @@ describe("halo: ROAS targets from the blended aMER and the total factor", () => 
     expect(roasBasis(null, withHalo(mults)).modelled).toBe(false);
   });
 });
+
+describe("planRoasTargets for the trackers: returning channels too", () => {
+  const s = settings({ meta_acquisition: 1.15, meta_returning: 0.6, google_nonbrand: 0.65, google_brand: 0.15, google_brand_returning: 0.15 });
+  const months = [month("2026-11", inputs({ amer: 2.3 }))];
+  it("leaves the returning channels out unless asked, as the plan does", () => {
+    expect(planRoasTargets(months, s)["2026-11"].meta_returning).toBeUndefined();
+  });
+  it("reads a returning channel against the same bar through its own factor: aMER / factor", () => {
+    const t = planRoasTargets(months, s, { returning: true })["2026-11"];
+    expect(t.meta_returning).toBeCloseTo(2.3 / 0.6);
+    expect(t.google_brand_returning).toBeCloseTo(2.3 / 0.15);
+    expect(t.meta_acquisition).toBeCloseTo(2.3 / 1.15);
+    // A returning channel with no factor in the settings gets no target.
+    expect(t.pinterest_returning).toBeUndefined();
+  });
+});

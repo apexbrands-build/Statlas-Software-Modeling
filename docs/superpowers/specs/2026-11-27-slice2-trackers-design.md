@@ -1,48 +1,50 @@
 # Slice 2: trackers for the paid channels
 
-Date: 2026-11-27. Status: built under João's standing instruction ("continue with the next build", 2026-11-26); the calls below are listed for him to correct. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
+Date: 2026-11-27 (revised the same day after João's two corrections and an independent review). Status: built on `development`, **not released**: waiting for João's word on the layout. Part of `2026-11-26-operating-system-blueprint.md`; method from `2026-11-26-ctc-operating-model-notes.md`.
 
-## Goal
-A media buyer opens the tracker of an ad platform and sees, for the month: what the plan expected each day, what was spent, where the month is heading at the current pace, how much of it each campaign carries, and the return against target.
+## Goal (João, 2026-11-27)
+"Take the total number of the forecast for spend and your efficiency targets for the platform. Then allocate in platform across your campaigns and see where you can maybe push more against targets. That's the whole idea for every tracker for every platform." And: non-brand and brand on Google, new and returning on Meta each have their own ROAS target, through their own incrementality factor.
 
-## Where it comes from
-- CTC: "channel tracker per campaign: target, projected and actual spend, projected vs actual ROAS, moments tagged". Every ad dollar has a daily target; each morning actuals are read against it.
-- João, 2026-11-26: target, projected and actual spend; projected is re-based on the month's pacing so far; it is then shared out to the running campaigns in proportion to what each has spent, so the buyer sees how much of the planned spend each campaign can carry.
-- The reference tool's tracker (notes in `docs/statlas-findings.md`): a day table (moments, target, projected, actual, delta) and, per campaign, projected and actual spend with target and actual iROAS; a "show iROAS" switch; this, last and next month.
-
-## Design
-One page per ad platform. Meta and Google are built (the two platforms that sync campaigns today); the others open when their connector exists. They sit in the report library (Meta Tracker, Google Tracker) and behind a new "Trackers" entry in the sidebar, with a switch between platforms on the page. Code: `lib/trackers/spend-tracker.ts` (the numbers), `components/reports/SpendTrackerReport.tsx` (the screen).
+## The page
+One page per ad platform (Meta and Google today), Sidebar > Trackers. It is **one wide grid, not a dashboard**: the days of the month down the side, blocks of columns across.
 
 ```
-Meta tracker        [ November 2026 v ]   Campaign shares from the last [ 28 v ] days   [x] Show iROAS
-
-Target for the month   Spent so far        Heading to           ROAS so far      ROAS needed on the days left
-120,000                84,200              114,800              1.48             1.71
-                       -4% vs 87,700       -4% vs plan          target 1.55      iROAS 1.70 vs 1.78
-
-Day      Moments          Target    Projected   Actual    Delta       | Campaign            Type  Share  Target  Projected  Actual  ROAS  iROAS  Target
-1 Sun                     4,100     3,950       3,950     -150        | ACQ | Evergreen     ACQ   61%    ...
-...                                                                   | RTN | Evergreen     RTN   12%
-27 Fri   Black Friday     9,800     9,400       -         -           | ...
+Day        | Meta total                              | New customers             | Returning customers       | ACQ | Evergreen          | RTN | Evergreen ...
+           | Target Projected Actual Delta ROAS      | Target Projected Actual ROAS | ...                    | Target Projected Actual ROAS
+Month      | 275,995 260,869 172,992 -10,031 1.81    | 236,049 224,091 148,603 1.60 | ...
+Sun 1      | 7,936   7,697   7,697   -238    1.93    | ...
+...
+Fri 27     | (days to come: target and projection, dimmed)
+Black Friday
 ```
 
-- **Target**: the plan's daily spend for the platform's channels (the default plan of that year).
-- **Projected**: a past day is its actual. A day still to come is its target times the pace so far (spent so far ÷ target so far). With no plan, the days to come use the average of the last seven days.
-- **Campaign share**: the campaign's part of the platform's spend over the last 28 days with data (7, 14 or 28). Its target and projection are the platform's times that share. Picking a campaign shows its own days in the day table.
-- **Return**: platform ROAS as synced (7-day click), iROAS (ROAS x the channel's factor), the plan's ROAS target for the campaign's channel, and the ROAS needed on the days left = (planned platform revenue - platform revenue so far) ÷ target spend left.
-- **Moments**: the calendar's events on each day.
-- **Launches**: for Meta, each day shows how many campaigns got new ads that day (the Calendar Report's launches), and the chart's title counts them for the month.
+- The **total** block stays in place while the rest scrolls sideways. After it come the platform's **types** (Meta: new customers, returning customers; Google: non-brand, brand, and their returning versions when used), then every **campaign**. On every day the campaigns add up to the total.
+- One sentence above the grid says where the month stands (spent vs target so far, heading to, ROAS vs target, ROAS needed on the days left). No tiles, no chart.
+- Green and red compare actual with target (beyond 10% either way), on spend and on ROAS, so a campaign that is above its ROAS target and under its spend is visible at a glance.
+- Controls: platform, month, the days the split is read over (7, 14, 28), ROAS or iROAS, leave out test campaigns. CSV of the whole grid.
+
+## The numbers (`lib/trackers/spend-tracker.ts`)
+- **Target** = the plan's daily spend, per type (the plan already holds spend per channel: Meta new, Meta returning, Google non-brand, Google brand...).
+- **Split to campaigns**: a type's target is shared out to that type's campaigns by their share of its spend over the last 7, 14 or 28 days with data. A brand campaign only carries brand budget. Meta reports one campaign's new-customer and existing-customer spend apart: the tracker shows them as one campaign that carries a part of both types.
+- **Projected**: a past day is its actual. A day to come is each type's target times that type's pace so far (its spend so far ÷ its target so far). With no plan: the average of the last seven days. A campaign's projection is what it spent plus its part of the days left.
+- **ROAS target per type** = the month's aMER ÷ the type's incrementality factor (the plan's formula, typed targets win). New for the trackers: **returning types get a target too, by the same formula** (the plan's own screens still leave them out).
+- **ROAS shown** = platform ROAS (7-day click); with "Show iROAS", revenue x the type's factor, against target x factor. The total's target is what the spend so far should have returned, each part at its own type's target (so it follows the mix really spent, not the planned mix).
+- **ROAS needed on the days left** = (platform revenue the plan expects for the month − platform revenue so far) ÷ planned spend of the days left.
+- **Planned spend no campaign carries** (for example brand budget with no brand campaign) is its own block at the end, so the grid adds up and the gap shows.
+- **Moments**: the calendar's events under the day; for Meta, the days a campaign got new ads (a dot on that campaign's day).
+- **Days read as actual**: up to the store's last day with data, or the ad platform's when its sync is up to three days behind (those days are still to come, not days of zero spend).
 
 ## Calls made (correct any)
-1. The pace is one number for the whole platform (spent so far ÷ target so far), applied to every day left. A campaign that is being scaled this week is not projected faster than the others.
-2. Shares come from spend, not from results: a campaign that spent 60% of the last 28 days carries 60% of the plan. It answers "can the account carry the spend", not "where should the spend go".
-3. Test campaigns are left out when the store setting says so, as in the Paid Media report.
-4. Budget and bid changes are not shown: the app does not hold them.
-5. With no plan the page still works on actuals and a run-rate, and says a plan is needed for targets.
-6. Google's tracker includes campaigns tagged for returning customers; each campaign is read against its own channel's target (brand, non-brand, returning).
+1. Returning campaigns are read against aMER ÷ their factor (for example 2.3 ÷ 0.6 = 3.83 on Meta returning). The plan had no target for them. If returning spend should have its own bar, it needs its own number in the plan.
+2. Each type has its own pace. The platform's projection is the sum of its types.
+3. Shares come from spend, not from results: they say how the account is carrying the plan today, not where the spend should go. The colours on ROAS say where there is room.
+4. Test campaigns are counted by default (the plan's spend holds their budget). Leaving them out says how much was left out.
+5. A campaign's target is not a budget set for it: it is its part of the plan at the recent split. The 7-day window follows a change of budgets faster; 28 days is steadier.
+6. Budget and bid changes are not shown: the app does not hold them.
+7. The page opens on the month of the store's last day with data, and follows the plan Home is set to (baseline or stretch).
 
 ## Not in this slice
-The email tracker (needs the Klaviyo sync), Amazon and TikTok Shop trackers (they need the plan's daily targets per channel, slice 3), the business scoreboard (next), changing budgets from the app.
+The email tracker (needs the Klaviyo sync), Amazon and TikTok Shop ad trackers (they need the plan's daily targets per channel, slice 3), the business scoreboard (next), changing budgets from the app, typing a target per campaign.
 
-## Done when
-On Point6 (real Meta and Google data and a plan) the Meta tracker shows the month's day table with targets, the projection and the campaigns with their shares; picking a campaign shows its days; the numbers add up to the Paid Media report's spend for the same days.
+## Review
+An independent review of the first version (tiles, chart, two tables) found two critical problems and five important ones; all are fixed with tests: the ROAS comparison mixed spend with and without a target; a stale picked campaign zeroed the page (the pick is gone with the new layout); the cut-off used the store's last day when the ad sync was late; leaving tests out said nothing; a campaign's projection did not match its own days; Google's target was blended at the planned mix; Meta campaigns appeared twice. The split by type and the grid were written after that review and have not had their own independent read yet: that comes before the release.

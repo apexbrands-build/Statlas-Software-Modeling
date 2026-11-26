@@ -2,18 +2,19 @@
 
 Newest first. CLAUDE.md keeps only one line per item and points here.
 
-## 2026-11-27: Spend trackers for Meta and Google (slice 2 of the operating-system build)
+## 2026-11-27: Spend trackers for Meta and Google (slice 2 of the operating-system build; on `development`, not released)
 
-- **What it is:** one page per ad platform, for the media buyer. For a month it shows the plan's daily spend target, what was spent, where the month is heading, how much of it each campaign carries, and the return against target. Sidebar > **Trackers** (or Reporting > Meta Tracker / Google Tracker); a switch at the top moves between Meta and Google.
+- **What it is:** one page per ad platform, for the media buyer: Sidebar > **Trackers** (or Reporting > Meta Tracker / Google Tracker), a switch at the top moves between Meta and Google. It is one wide grid: the days of the month down the side; the platform's total first (target, projected, actual, delta, ROAS), then its types (Meta: new and returning customers; Google: non-brand and brand), then every campaign as its own block. The campaigns add up to the total on every day. One sentence above the grid says where the month stands.
 - **Numbers** (`lib/trackers/spend-tracker.ts`, design `docs/superpowers/specs/2026-11-27-slice2-trackers-design.md`):
-  - Target = the plan's daily spend for the platform's channels (the plan Home uses). Google's tracker includes its returning-customer channels.
-  - Projected = a past day is its actual; a day still to come is its target times the pace so far (spent so far ÷ target so far). With no plan, the days to come run at the average of the last seven days and there is no target.
-  - Campaign share = the campaign's part of the platform's spend over the last 7, 14 or 28 days with data; its target and projection are the platform's times that share. Clicking a campaign shows its own days.
-  - Return = platform ROAS (7-day click) or iROAS (each campaign weighted by its channel's factor), against the plan's ROAS target; "ROAS needed on the days left" = (platform revenue the plan expects for the month − platform revenue so far) ÷ the planned spend of the days left.
-  - Moments = the calendar's events on each day; for Meta, the days campaigns got new ads.
-- Test campaigns follow the store setting (a checkbox on the page overrides it). Both tables download as CSV.
-- The sample store now has made-up campaigns (`supabase/demo/sample_store.sql`, run on the live database 2026-11-26), so the trackers and the Paid Media report show numbers there. Its campaigns add up to its ad channels' days.
-- Not built: budget and bid changes (the app does not hold them), trackers for Amazon and TikTok Shop ads (they need the plan's daily targets per channel, slice 3), the email tracker (needs the Klaviyo sync).
+  - Target = the plan's daily spend per type. A type's target is shared out to its campaigns by their share of that type's spend over the last 7, 14 or 28 days with data.
+  - Projected = a past day is its actual; a day to come is each type's target times that type's pace so far. With no plan: the average of the last seven days.
+  - ROAS target per type = aMER ÷ the type's incrementality factor. For the trackers the returning types get one too (`planRoasTargets(..., { returning: true })`); the plan's own screens are unchanged.
+  - The total's ROAS target follows the mix really spent. "ROAS needed on the days left" = (platform revenue the plan expects − platform revenue so far) ÷ planned spend left.
+  - Planned spend of a type that no campaign carries is shown as its own block.
+- Test campaigns are counted unless left out with the checkbox (the page then says how much was left out). The grid downloads as CSV.
+- The sample store has made-up campaigns (`supabase/demo/sample_store.sql`, run on the live database 2026-11-26), so the trackers and the Paid Media report show numbers there.
+- History of the day: the first version (tiles, a chart, two tables) went to an independent review, which found the ROAS tiles compared all of Meta with an acquisition-only target, among others; João then asked for the grid and for the split by type. Both are in this version. The rewritten split has not had its own independent read yet.
+- Not built: budget and bid changes, trackers for Amazon and TikTok Shop ads (slice 3), the email tracker (needs the Klaviyo sync).
 
 ## 2026-11-26: Channel depth: Amazon and TikTok Shop hold their own numbers (slice 1 of the operating-system build)
 - **Why:** the other channels held four numbers a day (revenue, orders, units, ad spend), which is not what an Amazon or a TikTok Shop team works from. Master plan: `docs/superpowers/specs/2026-11-26-operating-system-blueprint.md`; how it follows CTC's method: `2026-11-26-ctc-operating-model-notes.md`; this slice: `2026-11-26-slice1-channel-depth-design.md`.

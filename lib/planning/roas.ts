@@ -60,8 +60,13 @@ export function roasTarget(inputs: PlanMonthInputs | null, channel: ChannelKey, 
 /** Platform ROAS targets per month (key YYYY-MM) and channel. */
 export type MonthRoasTargets = Record<string, Partial<Record<ChannelKey, number>>>;
 
-export function planRoasTargets(months: PlanMonth[], settings: ClientSettings): MonthRoasTargets {
-  const channels = roasChannels(settings, months);
+/**
+ * `returning: true` (the spend trackers) adds the returning channels that have an incrementality factor: each is read against the same
+ * bar as acquisition, through its own factor (aMER ÷ factor), so a campaign for existing customers has a target too. The plan's own
+ * screens leave them out.
+ */
+export function planRoasTargets(months: PlanMonth[], settings: ClientSettings, opts: { returning?: boolean } = {}): MonthRoasTargets {
+  const channels = [...roasChannels(settings, months), ...(opts.returning ? RETENTION_CHANNELS.filter((k) => settings.multipliers[k] !== undefined) : [])];
   const out: MonthRoasTargets = {};
   for (const m of months) {
     if (!m.inputs) continue;
