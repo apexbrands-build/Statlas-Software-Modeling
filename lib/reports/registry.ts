@@ -29,7 +29,7 @@ export const REPORTS: ReportDef[] = [
   { slug: "total-net-customer", title: "Total Net Customer", description: "Groups the activity of each customer since store inception to display customer growth over time", categories: ["Recommended", "Revenue"], status: "planned" },
   { slug: "variable-costs", title: "Variable Costs Dashboard", description: "Variable costs reporting", categories: ["Recommended", "Costs"], status: "planned" },
   { slug: "calendar", title: "Calendar Report", description: "Key business metrics overlaid with events and goals", categories: ["Recommended"], status: "ready" },
-  { slug: "hourly", title: "Hourly Report", description: "Hour by hour data report", categories: ["Recommended", "Revenue"], status: "waiting", needs: "Hourly order and spend data (not stored yet)" },
+  { slug: "hourly", title: "Hourly Report", description: "One day hour by hour against what was expected, with the sends and launches on their hour", categories: ["Recommended", "Revenue"], status: "ready" },
   { slug: "email-metrics", title: "Email Metrics Report", description: "Email metrics between different applicable sources", categories: ["Recommended", "Visitor"], status: "waiting", needs: "Klaviyo connection" },
   { slug: "email-tracker", title: "Email Trackers", description: "Email tracker (Klaviyo)", categories: ["Recommended", "Visitor"], status: "waiting", needs: "Klaviyo connection" },
   { slug: "sms-tracker", title: "SMS Trackers", description: "SMS tracker", categories: ["Recommended", "Visitor"], status: "waiting", needs: "Klaviyo SMS connection" },

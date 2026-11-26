@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { addDays, dayOfWeek, eachDay, endOfMonth } from "@/lib/dates";
 import { aggregate, amerSpend } from "@/lib/metrics";
 import { monthEventCounts } from "@/lib/planning/calendar-grid";
-import { CSV_TEMPLATE, EVENT_TYPES, eventDays, GROUP_LABELS, parseEventCsv, suggestEvents, toDayFacts, TYPE_LABEL, typeGroup, type DayMultipliers, type EventGroup, type MarketingEvent } from "@/lib/planning/events";
+import { CSV_TEMPLATE, EVENT_TYPES, eventDays, GROUP_LABELS, parseEventCsv, sendTimeForSave, suggestEvents, toDayFacts, TYPE_LABEL, typeGroup, type DayMultipliers, type EventGroup, type MarketingEvent } from "@/lib/planning/events";
 import type { ClientSettings, DailyFact } from "@/lib/types";
 import type { PlanCtx } from "./ctx";
 import { CalendarGrid } from "./CalendarGrid";
@@ -63,10 +63,12 @@ function TypeSelect({ value, onChange, className = inputClass }: { value: string
   );
 }
 
-function Chip({ e, onClick, faint }: { e: Pick<MarketingEvent, "type" | "name">; onClick?: () => void; faint?: boolean }) {
+/** `time` is the event's time of day ("HH:MM", the store's clock), shown on the day it starts. */
+function Chip({ e, onClick, faint, time }: { e: Pick<MarketingEvent, "type" | "name">; onClick?: () => void; faint?: boolean; time?: string }) {
   const label = e.name && e.name !== TYPE_LABEL[e.type] ? `${e.name}` : TYPE_LABEL[e.type];
   return (
-    <button type="button" onClick={onClick} disabled={!onClick} title={TYPE_LABEL[e.type]} className={`rounded-full px-2 py-0.5 text-xs ${faint ? "bg-surface-raised text-text-faint" : GROUP_STYLE[typeGroup(e.type)].chip} ${onClick ? "hover:opacity-80" : ""}`}>
+    <button type="button" onClick={onClick} disabled={!onClick} title={`${TYPE_LABEL[e.type]}${time ? ` at ${time}` : ""}`} className={`rounded-full px-2 py-0.5 text-xs ${faint ? "bg-surface-raised text-text-faint" : GROUP_STYLE[typeGroup(e.type)].chip} ${onClick ? "hover:opacity-80" : ""}`}>
+      {time && <span className="mr-1 font-semibold tabular">{time}</span>}
       <span className="opacity-70">{TYPE_LABEL[e.type] !== label ? `${TYPE_LABEL[e.type]}: ` : ""}</span>
       {label}
     </button>
@@ -93,6 +95,11 @@ function EventForm({ draft, onChange, onSave, onCancel, onDelete, busy }: { draf
       <label className={lab}>
         End (included)
         <input type="date" className={`${inputClass} mt-0.5 w-full`} value={draft.endDate} min={draft.date} onChange={(e) => e.target.value && set({ endDate: e.target.value })} />
+      </label>
+      <label className={lab}>
+        Time (optional)
+        <input type="time" className={`${inputClass} mt-0.5 w-full`} value={draft.sendTime ?? ""} onChange={(e) => set({ sendTime: e.target.value })} />
+        <span className="mt-0.5 block text-[10px] leading-tight text-text-faint">The store&apos;s clock, on the start day. An email or SMS with a time sits on its hour in the Hourly Report.</span>
       </label>
       <label className={lab}>
         Promo / offer
@@ -161,7 +168,10 @@ export function CalendarStep({ ctx }: { ctx: CalendarCtx }) {
   const save = async () => {
     if (!draft) return;
     setBusy(true);
-    const err = await saveEvents([{ ...draft, name: draft.name.trim() || TYPE_LABEL[draft.type], endDate: draft.endDate || draft.date }]);
+    // The time is only sent when there is one to save or to clear, so an event without a time is saved exactly as before.
+    const { sendTime, ...rest } = draft;
+    const stored = draft.id ? events.find((e) => e.id === draft.id)?.sendTime : undefined;
+    const err = await saveEvents([{ ...rest, ...sendTimeForSave(sendTime, stored), name: draft.name.trim() || TYPE_LABEL[draft.type], endDate: draft.endDate || draft.date }]);
     setBusy(false);
     if (err) setMsg({ tone: "bad", text: err });
     else {
@@ -279,7 +289,7 @@ export function CalendarStep({ ctx }: { ctx: CalendarCtx }) {
                     </div>
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                       {evs.map((e) => (
-                        <Chip key={e.id} e={e} onClick={() => setDraft({ ...e })} />
+                        <Chip key={e.id} e={e} time={e.date === d ? e.sendTime : undefined} onClick={() => setDraft({ ...e })} />
                       ))}
                       {ly.map((e) => (
                         <Chip key={`ly${e.id}`} e={e} faint />

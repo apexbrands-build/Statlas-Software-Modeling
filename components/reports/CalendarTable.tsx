@@ -10,7 +10,7 @@ import type { Currency } from "@/lib/types";
 import { ACTION_META, ActionIcon } from "./calendar-icons";
 
 /** Green or pink shading that grows with the gap to goal; nothing inside the neutral band. */
-function heatStyle(tone: "good" | "bad" | "neutral", diff: number | null): React.CSSProperties | undefined {
+export function heatStyle(tone: "good" | "bad" | "neutral", diff: number | null): React.CSSProperties | undefined {
   if (tone === "neutral" || diff === null) return undefined;
   const alpha = 0.12 + Math.min(1, (Math.abs(diff) - 0.1) / 0.5) * 0.5;
   return { backgroundColor: tone === "good" ? `rgba(52,211,153,${alpha.toFixed(2)})` : `rgba(248,113,113,${alpha.toFixed(2)})` };

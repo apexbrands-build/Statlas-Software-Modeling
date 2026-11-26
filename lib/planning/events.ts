@@ -75,10 +75,33 @@ export interface MarketingEvent {
   audience?: string;
   segmentSize?: number | null;
   notes?: string;
+  /** Time of day of the event or send on its first day, "HH:MM" on the store's clock. Absent = no time set. Saving "" clears a stored time. */
+  sendTime?: string;
   source: "manual" | "import" | "klaviyo" | "sms";
 }
 
+/** A clock time as "HH:MM" ("9:05", "09:05:00" and "09:05:00.123" all read as 09:05); undefined for anything that is not a time of day. */
+export function normalizeSendTime(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(v.trim());
+  if (!m) return undefined;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return undefined;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
 export const eventDays = (e: MarketingEvent): string[] => eachDay(e.date, e.endDate >= e.date ? e.endDate : e.date);
+
+/**
+ * The send time to save from the event form: the typed time; an empty string when the field was emptied on an event that had a time
+ * (the stored time has to be cleared); nothing at all when there never was one, so an event without a time is saved exactly as before.
+ */
+export function sendTimeForSave(typed: string | undefined, stored: string | undefined): { sendTime?: string } {
+  const time = normalizeSendTime(typed);
+  if (time) return { sendTime: time };
+  return normalizeSendTime(stored) ? { sendTime: "" } : {};
+}
 
 /* ------------------------------------------------------------------ */
 /* Measuring past event days                                           */

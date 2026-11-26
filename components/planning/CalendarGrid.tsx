@@ -70,7 +70,8 @@ export function CalendarGrid({
                     const g = typeGroup(e.type);
                     const label = e.name && e.name !== TYPE_LABEL[e.type] ? e.name : TYPE_LABEL[e.type];
                     return (
-                      <button key={e.id} type="button" title={`${TYPE_LABEL[e.type]}${e.promo ? ` · ${e.promo}` : ""}`} onClick={() => onEdit(e)} className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium hover:brightness-125 ${GROUP_STYLE[g].chip} ${focus && focus !== g ? "opacity-25" : ""}`}>
+                      <button key={e.id} type="button" title={`${TYPE_LABEL[e.type]}${e.sendTime && e.date === d ? ` at ${e.sendTime}` : ""}${e.promo ? ` · ${e.promo}` : ""}`} onClick={() => onEdit(e)} className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium hover:brightness-125 ${GROUP_STYLE[g].chip} ${focus && focus !== g ? "opacity-25" : ""}`}>
+                        {e.sendTime && e.date === d && <span className="mr-1 font-semibold tabular">{e.sendTime}</span>}
                         {label}
                       </button>
                     );

@@ -2,6 +2,7 @@
 import type { Format } from "../format";
 import type { CalendarRow } from "./calendar";
 import { CALENDAR_SPECS } from "./calendar-specs";
+import type { MetricSpec } from "./metric-spec";
 
 export interface ChartSeries {
   key: string;
@@ -13,11 +14,14 @@ export interface ChartSeries {
   max: number;
 }
 
-/** Unknown keys are skipped. min is 0 or lower, and max is always above min, so a flat or empty series cannot divide by zero. */
-export function chartSeries(rows: CalendarRow[], keys: string[]): ChartSeries[] {
+/**
+ * Unknown keys are skipped. min is 0 or lower, and max is always above min, so a flat or empty series cannot divide by zero.
+ * `specs` are the columns the keys belong to: the Calendar Report's own unless another report (the Hourly Report) passes its columns.
+ */
+export function chartSeries(rows: CalendarRow[], keys: string[], specs: Pick<MetricSpec, "key" | "label" | "format">[] = CALENDAR_SPECS): ChartSeries[] {
   const out: ChartSeries[] = [];
   for (const key of keys) {
-    const spec = CALENDAR_SPECS.find((s) => s.key === key);
+    const spec = specs.find((s) => s.key === key);
     if (!spec) continue;
     const values = rows.map((r) => r.cells[key]?.actual ?? null);
     const goals = rows.map((r) => r.cells[key]?.goal ?? null);

@@ -1,8 +1,11 @@
-import { addDays, endOfMonth, startOfMonth, todayLocal, type Range } from "../dates";
+import { addDays, endOfMonth, startOfMonth, type Range } from "../dates";
+import { lastCompleteDay, lastDataDate } from "../last-data";
 import { normalizeQuery, type CreativePage, type CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import { isMissingFunction, mapAdRow, mapFormatRow } from "../creative/map-rows";
-import { mapMetaLaunches, type MetaAdRow, type MetaLaunch } from "./meta-launches";
+import { mapMetaLaunchHours, mapMetaLaunches, type MetaAdRow, type MetaLaunch, type MetaLaunchHour } from "./meta-launches";
+import { mapOrderHours, type OrderHour } from "./order-hours";
+import { eventFromRow, eventSaveError, eventToRow } from "./event-row";
 import { mapCreativeDay, mapLaunchedAd, mapMonthAgg, mapScoreAd } from "../creative/rows";
 import type { CreativeDay, CreativeHistory, LaunchedAd } from "../creative/types";
 import { defaultSettings } from "../defaults";
@@ -222,7 +225,8 @@ export class SupabaseRepository implements Repository {
     return { ads: ads.map(mapLaunchedAd), days: days.map(mapCreativeDay) };
   }
 
-  async getMetaLaunches(clientId: string, range: Range): Promise<MetaLaunch[] | undefined> {
+  /** The client's Meta ads created around the range (one day wider each side: the mappers cut to the store's days), with the store's time zone; undefined when the ad tables are missing. */
+  private async metaAdRows(clientId: string, range: Range): Promise<{ rows: MetaAdRow[]; zone: string } | undefined> {
     // Launch days are the store's days: read the client's time zone, ask one day wider each side and let the mapper cut to the range.
     const { data: c } = await this.db.from("clients").select("timezone").eq("id", clientId).maybeSingle();
     const zone = (c as Row | null)?.timezone ? String((c as Row).timezone) : "UTC";
@@ -246,7 +250,32 @@ export class SupabaseRepository implements Repository {
       rows.push(...got);
       if (got.length < PAGE) break;
     }
-    return mapMetaLaunches(rows, zone, range);
+    return { rows, zone };
+  }
+
+  async getMetaLaunches(clientId: string, range: Range): Promise<MetaLaunch[] | undefined> {
+    const got = await this.metaAdRows(clientId, range);
+    return got && mapMetaLaunches(got.rows, got.zone, range);
+  }
+
+  async getMetaLaunchHours(clientId: string, range: Range): Promise<MetaLaunchHour[] | undefined> {
+    const got = await this.metaAdRows(clientId, range);
+    return got && mapMetaLaunchHours(got.rows, got.zone, range);
+  }
+
+  /** `orders_by_hour` (migration 0023), all pages. Null when the function is not in the database yet, so the page can say so. */
+  async getOrderHours(clientId: string, from: string, to: string): Promise<OrderHour[] | null> {
+    const rows: Row[] = [];
+    for (let i = 0; ; i += 1000) {
+      const { data, error } = await this.db.rpc("orders_by_hour", { p_client: clientId, p_from: from, p_to: to }).order("order_date").order("hour").range(i, i + 999);
+      if (error) {
+        if (/orders_by_hour|PGRST202|PGRST205|42883/.test(`${error.code} ${error.message}`)) return null;
+        throw new Error(error.message);
+      }
+      rows.push(...((data ?? []) as Row[]));
+      if (!data || data.length < 1000) break;
+    }
+    return mapOrderHours(rows);
   }
 
   async getLastAdDate(clientId: string): Promise<string | null | undefined> {
@@ -327,9 +356,18 @@ export class SupabaseRepository implements Repository {
     }));
   }
 
+  /**
+   * The last day whose daily row holds the whole day (rules and reasons in `lib/last-data.ts`): never the store's today, and never a day
+   * whose row was last built while that day was still running. The latest daily row alone is not it: the Shopify store page writes
+   * today's row. Home, the reports, the plan comparison, the trackers and the plan editor all stop at this date.
+   */
   async getLastDataDate(clientId: string): Promise<string> {
-    const { data } = await this.db.from("daily_facts").select("date").eq("client_id", clientId).order("date", { ascending: false }).limit(1);
-    return (data?.[0]?.date as string) ?? addDays(todayLocal(), -1);
+    const { data: c } = await this.db.from("clients").select("timezone").eq("id", clientId).maybeSingle();
+    const zone = (c as Row | null)?.timezone as string | null | undefined;
+    const lastComplete = lastCompleteDay(new Date(), zone);
+    const { data } = await this.db.from("daily_facts").select("date,updated_at").eq("client_id", clientId).lte("date", lastComplete).order("date", { ascending: false }).limit(7);
+    const rows = ((data ?? []) as Row[]).map((r) => ({ date: r.date as string, updatedAt: (r.updated_at as string | null) ?? null }));
+    return lastDataDate(rows, zone) ?? lastComplete;
   }
 
   private async userLabel(): Promise<string> {
@@ -534,48 +572,17 @@ export class SupabaseRepository implements Repository {
     }));
   }
 
-  private eventOf(r: Row): MarketingEvent {
-    return {
-      id: r.id as string,
-      clientId: r.client_id as string,
-      date: r.date as string,
-      endDate: ((r.end_date as string | null) ?? (r.date as string)) as string,
-      type: r.category as string,
-      name: (r.title as string) ?? "",
-      ...(r.promo ? { promo: r.promo as string } : {}),
-      ...(r.product ? { product: r.product as string } : {}),
-      ...(r.audience ? { audience: r.audience as string } : {}),
-      segmentSize: r.segment_size == null ? null : n(r.segment_size),
-      ...(r.notes ? { notes: r.notes as string } : {}),
-      source: ((r.source as string) ?? "manual") as MarketingEvent["source"],
-    };
-  }
-
   async listEvents(clientId: string): Promise<MarketingEvent[]> {
     const rows = await fetchAll<Row>((a, b) => this.db.from("marketing_events").select("*").eq("client_id", clientId).order("date").range(a, b));
-    return rows.map((r) => this.eventOf(r));
+    return rows.map(eventFromRow);
   }
 
   async saveEvents(clientId: string, events: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]): Promise<MarketingEvent[]> {
-    const rec = (e: (typeof events)[number]) => ({
-      ...(e.id ? { id: e.id } : {}),
-      client_id: clientId,
-      date: e.date,
-      end_date: e.endDate || e.date,
-      category: e.type,
-      title: e.name || e.type,
-      source: e.source === "klaviyo" || e.source === "sms" || e.source === "import" ? e.source : "manual",
-      promo: e.promo ?? null,
-      product: e.product ?? null,
-      audience: e.audience ?? null,
-      segment_size: e.segmentSize ?? null,
-      notes: e.notes ?? null,
-    });
     const out: MarketingEvent[] = [];
     for (let i = 0; i < events.length; i += 200) {
-      const { data, error } = await this.db.from("marketing_events").upsert(events.slice(i, i + 200).map(rec)).select("*");
-      if (error) throw new Error(/column|policy|permission|row-level/i.test(error.message) ? `Could not save events: database migration 0008 has not been applied yet (supabase/migrations/0008_marketing_calendar.sql). ${error.message}` : error.message);
-      out.push(...((data ?? []) as Row[]).map((r) => this.eventOf(r)));
+      const { data, error } = await this.db.from("marketing_events").upsert(events.slice(i, i + 200).map((e) => eventToRow(clientId, e))).select("*");
+      if (error) throw new Error(eventSaveError(error.message));
+      out.push(...((data ?? []) as Row[]).map(eventFromRow));
     }
     return out;
   }

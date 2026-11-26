@@ -42,6 +42,11 @@ describe("report registry", () => {
     expect(trackerOfSlug("google-tracker")?.id).toBe("google");
   });
 
+  it("has the Hourly Report ready (its page is the Calendar Report by hour)", () => {
+    expect(getReport("hourly")).toMatchObject({ status: "ready", title: "Hourly Report" });
+    expect(getReport("hourly")?.needs).toBeUndefined();
+  });
+
   it("keeps reports that wait for a data source as waiting", () => {
     expect(status("email-metrics")).toBe("waiting");
   });

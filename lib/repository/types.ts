@@ -5,7 +5,8 @@ import type { Range } from "../dates";
 import type { ChannelSale } from "../omni/types";
 import type { ChannelSaleInput } from "../omni/import-kinds";
 import type { OrderChannel } from "../order-channels";
-import type { MetaLaunch } from "./meta-launches";
+import type { MetaLaunch, MetaLaunchHour } from "./meta-launches";
+import type { OrderHour } from "./order-hours";
 import type { AovData, AovMode } from "../reports/aov";
 import type { FirstProductRow } from "../reports/first-product";
 import type { MarketingEvent } from "../planning/events";
@@ -41,6 +42,13 @@ export interface Repository {
   getCreativeMonth(clientId: string, month: string, asOf: string): Promise<{ ads: LaunchedAd[]; days: CreativeDay[] } | null>;
   /** Meta campaign launches in the range (one per distinct campaign per day, catalog ads left out) for the Calendar Report; undefined when the ad tables are missing. */
   getMetaLaunches(clientId: string, range: Range): Promise<MetaLaunch[] | undefined>;
+  /** The same launches by hour of the store's clock, with the number of new ads, for the Hourly Report; undefined when the ad tables are missing. */
+  getMetaLaunchHours(clientId: string, range: Range): Promise<MetaLaunchHour[] | undefined>;
+  /**
+   * The store's orders by day and hour of its own clock (migration 0023), the same orders as the daily numbers, so a day's hours add up
+   * to that day. Hours with no order have no row. Null when the database function is not there yet.
+   */
+  getOrderHours(clientId: string, from: string, to: string): Promise<OrderHour[] | null>;
   /** Best Creatives (migration 0014). Last day with ad-level data: null = none yet, undefined = the ad tables are missing. */
   getLastAdDate(clientId: string): Promise<string | null | undefined>;
   /** One page of ads that spent in the range, filtered and ranked (see `lib/creative/aggregate.ts`); null when the read function is missing. */
@@ -72,7 +80,7 @@ export interface Repository {
   savePlanModel(plan: PlanVersion, kind: ModelKind, settings: unknown, results: unknown, changeNote: string): Promise<void>;
   /** The client's marketing calendar (all dates). */
   listEvents(clientId: string): Promise<MarketingEvent[]>;
-  /** Inserts (no id yet) or updates events; returns them with ids. Needs migration 0008 on the live database. */
+  /** Inserts (no id yet) or updates events; returns them with ids. Needs migration 0008 on the live database, and 0023 once an event carries a time. */
   saveEvents(clientId: string, events: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]): Promise<MarketingEvent[]>;
   deleteEvent(id: string): Promise<void>;
   /**

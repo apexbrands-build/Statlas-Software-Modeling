@@ -9,6 +9,7 @@ import { NewVsReturningReport } from "./NewVsReturningReport";
 import { RevenueOverviewReport } from "./RevenueOverviewReport";
 import { PaidMediaReport } from "./PaidMediaReport";
 import { FirstProductReport } from "./FirstProductReport";
+import { HourlyReport } from "./HourlyReport";
 import { PnlReport } from "./PnlReport";
 import { SpendTrackerReport } from "./SpendTrackerReport";
 import { WaitingForData } from "./WaitingForData";
@@ -25,6 +26,8 @@ export function ReportRouter({ slug }: { slug: string }) {
   switch (slug) {
     case "calendar":
       return <CalendarReport />;
+    case "hourly":
+      return <HourlyReport />;
     case "mer":
       return <MetricGoalReport slug="mer" specs={MER_SPECS} />;
     case "ads":

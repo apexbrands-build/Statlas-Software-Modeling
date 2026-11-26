@@ -1,5 +1,6 @@
 import { addDays, dayOfWeek, diffDays, eachDay, todayLocal, type Range } from "../dates";
-import { demoMetaLaunches, type MetaLaunch } from "./meta-launches";
+import { demoMetaLaunchHours, demoMetaLaunches, type MetaLaunch, type MetaLaunchHour } from "./meta-launches";
+import { demoOrderHours, type OrderHour } from "./order-hours";
 import { aggregateAds, aggregateFormats, type CreativePage, type CreativeQuery } from "../creative/aggregate";
 import type { FormatTotals, WowWindows } from "../creative/best-creatives";
 import { demoAdRows, demoCreativeHistory, demoCreativeMonth } from "../creative/demo";
@@ -25,7 +26,7 @@ import type { ChannelSaleInput } from "../omni/import-kinds";
 import { mergeRows, toInput } from "./channel-merge";
 import { platformOf, type Platform } from "../omni/metrics";
 import { haloSettingsOf } from "../planning/halo";
-import type { MarketingEvent } from "../planning/events";
+import { normalizeSendTime, type MarketingEvent } from "../planning/events";
 import type { CohortStat, ModelKind, SavedModel } from "../planning/models";
 import type { CohortRow } from "../planning/returning";
 import type { PlanChange, PlanMonth } from "../planning/types";
@@ -310,6 +311,18 @@ function factFor(clientId: string, date: string): DailyFact {
   return f;
 }
 
+/** The demo store's orders by hour for a range, as of `now`: finished days in full, the store's today up to its clock, nothing after. */
+export function demoHours(clientId: string, from: string, to: string, now: Date): OrderHour[] {
+  const zone = profileOf(clientId).client.timezone;
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(now).map((x) => [x.type, x.value]),
+  );
+  const today = `${p.year}-${p.month}-${p.day}`;
+  const end = to < today ? to : today;
+  if (from > end) return [];
+  return eachDay(from, end).flatMap((d) => demoOrderHours(factFor(clientId, d), zone, d === today ? { hour: Number(p.hour), minute: Number(p.minute) } : undefined));
+}
+
 /* ------------------------------------------------------------------ */
 /* Plan targets                                                        */
 /* ------------------------------------------------------------------ */
@@ -448,6 +461,15 @@ export class SeedRepository implements Repository {
 
   async getMetaLaunches(_clientId: string, range: Range): Promise<MetaLaunch[] | undefined> {
     return demoMetaLaunches(range);
+  }
+
+  async getMetaLaunchHours(_clientId: string, range: Range): Promise<MetaLaunchHour[] | undefined> {
+    return demoMetaLaunchHours(range);
+  }
+
+  /** Each demo day's own fact split over the hours (so the hours add up to the day); the store's today stops at its clock. */
+  async getOrderHours(clientId: string, from: string, to: string): Promise<OrderHour[] | null> {
+    return demoHours(clientId, from, to, new Date());
   }
 
   /** Demo ads end on the last data day, like the rest of the demo data. */
@@ -626,7 +648,12 @@ export class SeedRepository implements Repository {
   }
 
   async saveEvents(clientId: string, events: (Omit<MarketingEvent, "id" | "clientId"> & { id?: string })[]): Promise<MarketingEvent[]> {
-    const out = events.map((e) => ({ ...e, id: e.id ?? `ev-${Math.random().toString(36).slice(2, 10)}`, clientId }) as MarketingEvent);
+    const out = events.map((e) => {
+      // An emptied time ("") clears the stored one, like the database does.
+      const { sendTime, ...rest } = e;
+      const time = normalizeSendTime(sendTime);
+      return { ...rest, ...(time ? { sendTime: time } : {}), id: e.id ?? `ev-${Math.random().toString(36).slice(2, 10)}`, clientId } as MarketingEvent;
+    });
     for (const e of out) this.eventStore = [...this.eventStore.filter((x) => x.id !== e.id), e];
     return out;
   }

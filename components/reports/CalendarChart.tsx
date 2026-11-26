@@ -14,13 +14,34 @@ const PLOT_BOTTOM = 232;
 const PAD = { l: 14, r: 14, t: 14 };
 const TYPES = ["event", "email", "sms", "meta"] as const;
 
-/** Daily lines for the ticked Graph items (each on its own scale), the first item's goal dashed, projected days dashed, and a marker row per action type under the axis. */
-export function CalendarChart({ rows, series, currency }: { rows: CalendarRow[]; series: ChartSeries[]; currency: Currency }) {
+/** The words of the chart. The Calendar Report's own by default; the Hourly Report passes its hours' wording. */
+export interface ChartCopy {
+  /** The dashed reference line of the first item. */
+  goal: string;
+  goalShort: string;
+  empty: string;
+  aria: string;
+  note: string;
+}
+
+const DAILY_COPY: ChartCopy = {
+  goal: "Goal (first item)",
+  goalShort: "Goal",
+  empty: "Tick at least one item under Graph items to draw the chart.",
+  aria: "Line chart of the ticked metrics by day with the marketing actions marked below",
+  note: "Each line is drawn on its own scale; hover a day for the real values. Dashed = projected days.",
+};
+
+/**
+ * Daily lines for the ticked Graph items (each on its own scale), the first item's goal dashed, projected days dashed, and a marker row per action type under the axis.
+ * `tick` and `copy` let another report draw other rows than days (the Hourly Report's hours): `tick` gives the label under a row (null = none).
+ */
+export function CalendarChart({ rows, series, currency, tick, copy = DAILY_COPY }: { rows: CalendarRow[]; series: ChartSeries[]; currency: Currency; tick?: (row: CalendarRow, index: number, count: number) => string | null; copy?: ChartCopy }) {
   const box = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ i: number; left: number; top: number } | null>(null);
   const n = rows.length;
   if (n === 0) return null;
-  if (series.length === 0) return <p className="py-6 text-center text-sm text-text-muted">Tick at least one item under Graph items to draw the chart.</p>;
+  if (series.length === 0) return <p className="py-6 text-center text-sm text-text-muted">{copy.empty}</p>;
 
   const used = TYPES.filter((t) => rows.some((r) => r.actions.some((a) => a.type === t)));
   const H = PLOT_BOTTOM + 30 + Math.max(1, used.length) * 14;
@@ -59,14 +80,18 @@ export function CalendarChart({ rows, series, currency }: { rows: CalendarRow[];
         ))}
         <span>
           <i className="mr-1.5 inline-block h-[3px] w-3.5 rounded align-middle" style={{ background: "#fbbf24", opacity: 0.6 }} />
-          Goal (first item)
+          {copy.goal}
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Line chart of the ticked metrics by day with the marketing actions marked below">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={copy.aria}>
         {[0, 1, 2, 3, 4].map((g) => (
           <line key={g} x1={PAD.l} x2={W - PAD.r} y1={PAD.t + (plotH * g) / 4} y2={PAD.t + (plotH * g) / 4} stroke="currentColor" opacity={0.1} />
         ))}
         {rows.map((r, i) => {
+          if (tick) {
+            const label = tick(r, i, n);
+            return label === null ? null : <text key={r.date} x={X(i)} y={PLOT_BOTTOM + 16} textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.6}>{label}</text>;
+          }
           const day = Number(r.date.slice(8, 10));
           return n <= 40 ? (day % 5 === 1 || i === n - 1 ? <text key={r.date} x={X(i)} y={PLOT_BOTTOM + 16} textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.6}>{r.date.slice(5, 7) + "/" + r.date.slice(8, 10)}</text> : null) : day === 1 ? <text key={r.date} x={X(i)} y={PLOT_BOTTOM + 16} textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.6}>{r.date.slice(0, 7)}</text> : null;
         })}
@@ -116,7 +141,7 @@ export function CalendarChart({ rows, series, currency }: { rows: CalendarRow[];
           })}
           {series[0] && hr.cells[series[0].key]?.goal != null && (
             <div className="flex justify-between gap-4 text-[#fbbf24]">
-              <span>Goal</span>
+              <span>{copy.goalShort}</span>
               <span className="tabular">{formatValue(hr.cells[series[0].key].goal as number, series[0].format, currency)}</span>
             </div>
           )}
@@ -132,7 +157,7 @@ export function CalendarChart({ rows, series, currency }: { rows: CalendarRow[];
           ))}
         </div>
       )}
-      <p className="mt-2 text-[11px] text-text-faint">Each line is drawn on its own scale; hover a day for the real values. Dashed = projected days.</p>
+      <p className="mt-2 text-[11px] text-text-faint">{copy.note}</p>
     </div>
   );
 }

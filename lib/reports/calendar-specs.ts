@@ -40,7 +40,7 @@ const planRoas = (p: PlanTotals, key: ChannelKey) => {
  * types (the expected revenue adds up; a blended ROAS goal would follow the planned mix, not the mix spent, so there is none),
  * "none" for a type the plan sets no ROAS target for.
  */
-function platformRows(prefix: string, label: string, keys: ChannelKey[], goals: "both" | "revenue" | "none"): MetricSpec[] {
+export function platformRows(prefix: string, label: string, keys: ChannelKey[], goals: "both" | "revenue" | "none"): MetricSpec[] {
   return [
     { key: `${prefix}Spend`, label: `${label} Spend`, format: "currency0", direction: "up", value: (t) => sum(t, keys, "spend"), goal: (p) => planSpend(p, keys) },
     { key: `${prefix}Rev`, label: `${label} Revenue`, format: "currency0", direction: "up", value: (t) => sum(t, keys, "platformRevenue"), ...(goals === "none" ? {} : { goal: (p: PlanTotals) => planRevenue(p, keys) }) },
